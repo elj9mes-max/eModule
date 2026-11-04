@@ -26,7 +26,7 @@ test('teacher login redirects to teachers dashboard', function () {
     $response->assertRedirect(route('teachers.dashboard'));
 });
 
-test('student login redirects to students dashboard', function () {
+test('student login redirects to students welcome page', function () {
     $student = User::factory()->student()->create([
         'email' => 'student@example.com',
         'password' => 'secret123',
@@ -38,7 +38,7 @@ test('student login redirects to students dashboard', function () {
     ]);
 
     $this->assertAuthenticatedAs($student);
-    $response->assertRedirect(route('students.dashboard'));
+    $response->assertRedirect(route('students.welcome'));
 });
 
 test('user can also authenticate using their name', function () {
@@ -53,7 +53,7 @@ test('user can also authenticate using their name', function () {
     ]);
 
     $this->assertAuthenticatedAs($user);
-    $response->assertRedirect(route('students.dashboard'));
+    $response->assertRedirect(route('students.welcome'));
 });
 
 test('invalid credentials are rejected', function () {

@@ -282,23 +282,6 @@ const sendKudos = (studentName) => {
         <!-- MAIN ARENA STAGE -->
         <main class="game-stage">
             <!-- PAGE TITLE BAR -->
-            <section class="ranking-header-bar">
-                <div class="header-text-group">
-                    <div class="title-pill-tag">
-                        <span>🏆 GUILD HONOR ROLL</span>
-                    </div>
-                    <h1 class="page-main-title">Student Adventurer Rankings</h1>
-                    <p class="page-sub-desc">
-                        Honoring reading champions, daily quest streaks, and milestone book completions across all realms!
-                    </p>
-                </div>
-
-                <div class="header-action-group">
-                    <button type="button" class="btn-3d btn-bonus-reward" @click="sendKudos('Guild')">
-                        <span>🌟 AWARD +50 GUILD STARS</span>
-                    </button>
-                </div>
-            </section>
 
             <!-- 3D CARTOON TOP 3 WINNERS PODIUM -->
             <section class="podium-section" aria-label="Top 3 Champion Podium">
@@ -370,72 +353,7 @@ const sendKudos = (studentName) => {
             </section>
 
             <!-- GUILD FILTER & CONTROLS BAR -->
-            <section class="controls-card">
-                <!-- Search Box -->
-                <div class="search-box-pill">
-                    <span class="search-icon">🔍</span>
-                    <input
-                        v-model="searchQuery"
-                        type="text"
-                        class="search-input"
-                        placeholder="Search student adventurer or badge..."
-                    />
-                </div>
 
-                <!-- Realm Filter Dropdown / Pills -->
-                <div class="filter-pills-row">
-                    <button
-                        type="button"
-                        class="filter-pill-btn"
-                        :class="{ active: selectedKingdom === 'all' }"
-                        @click="selectedKingdom = 'all'"
-                    >
-                        🏰 All Realms
-                    </button>
-                    <button
-                        type="button"
-                        class="filter-pill-btn"
-                        :class="{ active: selectedKingdom === 'Whispering Forest' }"
-                        @click="selectedKingdom = 'Whispering Forest'"
-                    >
-                        🌲 Whispering Forest
-                    </button>
-                    <button
-                        type="button"
-                        class="filter-pill-btn"
-                        :class="{ active: selectedKingdom === 'Sunken Atlantis' }"
-                        @click="selectedKingdom = 'Sunken Atlantis'"
-                    >
-                        🌊 Sunken Atlantis
-                    </button>
-                    <button
-                        type="button"
-                        class="filter-pill-btn"
-                        :class="{ active: selectedKingdom === 'Cosmic Nebula' }"
-                        @click="selectedKingdom = 'Cosmic Nebula'"
-                    >
-                        🚀 Cosmic Nebula
-                    </button>
-                    <button
-                        type="button"
-                        class="filter-pill-btn"
-                        :class="{ active: selectedKingdom === 'Dino Volcanoes' }"
-                        @click="selectedKingdom = 'Dino Volcanoes'"
-                    >
-                        🌋 Dino Volcanoes
-                    </button>
-                </div>
-
-                <!-- Sort By Selector -->
-                <div class="sort-selector-wrap">
-                    <span class="sort-lbl">SORT:</span>
-                    <select v-model="sortBy" class="sort-select">
-                        <option value="stars">⭐ Most Stars</option>
-                        <option value="level">⚡ Highest Level</option>
-                        <option value="streak">🔥 Longest Streak</option>
-                    </select>
-                </div>
-            </section>
 
             <!-- FULL GUILD LEADERBOARD TABLE -->
             <section class="guild-roster-card">
@@ -520,16 +438,17 @@ const sendKudos = (studentName) => {
 
         <!-- 3D CARTOON BOTTOM GAME NAVIGATION DOCK -->
         <nav class="game-bottom-dock" aria-label="Game Console Dock">
-            <!-- Dock Item: World / Kingdoms (Back to Dashboard) -->
+            <!-- Dock Item: Your Modules (Back to Dashboard) -->
             <button
                 type="button"
                 class="dock-item"
                 @click="goToDashboard"
+                title="Your Modules"
             >
                 <div class="dock-bubble">
                     <span class="dock-icon">🏰</span>
                 </div>
-                <span class="dock-label">KINGDOMS</span>
+                <span class="dock-label">MODULES</span>
             </button>
 
             <!-- Dock Item: Students Ranking (Active) -->
@@ -564,7 +483,7 @@ const sendKudos = (studentName) => {
 
 <style scoped>
 /* ==========================================================================
-   CARTOON 3D GAME THEME TOKENS
+   CARTOON 3D + NEUMORPHISM GAME THEME TOKENS
    ========================================================================== */
 .game-dashboard-page {
     --game-navy: #1D2440;
@@ -581,19 +500,41 @@ const sendKudos = (studentName) => {
     --font-game: 'Fredoka', -apple-system, sans-serif;
     --font-ui: 'Nunito', -apple-system, sans-serif;
 
+    /* Neumorphic Tactile Lighting Tokens */
+    --neu-bg-base: #F5F0E3;
+    --neu-surface: linear-gradient(145deg, #FFFFFF 0%, #F3EFE4 100%);
+    --neu-light: rgba(255, 255, 255, 0.92);
+    --neu-shadow: rgba(196, 187, 168, 0.55);
+    --neu-navy-ambient: rgba(29, 36, 64, 0.12);
+    --neu-bevel-light: inset 3px 3px 6px rgba(255, 255, 255, 0.95);
+    --neu-bevel-dark: inset -4px -4px 8px rgba(194, 185, 166, 0.38);
+
     min-height: 100vh;
-    background-color: #F8F4E8;
-    background-image: 
-        radial-gradient(#E2DBCA 2px, transparent 2px),
-        radial-gradient(#E2DBCA 2px, #F8F4E8 2px);
-    background-size: 36px 36px;
-    background-position: 0 0, 18px 18px;
+    background-color: var(--neu-bg-base);
+    background-image:
+        radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.7) 0%, transparent 45%),
+        radial-gradient(circle at 85% 80%, rgba(226, 217, 197, 0.6) 0%, transparent 50%),
+        radial-gradient(#DFD7C4 2px, transparent 2px),
+        radial-gradient(#DFD7C4 2px, var(--neu-bg-base) 2px);
+    background-size: 100% 100%, 100% 100%, 36px 36px, 36px 36px;
+    background-position: 0 0, 0 0, 0 0, 18px 18px;
     font-family: var(--font-game);
     color: var(--game-navy);
     position: relative;
     padding-bottom: 7.5rem;
     overflow-x: hidden;
     box-sizing: border-box;
+}
+
+/* Soft Matte Neumorphic Grain Texture Overlay */
+.game-dashboard-page::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
 /* Background floating scenery */
@@ -651,7 +592,7 @@ const sendKudos = (studentName) => {
     to { transform: scale(1.2) translateY(-8px); opacity: 0.7; }
 }
 
-/* 3D Button Base */
+/* 3D + Neumorphic Tactile Button Base */
 .btn-3d {
     font-family: var(--font-game);
     font-weight: 900;
@@ -663,13 +604,17 @@ const sendKudos = (studentName) => {
     align-items: center;
     justify-content: center;
     gap: 0.45rem;
-    transition: transform 0.1s var(--spring-bounce), box-shadow 0.1s var(--spring-bounce);
+    transition: transform 0.14s var(--spring-bounce), box-shadow 0.14s var(--spring-bounce);
     outline: none;
     user-select: none;
 }
 
 .btn-3d:active {
     transform: translateY(4px) !important;
+    box-shadow:
+        0 1px 0 #1D2440,
+        inset 3px 3px 6px rgba(0, 0, 0, 0.22),
+        inset -2px -2px 5px rgba(255, 255, 255, 0.4) !important;
 }
 
 /* ==========================================================================
@@ -689,16 +634,19 @@ const sendKudos = (studentName) => {
 }
 
 .hud-profile-card {
-    background: #FFFFFF;
+    background: var(--neu-surface);
     border: 3px solid var(--game-border);
-    border-radius: 24px;
-    padding: 0.65rem 1.4rem 0.65rem 0.85rem;
+    border-radius: 26px;
+    padding: 0.7rem 1.45rem 0.7rem 0.9rem;
     display: flex;
     align-items: center;
     gap: 1rem;
-    box-shadow: 
+    box-shadow:
         0 6px 0 var(--game-border),
-        0 10px 20px rgba(29, 36, 64, 0.08);
+        -6px -6px 14px var(--neu-light),
+        8px 12px 22px var(--neu-navy-ambient),
+        var(--neu-bevel-light),
+        var(--neu-bevel-dark);
 }
 
 .hud-avatar-wrapper {
@@ -706,20 +654,24 @@ const sendKudos = (studentName) => {
 }
 
 .avatar-ring {
-    width: 54px;
-    height: 54px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #FFDE59 0%, #FFA800 100%);
+    background: linear-gradient(145deg, #FFEA85 0%, #FFA800 100%);
     border: 3px solid #1D2440;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.8);
+    box-shadow:
+        0 3px 0 #1D2440,
+        inset 3px 3px 6px rgba(255, 255, 255, 0.85),
+        inset -3px -3px 6px rgba(184, 120, 0, 0.45);
 }
 
 .avatar-emoji {
     font-size: 1.9rem;
     line-height: 1;
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.15));
 }
 
 .avatar-lvl-badge {
@@ -727,21 +679,23 @@ const sendKudos = (studentName) => {
     bottom: -6px;
     left: 50%;
     transform: translateX(-50%);
-    background: #FF6B4A;
+    background: linear-gradient(145deg, #FF7E62 0%, #EB4D2C 100%);
     color: #FFFFFF;
     font-size: 0.65rem;
     font-weight: 900;
-    padding: 0.1rem 0.45rem;
+    padding: 0.1rem 0.48rem;
     border-radius: 9999px;
     border: 2px solid #1D2440;
     white-space: nowrap;
-    box-shadow: 0 2px 0 #1D2440;
+    box-shadow:
+        0 2px 0 #1D2440,
+        inset 1px 1px 2px rgba(255, 255, 255, 0.6);
 }
 
 .hud-profile-meta {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.3rem;
 }
 
 .hud-name-row {
@@ -752,23 +706,29 @@ const sendKudos = (studentName) => {
 
 .hud-title-crown {
     font-size: 1.1rem;
+    filter: drop-shadow(0 2px 2px rgba(255, 192, 0, 0.35));
 }
 
 .hud-name {
     font-size: 1.2rem;
     font-weight: 900;
     color: var(--game-navy);
+    text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .instructor-tag {
     font-size: 0.65rem;
     font-weight: 900;
-    background: #E8F4FD;
-    color: #167AC6;
+    background: linear-gradient(145deg, #F0F8FF 0%, #D9EEFD 100%);
+    color: #1467A6;
     border: 1.5px solid #2395EB;
-    padding: 0.15rem 0.5rem;
-    border-radius: 6px;
+    padding: 0.15rem 0.55rem;
+    border-radius: 8px;
     letter-spacing: 0.04em;
+    box-shadow:
+        inset 1px 1px 2px rgba(255, 255, 255, 0.9),
+        inset -1px -1px 2px rgba(35, 149, 235, 0.18),
+        0 2px 0 rgba(35, 149, 235, 0.25);
 }
 
 .hud-xp-meter {
@@ -778,29 +738,36 @@ const sendKudos = (studentName) => {
 }
 
 .xp-track {
-    width: 140px;
-    height: 12px;
+    width: 145px;
+    height: 14px;
     background: #E2E6F0;
     border: 2px solid #1D2440;
     border-radius: 9999px;
     overflow: hidden;
     position: relative;
+    box-shadow:
+        inset 2px 3px 5px rgba(29, 36, 64, 0.25),
+        inset -2px -2px 4px rgba(255, 255, 255, 0.85),
+        0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .xp-fill {
     height: 100%;
-    background: linear-gradient(90deg, #06D6A0, #2395EB);
+    background: linear-gradient(90deg, #06D6A0 0%, #2395EB 100%);
     border-radius: 9999px;
     position: relative;
+    box-shadow:
+        inset 0 2px 3px rgba(255, 255, 255, 0.65),
+        inset 0 -2px 3px rgba(0, 0, 0, 0.2);
 }
 
 .xp-shine {
     position: absolute;
-    top: 1px;
-    left: 0;
-    right: 0;
+    top: 2px;
+    left: 4px;
+    right: 4px;
     height: 3px;
-    background: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.65);
     border-radius: 9999px;
 }
 
@@ -818,21 +785,63 @@ const sendKudos = (studentName) => {
 }
 
 .inventory-pill {
-    background: #FFFFFF;
+    background: var(--neu-surface);
     border: 3px solid var(--game-border);
-    border-radius: 20px;
-    padding: 0.45rem 1rem 0.45rem 0.65rem;
+    border-radius: 22px;
+    padding: 0.45rem 1.05rem 0.45rem 0.6rem;
     display: flex;
     align-items: center;
-    gap: 0.6rem;
-    box-shadow: 
+    gap: 0.65rem;
+    box-shadow:
         0 5px 0 var(--game-border),
-        0 6px 14px rgba(29, 36, 64, 0.06);
+        -4px -4px 10px var(--neu-light),
+        6px 9px 16px var(--neu-navy-ambient),
+        var(--neu-bevel-light),
+        var(--neu-bevel-dark);
 }
 
 .pill-icon {
-    font-size: 1.45rem;
+    font-size: 1.35rem;
     line-height: 1;
+    width: 38px;
+    height: 38px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #EFF2FA;
+    box-shadow:
+        inset 2px 2px 5px rgba(163, 174, 198, 0.55),
+        inset -2px -2px 5px rgba(255, 255, 255, 0.95);
+    border: 1.5px solid rgba(29, 36, 64, 0.12);
+}
+
+.gems-pill .pill-icon {
+    background: linear-gradient(145deg, #E8F6FF, #F5FBFF);
+    box-shadow:
+        inset 2px 2px 5px rgba(35, 149, 235, 0.22),
+        inset -2px -2px 5px rgba(255, 255, 255, 0.95);
+}
+
+.stars-pill .pill-icon {
+    background: linear-gradient(145deg, #FFF7DF, #FFFDF5);
+    box-shadow:
+        inset 2px 2px 5px rgba(255, 183, 3, 0.28),
+        inset -2px -2px 5px rgba(255, 255, 255, 0.95);
+}
+
+.energy-pill .pill-icon {
+    background: linear-gradient(145deg, #E6FBF5, #F4FFFC);
+    box-shadow:
+        inset 2px 2px 5px rgba(6, 214, 160, 0.25),
+        inset -2px -2px 5px rgba(255, 255, 255, 0.95);
+}
+
+.guild-pill .pill-icon {
+    background: linear-gradient(145deg, #F3EDFC, #FAF7FF);
+    box-shadow:
+        inset 2px 2px 5px rgba(132, 94, 194, 0.25),
+        inset -2px -2px 5px rgba(255, 255, 255, 0.95);
 }
 
 .pill-data {
@@ -845,6 +854,7 @@ const sendKudos = (studentName) => {
     font-weight: 900;
     line-height: 1;
     color: var(--game-navy);
+    text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .pill-lbl {
@@ -873,27 +883,34 @@ const sendKudos = (studentName) => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: #FFFFFF;
+    background: var(--neu-surface);
     border: 3.5px solid var(--game-border);
     border-radius: 28px;
-    padding: 1.6rem 2.2rem;
-    box-shadow: 
+    padding: 0.1rem 0.7rem;
+    box-shadow:
         0 8px 0 var(--game-border),
-        0 14px 28px rgba(29, 36, 64, 0.08);
+        -6px -6px 14px var(--neu-light),
+        10px 14px 28px var(--neu-navy-ambient),
+        var(--neu-bevel-light),
+        var(--neu-bevel-dark);
     flex-wrap: wrap;
     gap: 1.25rem;
 }
 
 .title-pill-tag {
     display: inline-block;
-    background: #FFF3EB;
+    background: linear-gradient(145deg, #FFF6EE 0%, #FFE6D6 100%);
     border: 2px solid #FF8D70;
     color: #D64627;
     font-size: 0.75rem;
     font-weight: 900;
-    padding: 0.2rem 0.65rem;
+    padding: 0.22rem 0.75rem;
     border-radius: 9999px;
     margin-bottom: 0.4rem;
+    box-shadow:
+        inset 1px 1px 3px rgba(255, 255, 255, 0.9),
+        inset -1px -1px 3px rgba(214, 70, 39, 0.18),
+        0 2px 0 rgba(255, 141, 112, 0.35);
 }
 
 .page-main-title {
@@ -902,6 +919,7 @@ const sendKudos = (studentName) => {
     color: var(--game-navy);
     margin: 0 0 0.35rem 0;
     line-height: 1.15;
+    text-shadow: 1px 2px 0 rgba(255, 255, 255, 0.85);
 }
 
 .page-sub-desc {
@@ -914,17 +932,25 @@ const sendKudos = (studentName) => {
 }
 
 .btn-bonus-reward {
-    background: linear-gradient(135deg, #FFDE59 0%, #FFB703 100%);
+    background: linear-gradient(145deg, #FFE46B 0%, #FFB703 100%);
     color: #573F00;
     padding: 0.85rem 1.65rem;
     font-size: 0.98rem;
     border-color: #8A6400;
-    box-shadow: 0 5px 0 #8A6400, 0 8px 18px rgba(255, 183, 3, 0.35);
+    box-shadow:
+        0 5px 0 #8A6400,
+        0 8px 18px rgba(255, 183, 3, 0.35),
+        inset 2px 2px 5px rgba(255, 255, 255, 0.8),
+        inset -2px -3px 5px rgba(184, 133, 0, 0.35);
 }
 
 .btn-bonus-reward:hover {
     transform: translateY(-2px);
-    box-shadow: 0 7px 0 #8A6400, 0 12px 22px rgba(255, 183, 3, 0.45);
+    box-shadow:
+        0 7px 0 #8A6400,
+        0 12px 22px rgba(255, 183, 3, 0.45),
+        inset 2px 2px 5px rgba(255, 255, 255, 0.9),
+        inset -2px -3px 5px rgba(184, 133, 0, 0.35);
 }
 
 /* ==========================================================================
@@ -965,18 +991,21 @@ const sendKudos = (studentName) => {
 
 .podium-avatar-card {
     width: 100%;
-    background: #FFFFFF;
+    background: var(--neu-surface);
     border: 3.5px solid var(--game-border);
-    border-radius: 24px;
+    border-radius: 26px;
     padding: 1.4rem 1.25rem;
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
     position: relative;
-    box-shadow: 
+    box-shadow:
         0 7px 0 var(--game-border),
-        0 12px 24px rgba(29, 36, 64, 0.08);
+        -5px -5px 12px var(--neu-light),
+        8px 14px 24px var(--neu-navy-ambient),
+        var(--neu-bevel-light),
+        var(--neu-bevel-dark);
     margin-bottom: 0.85rem;
     z-index: 1;
     box-sizing: border-box;
@@ -984,10 +1013,13 @@ const sendKudos = (studentName) => {
 
 .podium-avatar-card.gold-card {
     border-color: #8A6400;
-    background: linear-gradient(180deg, #FFFDF5 0%, #FFF9E6 100%);
-    box-shadow: 
+    background: linear-gradient(155deg, #FFFDF7 0%, #FFF3C4 100%);
+    box-shadow:
         0 8px 0 #8A6400,
-        0 14px 28px rgba(138, 100, 0, 0.15);
+        -6px -6px 14px rgba(255, 255, 255, 0.95),
+        0 16px 30px rgba(138, 100, 0, 0.18),
+        inset 3px 3px 6px rgba(255, 255, 255, 0.95),
+        inset -3px -3px 7px rgba(217, 155, 0, 0.25);
     transform: scale(1.04);
 }
 
@@ -1011,8 +1043,8 @@ const sendKudos = (studentName) => {
 }
 
 .podium-avatar-bubble {
-    width: 72px;
-    height: 72px;
+    width: 74px;
+    height: 74px;
     border-radius: 50%;
     border: 3px solid var(--game-border);
     display: flex;
@@ -1023,19 +1055,30 @@ const sendKudos = (studentName) => {
 }
 
 .gold-bubble {
-    background: linear-gradient(135deg, #FFE885 0%, #FFB703 100%);
+    background: linear-gradient(145deg, #FFF099 0%, #FFB703 100%);
     border-color: #8A6400;
-    box-shadow: inset 0 3px 6px rgba(255, 255, 255, 0.8);
+    box-shadow:
+        0 3px 0 #8A6400,
+        inset 3px 3px 6px rgba(255, 255, 255, 0.9),
+        inset -3px -3px 6px rgba(184, 120, 0, 0.4);
 }
 
 .silver-bubble {
-    background: linear-gradient(135deg, #F0F2F8 0%, #C8CDDE 100%);
+    background: linear-gradient(145deg, #F5F7FC 0%, #C8CDDE 100%);
     border-color: #4C5574;
+    box-shadow:
+        0 3px 0 #4C5574,
+        inset 3px 3px 6px rgba(255, 255, 255, 0.9),
+        inset -3px -3px 6px rgba(76, 85, 116, 0.35);
 }
 
 .bronze-bubble {
-    background: linear-gradient(135deg, #FFD2BD 0%, #E0855A 100%);
+    background: linear-gradient(145deg, #FFE0CF 0%, #E0855A 100%);
     border-color: #7A3F1F;
+    box-shadow:
+        0 3px 0 #7A3F1F,
+        inset 3px 3px 6px rgba(255, 255, 255, 0.85),
+        inset -3px -3px 6px rgba(122, 63, 31, 0.4);
 }
 
 .podium-name {
@@ -1062,23 +1105,30 @@ const sendKudos = (studentName) => {
     color: #8A6400;
 }
 
+/* Recessed Neumorphic Podium Stats Pill */
 .podium-stats-pill {
     display: inline-flex;
     gap: 0.65rem;
-    background: #F1F3F9;
-    border: 2px solid #D6DCEE;
-    padding: 0.25rem 0.65rem;
+    background: #EDF0F8;
+    border: 2px solid rgba(43, 51, 84, 0.14);
+    padding: 0.3rem 0.75rem;
     border-radius: 9999px;
     font-size: 0.78rem;
     font-weight: 900;
     color: var(--game-navy);
     margin-bottom: 0.6rem;
+    box-shadow:
+        inset 2px 2px 5px rgba(163, 174, 198, 0.5),
+        inset -2px -2px 5px rgba(255, 255, 255, 0.95);
 }
 
 .podium-stats-pill.gold-stats {
-    background: #FFF2CC;
-    border-color: #FFD166;
+    background: #FFF0BD;
+    border-color: rgba(217, 155, 0, 0.35);
     color: #614600;
+    box-shadow:
+        inset 2px 2px 5px rgba(217, 155, 0, 0.3),
+        inset -2px -2px 5px rgba(255, 255, 255, 0.9);
 }
 
 .podium-quote {
@@ -1090,39 +1140,48 @@ const sendKudos = (studentName) => {
     line-height: 1.35;
 }
 
-/* 3D Podium Step Blocks */
+/* 3D + Neumorphic Podium Step Blocks */
 .podium-block {
     width: 100%;
     border: 3.5px solid var(--game-border);
-    border-radius: 20px 20px 10px 10px;
+    border-radius: 22px 22px 12px 12px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     color: #FFFFFF;
-    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.2);
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.22);
     box-sizing: border-box;
 }
 
 .step-gold {
     height: 140px;
-    background: linear-gradient(180deg, #FFD166 0%, #FFB703 100%);
+    background: linear-gradient(160deg, #FFE17D 0%, #FFB703 100%);
     border-color: #8A6400;
-    box-shadow: 0 10px 0 #735300;
+    box-shadow:
+        0 10px 0 #735300,
+        inset 3px 3px 7px rgba(255, 255, 255, 0.75),
+        inset -4px -4px 8px rgba(138, 100, 0, 0.35);
 }
 
 .step-silver {
     height: 105px;
-    background: linear-gradient(180deg, #D4D8E8 0%, #9DA5C2 100%);
+    background: linear-gradient(160deg, #E2E6F3 0%, #9DA5C2 100%);
     border-color: #4C5574;
-    box-shadow: 0 8px 0 #394057;
+    box-shadow:
+        0 8px 0 #394057,
+        inset 3px 3px 7px rgba(255, 255, 255, 0.8),
+        inset -4px -4px 8px rgba(57, 64, 87, 0.35);
 }
 
 .step-bronze {
     height: 80px;
-    background: linear-gradient(180deg, #F0A584 0%, #C46E4A 100%);
+    background: linear-gradient(160deg, #F5B89C 0%, #C46E4A 100%);
     border-color: #7A3F1F;
-    box-shadow: 0 8px 0 #5C2F17;
+    box-shadow:
+        0 8px 0 #5C2F17,
+        inset 3px 3px 7px rgba(255, 255, 255, 0.65),
+        inset -4px -4px 8px rgba(92, 47, 23, 0.4);
 }
 
 .podium-step-num {
@@ -1141,32 +1200,23 @@ const sendKudos = (studentName) => {
 /* ==========================================================================
    SEARCH & FILTERS CONTROL BAR
    ========================================================================== */
-.controls-card {
-    background: #FFFFFF;
-    border: 3.5px solid var(--game-border);
-    border-radius: 26px;
-    padding: 1.25rem 1.65rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1.25rem;
-    flex-wrap: wrap;
-    box-shadow: 
-        0 6px 0 var(--game-border),
-        0 10px 20px rgba(29, 36, 64, 0.06);
-}
 
+
+/* Recessed Neumorphic Search Input Well */
 .search-box-pill {
     flex: 1;
     min-width: 240px;
     height: 46px;
-    background: #F4F6FB;
+    background: #EDF1FA;
     border: 2.5px solid var(--game-border);
     border-radius: 9999px;
     display: flex;
     align-items: center;
-    padding: 0 1rem;
+    padding: 0 1.05rem;
     gap: 0.5rem;
+    box-shadow:
+        inset 3px 3px 6px rgba(156, 168, 196, 0.55),
+        inset -3px -3px 6px rgba(255, 255, 255, 0.95);
 }
 
 .search-icon {
@@ -1191,33 +1241,39 @@ const sendKudos = (studentName) => {
 
 .filter-pills-row {
     display: flex;
-    gap: 0.45rem;
+    gap: 0.5rem;
     flex-wrap: wrap;
 }
 
 .filter-pill-btn {
-    background: #F1F3F9;
+    background: linear-gradient(145deg, #FFFFFF 0%, #EAEFF8 100%);
     border: 2px solid var(--game-border);
     border-radius: 9999px;
-    padding: 0.4rem 0.85rem;
+    padding: 0.42rem 0.9rem;
     font-family: var(--font-game);
     font-size: 0.8rem;
     font-weight: 900;
     color: #586382;
     cursor: pointer;
-    transition: all 0.15s ease;
+    box-shadow:
+        0 2px 0 var(--game-border),
+        inset 1px 1px 3px rgba(255, 255, 255, 0.95),
+        inset -1px -1px 3px rgba(163, 174, 198, 0.4);
+    transition: all 0.15s var(--spring-bounce);
 }
 
 .filter-pill-btn:hover {
-    background: #FFFFFF;
-    transform: translateY(-1px);
+    transform: translateY(-2px);
 }
 
 .filter-pill-btn.active {
-    background: var(--game-blue);
+    background: linear-gradient(145deg, #38A3F5 0%, #1579C4 100%);
     color: #FFFFFF;
     border-color: #0E5287;
-    box-shadow: 0 3px 0 #0E5287;
+    box-shadow:
+        0 3px 0 #0E5287,
+        inset 2px 2px 4px rgba(255, 255, 255, 0.55),
+        inset -2px -2px 4px rgba(14, 82, 135, 0.45);
 }
 
 .sort-selector-wrap {
@@ -1233,9 +1289,9 @@ const sendKudos = (studentName) => {
 }
 
 .sort-select {
-    background: #F4F6FB;
+    background: linear-gradient(145deg, #FFFFFF 0%, #EDF1FA 100%);
     border: 2.5px solid var(--game-border);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 0.45rem 0.85rem;
     font-family: var(--font-game);
     font-size: 0.85rem;
@@ -1243,21 +1299,29 @@ const sendKudos = (studentName) => {
     color: var(--game-navy);
     cursor: pointer;
     outline: none;
+    box-shadow:
+        0 3px 0 var(--game-border),
+        inset 2px 2px 4px rgba(255, 255, 255, 0.9);
 }
 
 /* ==========================================================================
    FULL GUILD LEADERBOARD ROSTER
    ========================================================================== */
 .guild-roster-card {
-    background: #FFFFFF;
+    background: var(--neu-surface);
     border: 3.5px solid var(--game-border);
     border-radius: 28px;
-    box-shadow: 0 8px 0 var(--game-border);
+    box-shadow:
+        0 8px 0 var(--game-border),
+        -6px -6px 14px var(--neu-light),
+        10px 16px 28px var(--neu-navy-ambient),
+        var(--neu-bevel-light),
+        var(--neu-bevel-dark);
     overflow: hidden;
 }
 
 .guild-roster-header {
-    background: #F1F3F9;
+    background: linear-gradient(180deg, #EEF2FA 0%, #E3E9F5 100%);
     border-bottom: 3px solid var(--game-border);
     padding: 1rem 1.65rem;
     display: flex;
@@ -1266,11 +1330,12 @@ const sendKudos = (studentName) => {
     font-weight: 900;
     color: #697494;
     letter-spacing: 0.05em;
+    box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.85);
 }
 
 .guild-adventurer-row {
     padding: 1.1rem 1.65rem;
-    border-bottom: 2px solid #EAEFF8;
+    border-bottom: 2px solid rgba(226, 232, 245, 0.8);
     display: flex;
     align-items: center;
     transition: background-color 0.15s ease;
@@ -1281,7 +1346,7 @@ const sendKudos = (studentName) => {
 }
 
 .guild-adventurer-row:hover {
-    background-color: #F8FAFD;
+    background-color: rgba(255, 255, 255, 0.75);
 }
 
 .col-rank { width: 65px; }
@@ -1296,27 +1361,34 @@ const sendKudos = (studentName) => {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
-    background: #E8ECF5;
+    background: linear-gradient(145deg, #F5F7FC 0%, #E2E7F4 100%);
     border: 2.5px solid var(--game-border);
     font-size: 0.85rem;
     font-weight: 900;
     color: var(--game-navy);
+    box-shadow:
+        0 2px 0 var(--game-border),
+        inset 2px 2px 4px rgba(255, 255, 255, 0.9),
+        inset -2px -2px 4px rgba(163, 174, 198, 0.45);
 }
 
 .adventurer-avatar-box {
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
-    background: #F4F6FB;
+    width: 50px;
+    height: 50px;
+    border-radius: 16px;
+    background: linear-gradient(145deg, #FFFFFF 0%, #EAEFF9 100%);
     border: 2.5px solid var(--game-border);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 1.7rem;
-    box-shadow: 0 3px 0 var(--game-border);
+    box-shadow:
+        0 3px 0 var(--game-border),
+        inset 2px 2px 5px rgba(255, 255, 255, 0.95),
+        inset -2px -2px 5px rgba(163, 174, 198, 0.4);
 }
 
 .adventurer-meta {
@@ -1337,13 +1409,16 @@ const sendKudos = (studentName) => {
 }
 
 .level-pill-badge {
-    background: #E8F4FD;
+    background: linear-gradient(145deg, #F0F8FF 0%, #D9EEFD 100%);
     color: #1579C4;
     border: 2px solid #2395EB;
-    padding: 0.2rem 0.65rem;
+    padding: 0.22rem 0.68rem;
     border-radius: 9999px;
     font-size: 0.78rem;
     font-weight: 900;
+    box-shadow:
+        inset 1px 1px 3px rgba(255, 255, 255, 0.9),
+        0 2px 0 rgba(35, 149, 235, 0.25);
 }
 
 .realm-name-tag {
@@ -1353,13 +1428,16 @@ const sendKudos = (studentName) => {
 }
 
 .streak-pill {
-    background: #FFF1EE;
+    background: linear-gradient(145deg, #FFF5F2 0%, #FFE5DE 100%);
     color: #D94423;
     border: 1.5px solid #FF8D70;
-    padding: 0.2rem 0.6rem;
-    border-radius: 8px;
+    padding: 0.22rem 0.65rem;
+    border-radius: 10px;
     font-size: 0.82rem;
     font-weight: 900;
+    box-shadow:
+        inset 1px 1px 3px rgba(255, 255, 255, 0.9),
+        inset -1px -1px 3px rgba(217, 68, 35, 0.15);
 }
 
 .star-rating-val {
@@ -1369,17 +1447,23 @@ const sendKudos = (studentName) => {
 }
 
 .btn-award-kudos {
-    background: #FFFFFF;
+    background: linear-gradient(145deg, #FFFFFF 0%, #F0F3FA 100%);
     color: var(--game-navy);
     padding: 0.5rem 0.95rem;
     font-size: 0.82rem;
-    box-shadow: 0 3px 0 var(--game-border);
+    box-shadow:
+        0 3px 0 var(--game-border),
+        inset 2px 2px 4px rgba(255, 255, 255, 0.95),
+        inset -2px -2px 4px rgba(163, 174, 198, 0.35);
 }
 
 .btn-award-kudos:hover {
-    background: #FFF9ED;
+    background: linear-gradient(145deg, #FFFDF7 0%, #FFF0C2 100%);
     border-color: #FFA800;
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    box-shadow:
+        0 5px 0 #B88500,
+        inset 2px 2px 4px rgba(255, 255, 255, 0.95);
 }
 
 .empty-roster-state {
@@ -1411,7 +1495,7 @@ const sendKudos = (studentName) => {
 }
 
 /* ==========================================================================
-   3D CARTOON BOTTOM GAME NAVIGATION DOCK
+   3D CARTOON + NEUMORPHIC BOTTOM GAME NAVIGATION DOCK
    ========================================================================== */
 .game-bottom-dock {
     position: fixed;
@@ -1419,16 +1503,19 @@ const sendKudos = (studentName) => {
     left: 50%;
     transform: translateX(-50%);
     z-index: 999;
-    background: #FFFFFF;
+    background: var(--neu-surface);
     border: 3.5px solid var(--game-border);
-    border-radius: 36px;
-    padding: 0.6rem 1.4rem;
+    border-radius: 38px;
+    padding: 0.65rem 1.5rem;
     display: flex;
     align-items: center;
     gap: 1.5rem;
-    box-shadow: 
+    box-shadow:
         0 10px 0 var(--game-border),
-        0 20px 40px rgba(29, 36, 64, 0.22);
+        -6px -6px 16px rgba(255, 255, 255, 0.85),
+        0 22px 42px rgba(29, 36, 64, 0.25),
+        var(--neu-bevel-light),
+        var(--neu-bevel-dark);
     user-select: none;
     max-width: 95vw;
 }
@@ -1451,24 +1538,31 @@ const sendKudos = (studentName) => {
 }
 
 .dock-bubble {
-    width: 48px;
-    height: 48px;
+    width: 50px;
+    height: 50px;
     border-radius: 18px;
-    background: #F1F3F9;
+    background: linear-gradient(145deg, #FFFFFF 0%, #E9EDF7 100%);
     border: 2.5px solid var(--game-border);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 1.5rem;
-    box-shadow: 0 3px 0 var(--game-border);
+    box-shadow:
+        0 3px 0 var(--game-border),
+        inset 2px 2px 5px rgba(255, 255, 255, 0.95),
+        inset -2px -2px 5px rgba(164, 176, 204, 0.45);
     position: relative;
     transition: all 0.2s var(--spring-bounce);
 }
 
 .dock-item.active .dock-bubble {
-    background: linear-gradient(135deg, #2395EB 0%, #1579C4 100%);
+    background: linear-gradient(145deg, #38A3F5 0%, #1579C4 100%);
     border-color: #0E5287;
-    box-shadow: 0 4px 0 #0E5287;
+    box-shadow:
+        0 4px 0 #0E5287,
+        0 6px 14px rgba(35, 149, 235, 0.35),
+        inset 2px 2px 5px rgba(255, 255, 255, 0.6),
+        inset -2px -3px 6px rgba(14, 82, 135, 0.5);
     transform: translateY(-4px) scale(1.08);
 }
 
@@ -1490,15 +1584,22 @@ const sendKudos = (studentName) => {
 }
 
 .dock-divider {
-    width: 2px;
+    width: 3px;
     height: 42px;
-    background: #E2E6F2;
+    background: #DFE4F2;
     border-radius: 9999px;
+    box-shadow:
+        inset 1px 1px 2px rgba(163, 174, 198, 0.6),
+        1px 0 0 rgba(255, 255, 255, 0.9);
 }
 
 .logout-item:hover .exit-bubble {
-    background: #FFF1F0;
+    background: linear-gradient(145deg, #FFF5F5 0%, #FFE0E0 100%);
     border-color: #FF4D4F;
+    box-shadow:
+        0 3px 0 #CF1322,
+        inset 2px 2px 4px rgba(255, 255, 255, 0.9),
+        inset -2px -2px 4px rgba(255, 77, 79, 0.25);
 }
 
 .logout-item:hover .dock-label {

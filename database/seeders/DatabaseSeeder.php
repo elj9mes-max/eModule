@@ -24,5 +24,7 @@ class DatabaseSeeder extends Seeder
             'name' => 'Test Teacher',
             'email' => 'teacher@example.com',
         ]);
+
+        $this->call(ModuleSeeder::class);
     }
 }
