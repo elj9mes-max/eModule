@@ -3,9 +3,15 @@
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\StudentDashboardController;
+use App\Http\Controllers\TeacherColorConflictQuizController;
+use App\Http\Controllers\TeacherConflictMapQuizController;
 use App\Http\Controllers\TeacherDashboardController;
+use App\Http\Controllers\TeacherEvaluationQuizController;
 use App\Http\Controllers\TeacherLectureController;
+use App\Http\Controllers\TeacherMatchingTypeQuizController;
 use App\Http\Controllers\TeacherModuleController;
+use App\Http\Controllers\TeacherMultipleChoiceQuizController;
+use App\Http\Controllers\TeacherReflectionQuizController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [LoginController::class, 'create'])->name('login');
@@ -32,6 +38,25 @@ Route::middleware('auth')->group(function () {
     Route::post('/teachers/modules/{module:slug}/lectures', [TeacherLectureController::class, 'store'])->name('teachers.lectures.store');
     Route::get('/teachers/modules/{module:slug}/lectures/{lecture:slug}/contents/create', [TeacherLectureController::class, 'createContent'])->name('teachers.lectures.contents.create');
     Route::post('/teachers/modules/{module:slug}/lectures/{lecture:slug}/contents', [TeacherLectureController::class, 'storeContent'])->name('teachers.lectures.contents.store');
+
+    Route::get('/teachers/modules/{module:slug}/quizzes/multiple-choice/create', [TeacherMultipleChoiceQuizController::class, 'create'])->name('teachers.quizzes.multiple-choice.create');
+    Route::post('/teachers/modules/{module:slug}/quizzes/multiple-choice', [TeacherMultipleChoiceQuizController::class, 'store'])->name('teachers.quizzes.multiple-choice.store');
+    Route::get('/teachers/modules/{module:slug}/quizzes/multiple-choice/{quiz:slug}', [TeacherMultipleChoiceQuizController::class, 'show'])->name('teachers.quizzes.multiple-choice.show');
+
+    Route::get('/teachers/modules/{module:slug}/quizzes/color-the-conflict/create', [TeacherColorConflictQuizController::class, 'create'])->name('teachers.quizzes.color-the-conflict.create');
+    Route::post('/teachers/modules/{module:slug}/quizzes/color-the-conflict', [TeacherColorConflictQuizController::class, 'store'])->name('teachers.quizzes.color-the-conflict.store');
+
+    Route::get('/teachers/modules/{module:slug}/quizzes/the-conflict-map/create', [TeacherConflictMapQuizController::class, 'create'])->name('teachers.quizzes.the-conflict-map.create');
+    Route::post('/teachers/modules/{module:slug}/quizzes/the-conflict-map', [TeacherConflictMapQuizController::class, 'store'])->name('teachers.quizzes.the-conflict-map.store');
+
+    Route::get('/teachers/modules/{module:slug}/quizzes/matching-type/create', [TeacherMatchingTypeQuizController::class, 'create'])->name('teachers.quizzes.matching-type.create');
+    Route::post('/teachers/modules/{module:slug}/quizzes/matching-type', [TeacherMatchingTypeQuizController::class, 'store'])->name('teachers.quizzes.matching-type.store');
+
+    Route::get('/teachers/modules/{module:slug}/quizzes/evaluation/create', [TeacherEvaluationQuizController::class, 'create'])->name('teachers.quizzes.evaluation.create');
+    Route::post('/teachers/modules/{module:slug}/quizzes/evaluation', [TeacherEvaluationQuizController::class, 'store'])->name('teachers.quizzes.evaluation.store');
+
+    Route::get('/teachers/modules/{module:slug}/quizzes/reflection/create', [TeacherReflectionQuizController::class, 'create'])->name('teachers.quizzes.reflection.create');
+    Route::post('/teachers/modules/{module:slug}/quizzes/reflection', [TeacherReflectionQuizController::class, 'store'])->name('teachers.quizzes.reflection.store');
 
     Route::get('/students/welcome', [StudentDashboardController::class, 'welcome'])->name('students.welcome');
     Route::get('/students/dashboard', [StudentDashboardController::class, 'index'])->name('students.dashboard');

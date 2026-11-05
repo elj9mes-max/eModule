@@ -23,6 +23,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    quizzes: {
+        type: Array,
+        default: () => [],
+    },
     moduleTitle: {
         type: String,
         default: null,
@@ -37,7 +41,7 @@ const props = defineProps({
     },
 });
 
-const emit = defineEmits(['step-selected', 'step-completed', 'journey-completed']);
+const emit = defineEmits(['step-selected', 'step-completed', 'journey-completed', 'create-milestone']);
 
 const displayTitle = computed(() => props.moduleTitle || props.module?.title || 'Conflict and Community Values');
 const displayGrade = computed(() => props.moduleGrade || props.module?.grade_level || 'Grade 3 • Reading Legends');
@@ -52,38 +56,97 @@ const themePool = [
     { theme: 'highland-peak', name: 'Highland Pine Peak & Sky Observatory', icon: '🏔️', badge: 'Summit Scholar' },
 ];
 
-// Dynamically map lectures from the database
+const STEP_START_Y = 240;
+const STEP_INTERVAL_Y = 380;
+const CURVE_OFFSET_Y = 190;
+
+// Dynamically map lectures and quizzes into sequential adventure milestones
 const steps = computed(() => {
-    if (!props.lectures || props.lectures.length === 0) {
+    const rawLectures = (props.lectures || []).map((lec) => ({
+        ...lec,
+        itemType: 'lecture',
+        sortOrder: Number(lec.sort_order) || 0,
+    }));
+
+    const rawQuizzes = (props.quizzes || []).map((quiz) => ({
+        ...quiz,
+        itemType: 'quiz',
+        sortOrder: Number(quiz.sort_order) || 0,
+    }));
+
+    // Combine and sort by sort_order ascending
+    const combined = [...rawLectures, ...rawQuizzes].sort((a, b) => {
+        if (a.sortOrder !== b.sortOrder) {
+            return a.sortOrder - b.sortOrder;
+        }
+        return (a.id || 0) - (b.id || 0);
+    });
+
+    if (combined.length === 0) {
         return [];
     }
 
-    return props.lectures.map((lec, idx) => {
+    return combined.map((item, idx) => {
         const stepNum = idx + 1;
         const t = themePool[idx % themePool.length];
         const isLeft = stepNum % 2 === 1;
-        const rawBody = lec.body || '';
+        const isQuiz = item.itemType === 'quiz';
+
+        if (isQuiz) {
+            return {
+                id: stepNum,
+                type: 'quiz',
+                quizType: item.type || 'multiple_choice',
+                dbId: item.id,
+                slug: item.slug,
+                title: item.title,
+                subtitle: item.description
+                    ? (item.description.length > 45 ? item.description.slice(0, 45) + '...' : item.description)
+                    : `Quiz Challenge ${stepNum}`,
+                theme: t.theme,
+                themeName: t.name,
+                icon: '🎯',
+                badge: 'Quiz Challenge',
+                xp: Number(item.xp_reward) || 150,
+                summary: item.description
+                    || (item.reading_passage ? item.reading_passage.slice(0, 140) + '...' : 'Interactive reading comprehension quest with automated scoring and XP.'),
+                readingPassage: item.reading_passage || null,
+                questionsCount: Number(item.questions_count) || item.questions?.length || 0,
+                passingPercentage: item.passing_percentage || 70,
+                timeLimitSeconds: item.time_limit_seconds || null,
+                is_published: item.is_published ?? true,
+                position: isLeft ? 'left' : 'right',
+                cx: isLeft ? 170 : 510,
+                cy: STEP_START_Y + idx * STEP_INTERVAL_Y,
+            };
+        }
+
+        const rawBody = item.body || '';
         const strippedBody = rawBody.replace(/<[^>]*>/g, '').trim();
 
         return {
             id: stepNum,
-            dbId: lec.id,
-            slug: lec.slug,
-            title: lec.title,
-            subtitle: lec.description ? (lec.description.length > 45 ? lec.description.slice(0, 45) + '...' : lec.description) : `Reading Quest ${stepNum}`,
+            type: 'lecture',
+            dbId: item.id,
+            slug: item.slug,
+            title: item.title,
+            subtitle: item.description
+                ? (item.description.length > 45 ? item.description.slice(0, 45) + '...' : item.description)
+                : `Reading Quest ${stepNum}`,
             theme: t.theme,
             themeName: t.name,
             icon: t.icon,
             badge: t.badge,
-            xp: Number(lec.xp_reward) || 100,
-            summary: lec.description || (strippedBody ? strippedBody.slice(0, 140) + '...' : 'Explore reading concepts, multimedia story blocks, and questions.'),
-            body: lec.body || null,
-            contentsCount: Number(lec.contents_count) || lec.contents?.length || 0,
-            contents: lec.contents || [],
-            is_published: lec.is_published ?? true,
+            xp: Number(item.xp_reward) || 100,
+            summary: item.description
+                || (strippedBody ? strippedBody.slice(0, 140) + '...' : 'Explore reading concepts, multimedia story blocks, and questions.'),
+            body: item.body || null,
+            contentsCount: Number(item.contents_count) || item.contents?.length || 0,
+            contents: item.contents || [],
+            is_published: item.is_published ?? true,
             position: isLeft ? 'left' : 'right',
             cx: isLeft ? 170 : 510,
-            cy: 220 + idx * 260,
+            cy: STEP_START_Y + idx * STEP_INTERVAL_Y,
         };
     });
 });
@@ -95,26 +158,26 @@ const trailStageHeight = computed(() => {
     const list = steps.value;
     if (!list || list.length === 0) return 1200;
     const last = list[list.length - 1];
-    return last.cy + 640;
+    return last.cy + 580;
 });
 
 // Dynamic S-Curve Path connecting Start (340,90) -> Step 1 -> ... -> Finale Chest
 const pathTotalD = computed(() => {
     const list = steps.value;
     if (!list || list.length === 0) return '';
-    const start = 'M 340,90 C 340,140 170,160 170,220';
+    const start = 'M 340,90 C 340,150 170,170 170,240';
     if (list.length === 1) {
-        return `${start} C 170,350 340,400 340,640`;
+        return `${start} C 170,400 340,480 340,700`;
     }
     let d = start;
     for (let i = 0; i < list.length - 1; i++) {
         const curr = list[i];
         const next = list[i + 1];
-        d += ` C ${curr.cx},${curr.cy + 130} ${next.cx},${next.cy - 130} ${next.cx},${next.cy}`;
+        d += ` C ${curr.cx},${curr.cy + CURVE_OFFSET_Y} ${next.cx},${next.cy - CURVE_OFFSET_Y} ${next.cx},${next.cy}`;
     }
     const last = list[list.length - 1];
-    const chestY = last.cy + 420;
-    d += ` C ${last.cx},${last.cy + 200} 340,${last.cy + 240} 340,${chestY}`;
+    const chestY = last.cy + 380;
+    d += ` C ${last.cx},${last.cy + 180} 340,${last.cy + 220} 340,${chestY}`;
     return d;
 });
 
@@ -127,7 +190,7 @@ const segments = computed(() => {
     // Segment 0: Start to Node 1
     segs.push({
         id: 0,
-        d: 'M 340,90 C 340,140 170,160 170,220',
+        d: 'M 340,90 C 340,150 170,170 170,240',
         isIlluminated: currentStep.value >= 1,
         color: '#06D6A0',
         isChestBeam: false,
@@ -139,7 +202,7 @@ const segments = computed(() => {
         const stepNum = i + 1;
         segs.push({
             id: stepNum,
-            d: `M ${curr.cx},${curr.cy} C ${curr.cx},${curr.cy + 130} ${next.cx},${next.cy - 130} ${next.cx},${next.cy}`,
+            d: `M ${curr.cx},${curr.cy} C ${curr.cx},${curr.cy + CURVE_OFFSET_Y} ${next.cx},${next.cy - CURVE_OFFSET_Y} ${next.cx},${next.cy}`,
             isIlluminated: currentStep.value > stepNum,
             color: stepNum % 3 === 1 ? '#06D6A0' : (stepNum % 3 === 2 ? '#2395EB' : '#FF6B4A'),
             isChestBeam: false,
@@ -147,10 +210,10 @@ const segments = computed(() => {
     }
 
     const last = list[list.length - 1];
-    const chestY = last.cy + 420;
+    const chestY = last.cy + 380;
     segs.push({
         id: list.length,
-        d: `M ${last.cx},${last.cy} C ${last.cx},${last.cy + 200} 340,${last.cy + 240} 340,${chestY}`,
+        d: `M ${last.cx},${last.cy} C ${last.cx},${last.cy + 180} 340,${last.cy + 220} 340,${chestY}`,
         isIlluminated: currentStep.value > list.length,
         color: '#FFC000',
         isChestBeam: true,
@@ -166,6 +229,8 @@ const showModal = ref(false);
 const showConfetti = ref(false);
 const chestOpened = ref(false);
 const isCelebrationVisible = ref(false);
+const showLockedChestModal = ref(false);
+const lockedRemainingMilestones = ref(1);
 
 // Total adventure XP
 const computedTotalXp = computed(() => {
@@ -265,20 +330,27 @@ const toggleChest = () => {
             }, 5000);
         }
     } else {
-        const remaining = (totalLecturesCount.value + 1) - currentStep.value;
-        alert(`🔒 The ancient treasure chest remains locked! Complete ${remaining} more reading milestone${remaining > 1 ? 's' : ''} to unlock the island treasure vault!`);
+        lockedRemainingMilestones.value = Math.max(1, (totalLecturesCount.value + 1) - currentStep.value);
+        showLockedChestModal.value = true;
     }
 };
 
 const goToCreateLecture = () => {
-    if (props.module?.slug) {
-        router.visit(`/teachers/modules/${props.module.slug}/lectures/create`);
+    emit('create-milestone');
+    if (!props.module?.slug) {
+        return;
     }
 };
 
 const goToManageContent = (step) => {
     if (props.module?.slug && step?.slug) {
         router.visit(`/teachers/modules/${props.module.slug}/lectures/${step.slug}/contents/create`);
+    }
+};
+
+const goToViewQuiz = (step) => {
+    if (props.module?.slug && step?.slug) {
+        router.visit(`/teachers/modules/${props.module.slug}/quizzes/multiple-choice/${step.slug}`);
     }
 };
 
@@ -413,51 +485,6 @@ onMounted(() => {
                         <span class="pill-number">{{ progressPercentage }}%</span>
                     </div>
                 </div>
-            </div>
-
-            <!-- Top Interactive Micro-Control Toolbar -->
-            <div v-if="totalLecturesCount > 0" class="hud-action-row">
-                <button
-                    type="button"
-                    class="btn-hud-control btn-hud-prev"
-                    :disabled="currentStep <= 1"
-                    @click="previousStep"
-                    title="Go back to previous step"
-                >
-                    <span class="btn-arrow">❮</span>
-                    <span>Previous</span>
-                </button>
-
-                <div class="hud-stepper-track">
-                    <div
-                        class="hud-stepper-fill"
-                        :style="{ width: `${progressPercentage}%` }"
-                    ></div>
-                </div>
-
-                <button
-                    v-if="currentStep <= totalLecturesCount"
-                    type="button"
-                    class="btn-hud-control btn-hud-next"
-                    @click="advanceToNextStep"
-                    title="Mark active step complete and advance"
-                >
-                    <span>Complete Step</span>
-                    <span class="btn-arrow">➔</span>
-                </button>
-
-                <button
-                    v-else
-                    type="button"
-                    class="btn-hud-control btn-hud-reset"
-                    @click="resetJourney"
-                    title="Start journey over"
-                >
-                    <span>🔄 Reset Map</span>
-                </button>
-            </div>
-            <div v-else class="hud-action-row empty-action-row">
-                <span class="empty-hud-text">🏝️ No lectures added yet — click "+ CREATE LECTURE" to begin!</span>
             </div>
         </header>
 
@@ -628,7 +655,7 @@ onMounted(() => {
                                 'is-selected': selectedStep?.id === step.id
                             }
                         ]"
-                        :style="{ top: `${step.cy - 75}px` }"
+                        :style="{ top: `${step.cy - 75}px`, zIndex: isStepActive(step.id) ? 30 : 15 }"
                     >
                         <!-- Left or Right Sub-cluster Anchor: Terrain Pad + 3D Button -->
                         <div class="node-anchor-wrap">
@@ -684,13 +711,12 @@ onMounted(() => {
                                 `pointer-${step.position === 'left' ? 'left' : 'right'}`,
                                 { 'elevated': isStepActive(step.id) }
                             ]"
-                            @click="handleSelectStep(step)"
                         >
                             <div class="speech-pointer-triangle"></div>
 
                             <div class="bubble-header">
                                 <span class="step-kicker-pill" :class="`pill-${step.theme}`">
-                                    {{ step.icon }} LECTURE {{ step.id }}
+                                    {{ step.icon }} {{ step.type === 'quiz' ? 'QUIZ' : 'LECTURE' }} {{ step.id }}
                                 </span>
                                 <span class="xp-badge">+{{ step.xp }} XP</span>
                             </div>
@@ -701,12 +727,22 @@ onMounted(() => {
 
                             <div class="bubble-footer">
                                 <div class="time-meta">
-                                    <span v-if="step.contentsCount > 0" class="contents-count-tag">
-                                        📁 {{ step.contentsCount }} {{ step.contentsCount === 1 ? 'Block' : 'Blocks' }}
-                                    </span>
-                                    <span v-else class="contents-count-tag empty-contents-tag">
-                                        📖 Milestone
-                                    </span>
+                                    <template v-if="step.type === 'quiz'">
+                                        <span class="contents-count-tag quiz-count-tag">
+                                            🎯 {{ step.questionsCount }} {{ step.questionsCount === 1 ? 'Question' : 'Questions' }}
+                                        </span>
+                                        <span v-if="step.passingPercentage" class="contents-count-tag passing-tag">
+                                            ⭐ {{ step.passingPercentage }}% Pass
+                                        </span>
+                                    </template>
+                                    <template v-else>
+                                        <span v-if="step.contentsCount > 0" class="contents-count-tag">
+                                            📁 {{ step.contentsCount }} {{ step.contentsCount === 1 ? 'Block' : 'Blocks' }}
+                                        </span>
+                                        <span v-else class="contents-count-tag empty-contents-tag">
+                                            📖 Milestone
+                                        </span>
+                                    </template>
                                 </div>
 
                                 <div class="action-tag">
@@ -720,6 +756,26 @@ onMounted(() => {
                                         Locked
                                     </span>
                                 </div>
+                            </div>
+
+                            <!-- Manage/View Milestone Action Button (Bottom of Speech Bubble Card) -->
+                            <div v-if="module?.slug && step?.slug" class="speech-bubble-manage-row">
+                                <button
+                                    v-if="step.type === 'quiz'"
+                                    type="button"
+                                    class="btn-bubble-manage-content btn-bubble-quiz"
+                                    @click.stop="goToViewQuiz(step)"
+                                >
+                                    <span>🎯 View Quiz ➔</span>
+                                </button>
+                                <button
+                                    v-else
+                                    type="button"
+                                    class="btn-bubble-manage-content"
+                                    @click.stop="goToManageContent(step)"
+                                >
+                                    <span>🎨 Manage Lecture ➔</span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -784,7 +840,7 @@ onMounted(() => {
                         </div>
 
                         <div class="chest-action-pill">
-                            <span v-if="currentStep <= totalLecturesCount">🔒 Complete all {{ totalLecturesCount }} Lectures to Unlock</span>
+                            <span v-if="currentStep <= totalLecturesCount">🔒 Complete all {{ totalLecturesCount }} Milestones to Unlock</span>
                             <span v-else-if="!chestOpened">✨ Click to Open Treasure! ✨</span>
                             <span v-else>🎉 Quest Complete! You're a Master Reader! 🎉</span>
                         </div>
@@ -812,7 +868,9 @@ onMounted(() => {
                     </button>
 
                     <div class="modal-header">
-                        <span class="modal-step-badge">{{ selectedStep.icon }} Lecture {{ selectedStep.id }}</span>
+                        <span class="modal-step-badge">
+                            {{ selectedStep.icon }} {{ selectedStep.type === 'quiz' ? 'Quiz Challenge' : 'Lecture' }} {{ selectedStep.id }}
+                        </span>
                         <span class="modal-theme-tag">{{ selectedStep.themeName }}</span>
                     </div>
 
@@ -828,10 +886,12 @@ onMounted(() => {
                             </div>
                         </div>
                         <div class="meta-item">
-                            <span class="meta-icon">📁</span>
+                            <span class="meta-icon">{{ selectedStep.type === 'quiz' ? '🎯' : '📁' }}</span>
                             <div>
-                                <span class="meta-label">CONTENTS</span>
-                                <span class="meta-value">{{ selectedStep.contentsCount }} Blocks</span>
+                                <span class="meta-label">{{ selectedStep.type === 'quiz' ? 'QUESTIONS' : 'CONTENTS' }}</span>
+                                <span class="meta-value">
+                                    {{ selectedStep.type === 'quiz' ? `${selectedStep.questionsCount} Questions` : `${selectedStep.contentsCount} Blocks` }}
+                                </span>
                             </div>
                         </div>
                         <div class="meta-item">
@@ -844,19 +904,12 @@ onMounted(() => {
                     </div>
 
                     <div class="modal-body-section">
-                        <h4>Lecture Overview</h4>
+                        <h4>{{ selectedStep.type === 'quiz' ? 'Quiz Challenge Overview' : 'Lecture Overview' }}</h4>
                         <p>{{ selectedStep.summary }}</p>
-                    </div>
-
-                    <!-- Manage Multimedia Content Action Button -->
-                    <div v-if="module?.slug && selectedStep?.slug" class="modal-manage-row">
-                        <button
-                            type="button"
-                            class="btn-manage-contents"
-                            @click="goToManageContent(selectedStep)"
-                        >
-                            <span>🎨 Manage Lecture Content Blocks ({{ selectedStep.contentsCount }}) ➔</span>
-                        </button>
+                        <div v-if="selectedStep.readingPassage" class="modal-passage-preview">
+                            <span class="passage-label">📖 Story Reading Passage Excerpt:</span>
+                            <p class="passage-excerpt">{{ selectedStep.readingPassage }}</p>
+                        </div>
                     </div>
 
                     <div class="modal-actions-footer">
@@ -866,6 +919,15 @@ onMounted(() => {
                             @click="showModal = false"
                         >
                             Close
+                        </button>
+
+                        <button
+                            v-if="selectedStep.type === 'quiz' && module?.slug && selectedStep?.slug"
+                            type="button"
+                            class="modal-view-quiz-btn"
+                            @click="() => { showModal = false; goToViewQuiz(selectedStep); }"
+                        >
+                            <span>🎯 Open Quiz ➔</span>
                         </button>
 
                         <button
@@ -892,7 +954,71 @@ onMounted(() => {
                             class="modal-locked-btn"
                             disabled
                         >
-                            <span>🔒 Complete Lecture {{ selectedStep.id - 1 }} First</span>
+                            <span>🔒 Complete Step {{ selectedStep.id - 1 }} First</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <!-- 3D CARTOON NEUMORPHIC MODAL: LOCKED TREASURE CHEST ALERT -->
+        <transition name="modal-bounce">
+            <div
+                v-if="showLockedChestModal"
+                class="modal-backdrop-layer"
+                @click.self="showLockedChestModal = false"
+            >
+                <div class="modal-dialog locked-chest-dialog">
+                    <button
+                        type="button"
+                        class="modal-btn-close"
+                        @click="showLockedChestModal = false"
+                        aria-label="Close dialog"
+                    >
+                        ✕
+                    </button>
+
+                    <!-- 3D Floating Padlock & Chest Emblem Pod -->
+                    <div class="locked-chest-emblem-wrap">
+                        <div class="locked-chest-pod">
+                            <span class="chest-art-emoji">📦</span>
+                            <span class="chest-lock-badge">🔒</span>
+                        </div>
+                        <div class="emblem-sparkle es-1">✨</div>
+                        <div class="emblem-sparkle es-2">⭐</div>
+                    </div>
+
+                    <div class="dialog-header">
+                        <span class="dialog-badge">🏝️ ISLAND TREASURE VAULT</span>
+                        <h2 class="dialog-title">The Ancient Chest Remains Locked!</h2>
+                        <p class="dialog-subtitle">
+                            Complete <span class="highlight-milestones"><strong>{{ lockedRemainingMilestones }} more reading milestone{{ lockedRemainingMilestones > 1 ? 's' : '' }}</strong></span> along the adventure trail to unlock the island treasure vault and reveal your guild rewards!
+                        </p>
+                    </div>
+
+                    <!-- 3D Recessed Neumorphic Progress Tracker Well -->
+                    <div class="locked-progress-well">
+                        <div class="progress-well-labels">
+                            <span class="well-label">EXPEDITION PROGRESS</span>
+                            <span class="well-value">{{ Math.max(0, currentStep - 1) }} / {{ totalLecturesCount }} Milestones Completed</span>
+                        </div>
+                        <div class="well-track">
+                            <div class="well-fill" :style="{ width: `${progressPercentage}%` }"></div>
+                        </div>
+                        <div class="well-bounty-preview">
+                            <span class="bounty-sparkle">⚡</span>
+                            <span class="bounty-text">Bounty locked inside: <strong>+{{ module?.xp_bonus || 1250 }} XP &amp; Legendary Guild Gem</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- 3D Modal Action -->
+                    <div class="locked-modal-actions">
+                        <button
+                            type="button"
+                            class="btn-3d-modal-action btn-continue-quest"
+                            @click="showLockedChestModal = false"
+                        >
+                            <span>🗺️ CONTINUE QUEST ➔</span>
                         </button>
                     </div>
                 </div>
@@ -1169,12 +1295,15 @@ onMounted(() => {
 }
 
 .hud-capsule {
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(12px);
+    background: linear-gradient(180deg, #FFFFFF 0%, #EEF4FD 100%);
+    border: 3px solid #2B3354;
     border-radius: 26px;
     padding: 0.85rem 1.25rem;
-    box-shadow: var(--neu-card-shadow);
-    border: 2px solid rgba(255, 255, 255, 0.95);
+    box-shadow:
+        0 6px 0 #2B3354,
+        0 12px 24px rgba(29, 36, 64, 0.12),
+        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.95),
+        inset -2px -2px 4px rgba(160, 175, 205, 0.35);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1254,28 +1383,31 @@ onMounted(() => {
 .stat-pill {
     display: flex;
     align-items: center;
-    gap: 0.3rem;
-    padding: 0.35rem 0.65rem;
+    gap: 0.35rem;
+    padding: 0.38rem 0.75rem;
     border-radius: 9999px;
     font-family: var(--font-heading);
-    font-weight: 800;
+    font-weight: 900;
     font-size: 0.8rem;
+    box-shadow: 0 2px 0 var(--pill-border, #D97706), inset 1px 1px 2px rgba(255, 255, 255, 0.85);
 }
 
 .xp-pill {
-    background: #fef3c7;
-    color: #b45309;
-    border: 1.5px solid #fde68a;
+    background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+    color: #92400E;
+    border: 1.5px solid #F59E0B;
+    --pill-border: #D97706;
 }
 
 .progress-pill {
-    background: #e0f2fe;
-    color: #0369a1;
-    border: 1.5px solid #bae6fd;
+    background: linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 100%);
+    color: #0369A1;
+    border: 1.5px solid #38BDF8;
+    --pill-border: #0284C7;
 }
 
 /* Micro Action Row */
-.hud-action-row {
+/* .hud-action-row {
     margin-top: 0.65rem;
     display: flex;
     align-items: center;
@@ -1351,7 +1483,7 @@ onMounted(() => {
     background: #fef08a;
     color: #854d0e;
     box-shadow: 0 2px 0 #ca8a04;
-}
+} */
 
 /* Main Vertical Container */
 .journey-main-container {
@@ -1523,6 +1655,7 @@ onMounted(() => {
     width: 100%;
     display: flex;
     align-items: center;
+    pointer-events: none;
     z-index: 10;
 }
 
@@ -1546,6 +1679,7 @@ onMounted(() => {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    pointer-events: auto;
 }
 
 .terrain-island {
@@ -1746,29 +1880,41 @@ onMounted(() => {
     50% { transform: translateY(-4px); }
 }
 
-/* Speech Bubble Card */
+/* Speech Bubble Card with Chunky 3D Neumorphic Frame */
 .speech-bubble-card {
     position: relative;
-    max-width: 310px;
-    background: rgba(255, 255, 255, 0.94);
-    backdrop-filter: blur(12px);
+    max-width: 385px;
+    width: 100%;
+    background: linear-gradient(155deg, #FFFFFF 0%, #F5F9FD 100%);
     border-radius: 22px;
-    padding: 1.15rem 1.25rem;
-    box-shadow: var(--neu-card-shadow);
-    border: 2px solid rgba(255, 255, 255, 0.95);
-    cursor: pointer;
-    transition: all 0.25s var(--spring-bounce);
+    padding: 1.1rem 1.25rem;
+    box-shadow:
+        0 8px 0 #2B3354,
+        0 14px 28px rgba(29, 36, 64, 0.14),
+        inset 2px 2px 4px rgba(255, 255, 255, 0.95),
+        inset -2px -2px 4px rgba(160, 175, 205, 0.35);
+    border: 3px solid #2B3354;
+    cursor: default;
+    transition: transform 0.25s var(--spring-bounce), box-shadow 0.25s var(--spring-bounce);
     user-select: none;
+    pointer-events: auto;
 }
 
 .speech-bubble-card:hover {
-    transform: translateY(-3px) scale(1.02);
-    box-shadow: 12px 12px 28px rgba(14, 116, 144, 0.2), -12px -12px 28px var(--shadow-light);
+    transform: translateY(-3px);
+    box-shadow:
+        0 11px 0 #2B3354,
+        0 20px 32px rgba(29, 36, 64, 0.18),
+        inset 2px 2px 4px rgba(255, 255, 255, 1);
 }
 
 .speech-bubble-card.elevated {
-    border-color: #fed7aa;
-    box-shadow: 12px 12px 30px rgba(249, 115, 22, 0.22), -10px -10px 24px var(--shadow-light);
+    border-color: #2B3354;
+    background: linear-gradient(155deg, #FFFFFF 0%, #FFF8F1 60%, #FEF0E4 100%);
+    box-shadow:
+        0 10px 0 #2B3354,
+        0 20px 34px rgba(249, 115, 22, 0.25),
+        inset 2px 2px 4px rgba(255, 255, 255, 1);
 }
 
 .speech-pointer-triangle {
@@ -1836,6 +1982,10 @@ onMounted(() => {
     color: var(--brand-navy);
     margin: 0 0 0.4rem 0;
     line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 .bubble-summary {
@@ -2232,29 +2382,148 @@ onMounted(() => {
     margin: 0 0 1.25rem 0;
 }
 
-/* Manage Content Button */
-.modal-manage-row {
-    margin-bottom: 1.5rem;
+/* Speech Bubble Manage Content Button */
+.speech-bubble-manage-row {
+    margin-top: 0.85rem;
+    padding-top: 0.75rem;
+    border-top: 1.5px dashed rgba(203, 213, 225, 0.85);
 }
 
-.btn-manage-contents {
+.btn-bubble-manage-content {
     width: 100%;
-    background: #f0fdf4;
-    border: 2px dashed #86efac;
-    color: #15803d;
+    background: linear-gradient(145deg, #10B981 0%, #059669 100%);
+    border: 2px solid #064E3B;
+    color: #FFFFFF;
     border-radius: 14px;
-    padding: 0.75rem 1rem;
+    padding: 0.65rem 0.95rem;
     font-family: var(--font-heading);
     font-weight: 900;
-    font-size: 0.88rem;
+    font-size: 0.82rem;
+    letter-spacing: 0.03em;
     cursor: pointer;
-    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+        0 3.5px 0 #064E3B,
+        0 6px 14px rgba(5, 150, 105, 0.3),
+        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.7),
+        inset -1.5px -1.5px 3px rgba(6, 78, 59, 0.35);
+    transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
+    user-select: none;
 }
 
-.btn-manage-contents:hover {
-    background: #dcfce7;
-    border-color: #22c55e;
-    transform: translateY(-1px);
+.btn-bubble-manage-content:hover {
+    background: linear-gradient(145deg, #34D399 0%, #059669 100%);
+    transform: translateY(-2px);
+    box-shadow:
+        0 5.5px 0 #064E3B,
+        0 10px 20px rgba(5, 150, 105, 0.45),
+        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.9);
+}
+
+.btn-bubble-manage-content:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #064E3B;
+}
+
+.btn-bubble-manage-content:active {
+    transform: translateY(2px);
+    border-bottom-width: 2px;
+    box-shadow: 0 1px 2px rgba(34, 197, 94, 0.2);
+}
+
+.btn-bubble-quiz {
+    background: linear-gradient(145deg, #f97316 0%, #ea580c 100%);
+    border: 2px solid #9a3412;
+    box-shadow:
+        0 3.5px 0 #9a3412,
+        0 6px 14px rgba(234, 88, 12, 0.35),
+        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.7),
+        inset -1.5px -1.5px 3px rgba(154, 52, 18, 0.35);
+}
+
+.btn-bubble-quiz:hover {
+    background: linear-gradient(145deg, #fb923c 0%, #ea580c 100%);
+    box-shadow:
+        0 5.5px 0 #9a3412,
+        0 10px 20px rgba(234, 88, 12, 0.45),
+        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.9);
+}
+
+.btn-bubble-quiz:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #9a3412;
+}
+
+.quiz-count-tag {
+    background: rgba(249, 115, 22, 0.12);
+    color: #c2410c;
+    border: 1px solid rgba(249, 115, 22, 0.25);
+    border-radius: 8px;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.passing-tag {
+    background: rgba(234, 179, 8, 0.15);
+    color: #a16207;
+    border: 1px solid rgba(234, 179, 8, 0.3);
+    border-radius: 8px;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.modal-passage-preview {
+    margin-top: 1rem;
+    padding: 0.85rem 1rem;
+    background: #f8fafc;
+    border-left: 3.5px solid #f97316;
+    border-radius: 8px;
+}
+
+.modal-passage-preview .passage-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #c2410c;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.35rem;
+}
+
+.modal-passage-preview .passage-excerpt {
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: #475569;
+    font-style: italic;
+    margin: 0;
+}
+
+.modal-view-quiz-btn {
+    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    color: #ffffff;
+    border: none;
+    padding: 0.65rem 1.25rem;
+    border-radius: 14px;
+    font-family: var(--font-heading);
+    font-weight: 900;
+    font-size: 0.9rem;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #9a3412, 0 8px 14px rgba(234, 88, 12, 0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.modal-view-quiz-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 #9a3412, 0 10px 18px rgba(234, 88, 12, 0.45);
+}
+
+.modal-view-quiz-btn:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #9a3412;
 }
 
 .modal-actions-footer {
@@ -2318,6 +2587,279 @@ onMounted(() => {
 @keyframes modalPop {
     from { opacity: 0; transform: scale(0.85) translateY(20px); }
     to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ==========================================================================
+   3D CARTOON NEUMORPHIC MODAL: LOCKED TREASURE CHEST
+   ========================================================================== */
+.modal-backdrop-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(8px);
+}
+
+.locked-chest-dialog {
+    position: relative;
+    width: 100%;
+    max-width: 460px;
+    background: linear-gradient(165deg, #FFFFFF 0%, #FFF8EE 45%, #FEF0D6 100%);
+    border: 4px solid #2B3354;
+    border-radius: 36px;
+    padding: 2.25rem 2rem 1.85rem;
+    box-shadow: 0 16px 0 #2B3354, 0 32px 64px rgba(15, 23, 42, 0.4), inset 2px 2px 4px #ffffff, inset -3px -3px 6px rgba(217, 119, 6, 0.15);
+    text-align: center;
+}
+
+.modal-btn-close {
+    position: absolute;
+    top: 1.15rem;
+    right: 1.15rem;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 3px solid #2B3354;
+    background: #ffffff;
+    color: #2B3354;
+    font-family: var(--font-heading);
+    font-size: 1.1rem;
+    font-weight: 900;
+    box-shadow: 0 4px 0 #2B3354;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.modal-btn-close:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 #2B3354;
+    background: #FEE2E2;
+    color: #DC2626;
+}
+
+.modal-btn-close:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #2B3354;
+}
+
+.locked-chest-emblem-wrap {
+    position: relative;
+    width: 104px;
+    height: 104px;
+    margin: -4.5rem auto 1.25rem;
+}
+
+.locked-chest-pod {
+    width: 100%;
+    height: 100%;
+    border-radius: 32px;
+    border: 4px solid #2B3354;
+    background: linear-gradient(145deg, #FFE082 0%, #F59E0B 55%, #D97706 100%);
+    box-shadow: 0 10px 0 #2B3354, 0 16px 30px rgba(217, 119, 6, 0.45), inset 3px 3px 6px #FFF9C4, inset -3px -3px 6px #B45309;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    animation: floatLockedChest 3.5s ease-in-out infinite alternate;
+}
+
+@keyframes floatLockedChest {
+    0% { transform: translateY(0) scale(1) rotate(0deg); }
+    100% { transform: translateY(-8px) scale(1.04) rotate(-2deg); }
+}
+
+.chest-art-emoji {
+    font-size: 3.4rem;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.2));
+}
+
+.chest-lock-badge {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    font-size: 1.4rem;
+    background: #EF4444;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 3px solid #2B3354;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 0 #2B3354;
+}
+
+.emblem-sparkle {
+    position: absolute;
+    font-size: 1.25rem;
+    pointer-events: none;
+    animation: twinkleSparkle 2.5s ease-in-out infinite alternate;
+}
+
+.es-1 {
+    top: -4px;
+    left: -10px;
+    animation-delay: 0.2s;
+}
+
+.es-2 {
+    bottom: 8px;
+    left: -14px;
+    animation-delay: 0.8s;
+}
+
+@keyframes twinkleSparkle {
+    0% { transform: scale(0.8) rotate(0deg); opacity: 0.6; }
+    100% { transform: scale(1.2) rotate(15deg); opacity: 1; }
+}
+
+.dialog-header {
+    margin-bottom: 1.25rem;
+}
+
+.dialog-badge {
+    display: inline-block;
+    font-family: var(--font-heading);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    color: #B45309;
+    background: #FEF3C7;
+    border: 2.5px solid #2B3354;
+    border-radius: 9999px;
+    padding: 0.35rem 0.9rem;
+    box-shadow: 0 3px 0 #2B3354;
+    margin-bottom: 0.85rem;
+}
+
+.dialog-title {
+    font-family: var(--font-heading);
+    font-size: 1.55rem;
+    font-weight: 900;
+    color: #1D2440;
+    line-height: 1.25;
+    margin: 0 0 0.65rem 0;
+    text-shadow: 0 1px 0 #ffffff;
+}
+
+.dialog-subtitle {
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #475569;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.highlight-milestones {
+    color: #B45309;
+    background: #FEF3C7;
+    padding: 0.15rem 0.45rem;
+    border-radius: 8px;
+    border: 1.5px solid #F59E0B;
+}
+
+.locked-progress-well {
+    background: #F1F5F9;
+    border: 3px solid #2B3354;
+    border-radius: 22px;
+    padding: 1rem 1.15rem;
+    margin-bottom: 1.4rem;
+    box-shadow: inset 2px 2px 6px rgba(15, 23, 42, 0.12), inset -2px -2px 6px #ffffff, 0 4px 0 #2B3354;
+}
+
+.progress-well-labels {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--font-heading);
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #64748B;
+    margin-bottom: 0.5rem;
+}
+
+.well-value {
+    color: #1D2440;
+    font-weight: 900;
+}
+
+.well-track {
+    width: 100%;
+    height: 16px;
+    background: #CBD5E1;
+    border: 2.5px solid #2B3354;
+    border-radius: 9999px;
+    overflow: hidden;
+    box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.2);
+    position: relative;
+}
+
+.well-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #F59E0B 0%, #10B981 100%);
+    border-radius: 9999px;
+    transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.4);
+}
+
+.well-bounty-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    margin-top: 0.75rem;
+    font-family: var(--font-heading);
+    font-size: 0.78rem;
+    color: #475569;
+}
+
+.bounty-sparkle {
+    font-size: 0.95rem;
+}
+
+.bounty-text strong {
+    color: #B45309;
+}
+
+.locked-modal-actions {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+.btn-3d-modal-action.btn-continue-quest {
+    width: 100%;
+    border: 3px solid #2B3354;
+    border-radius: 20px;
+    padding: 0.95rem 1.75rem;
+    font-family: var(--font-heading);
+    font-weight: 900;
+    font-size: 1.05rem;
+    letter-spacing: 0.04em;
+    color: #ffffff;
+    background: linear-gradient(135deg, #F97316 0%, #EA580C 100%);
+    box-shadow: 0 6px 0 #2B3354, 0 12px 24px rgba(234, 88, 12, 0.35);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-3d-modal-action.btn-continue-quest:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 0 #2B3354, 0 16px 28px rgba(234, 88, 12, 0.45);
+    filter: brightness(1.05);
+}
+
+.btn-3d-modal-action.btn-continue-quest:active {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 #2B3354;
 }
 
 /* Celebration Toast */
@@ -2486,6 +3028,7 @@ onMounted(() => {
     .chunky-3d-button { width: 58px; height: 58px; }
     .badge-icon-check, .badge-num-active { font-size: 1.5rem; }
     .speech-bubble-card { max-width: 215px; padding: 0.85rem 0.95rem; }
+    .btn-bubble-manage-content { font-size: 0.7rem; padding: 0.45rem 0.55rem; }
     .bubble-title { font-size: 0.88rem; }
     .bubble-summary { font-size: 0.75rem; }
     .celebration-toast { flex-direction: column; text-align: center; padding: 1rem; }

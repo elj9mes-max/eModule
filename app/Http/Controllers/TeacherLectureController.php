@@ -27,7 +27,7 @@ class TeacherLectureController extends Controller
             return redirect()->route('teachers.dashboard');
         }
 
-        $nextOrder = ((int) $module->lectures()->max('sort_order')) + 1;
+        $nextOrder = $module->nextMilestoneSortOrder();
 
         return Inertia::render('teachers/create/Lecture', [
             'user' => [
@@ -68,7 +68,7 @@ class TeacherLectureController extends Controller
             $slug = $baseSlug.'-'.$counter++;
         }
 
-        $nextOrder = ((int) $module->lectures()->max('sort_order')) + 1;
+        $nextOrder = $module->nextMilestoneSortOrder();
         $isPublished = (bool) ($validated['is_published'] ?? true);
 
         $module->lectures()->create([

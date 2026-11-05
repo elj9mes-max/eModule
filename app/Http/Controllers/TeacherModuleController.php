@@ -7,6 +7,10 @@ use App\Http\Requests\StoreModuleRequest;
 use App\Models\Lecture;
 use App\Models\LectureContent;
 use App\Models\Module;
+use App\Models\Quiz;
+use App\Models\QuizContext;
+use App\Models\QuizQuestion;
+use App\Models\QuizQuestionOption;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -70,7 +74,7 @@ class TeacherModuleController extends Controller
             'cover_image_path' => $coverImagePath,
             'xp_bonus' => (int) $validated['xp_bonus'],
             'boss_name' => $validated['boss_name'] ?? null,
-            'max_students' => (int) $validated['max_students'],
+            'max_students' => isset($validated['max_students']) && $validated['max_students'] !== null ? (int) $validated['max_students'] : null,
             'status' => $status,
             'sort_order' => $nextOrder,
             'published_at' => $status === ModuleStatus::Published ? now() : null,
@@ -92,6 +96,7 @@ class TeacherModuleController extends Controller
 
         $module->load([
             'lectures' => fn ($query) => $query->with('contents')->orderBy('sort_order'),
+            'quizzes' => fn ($query) => $query->with(['contexts', 'questions.options'])->orderBy('sort_order'),
         ]);
 
         return Inertia::render('teachers/view/Module', [
@@ -135,6 +140,47 @@ class TeacherModuleController extends Controller
                     'external_url' => $content->external_url,
                     'caption' => $content->caption,
                     'sort_order' => $content->sort_order,
+                ])->values()->all(),
+            ])->values()->all(),
+            'quizzes' => $module->quizzes->map(fn (Quiz $quiz): array => [
+                'id' => $quiz->id,
+                'title' => $quiz->title,
+                'slug' => $quiz->slug,
+                'type' => $quiz->type->value,
+                'description' => $quiz->description,
+                'reading_passage' => $quiz->contexts->first()?->scenario ?? $quiz->reading_passage,
+                'context' => $quiz->contexts->first() ? [
+                    'id' => $quiz->contexts->first()->id,
+                    'scenario' => $quiz->contexts->first()->scenario,
+                    'hint' => $quiz->contexts->first()->hint,
+                ] : null,
+                'contexts' => $quiz->contexts->map(fn (QuizContext $ctx): array => [
+                    'id' => $ctx->id,
+                    'scenario' => $ctx->scenario,
+                    'hint' => $ctx->hint,
+                ])->values()->all(),
+                'xp_reward' => $quiz->xp_reward,
+                'passing_percentage' => $quiz->passing_percentage,
+                'time_limit_seconds' => $quiz->time_limit_seconds,
+                'sort_order' => $quiz->sort_order,
+                'is_published' => $quiz->is_published,
+                'questions_count' => $quiz->questions->count(),
+                'questions' => $quiz->questions->map(fn (QuizQuestion $question): array => [
+                    'id' => $question->id,
+                    'question_text' => $question->question_text,
+                    'selection_type' => $question->selection_type->value,
+                    'passage_context' => $question->passage_context,
+                    'hint' => $question->hint,
+                    'explanation' => $question->explanation,
+                    'points' => $question->points,
+                    'sort_order' => $question->sort_order,
+                    'options' => $question->options->map(fn (QuizQuestionOption $option): array => [
+                        'id' => $option->id,
+                        'option_text' => $option->option_text,
+                        'is_correct' => $option->is_correct,
+                        'feedback' => $option->feedback,
+                        'sort_order' => $option->sort_order,
+                    ])->values()->all(),
                 ])->values()->all(),
             ])->values()->all(),
         ]);

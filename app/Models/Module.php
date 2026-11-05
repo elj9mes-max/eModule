@@ -44,7 +44,6 @@ class Module extends Model
         'theme' => ModuleTheme::Forest,
         'icon' => '📘',
         'xp_bonus' => 250,
-        'max_students' => 35,
         'status' => ModuleStatus::Draft,
         'sort_order' => 0,
     ];
@@ -84,6 +83,27 @@ class Module extends Model
     public function lectures(): HasMany
     {
         return $this->hasMany(Lecture::class)->orderBy('sort_order');
+    }
+
+    /**
+     * Get the quizzes inside the module, ordered by sort_order.
+     *
+     * @return HasMany<Quiz, $this>
+     */
+    public function quizzes(): HasMany
+    {
+        return $this->hasMany(Quiz::class)->orderBy('sort_order');
+    }
+
+    /**
+     * Determine the next sequential milestone sort order across all lectures and quizzes.
+     */
+    public function nextMilestoneSortOrder(): int
+    {
+        $maxLectureOrder = (int) $this->lectures()->max('sort_order');
+        $maxQuizOrder = (int) $this->quizzes()->max('sort_order');
+
+        return max($maxLectureOrder, $maxQuizOrder) + 1;
     }
 
     /**

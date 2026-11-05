@@ -34,7 +34,7 @@ class StoreModuleRequest extends FormRequest
             'cover_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'xp_bonus' => ['required', 'integer', 'min:0', 'max:100000'],
             'boss_name' => ['nullable', 'string', 'max:120'],
-            'max_students' => ['required', 'integer', 'min:1', 'max:500'],
+            'max_students' => ['nullable', 'integer', 'min:1', 'max:500'],
             'status' => ['required', Rule::enum(ModuleStatus::class)],
         ];
     }

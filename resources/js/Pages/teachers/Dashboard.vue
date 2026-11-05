@@ -129,9 +129,9 @@ const openModule = (mod) => {
                         <p class="panel-sub">Select a module to manage lectures, multimedia lessons, reading quests, and milestones.</p>
                     </div>
                     <div class="header-buttons">
-                        <button type="button" class="btn-3d btn-ranking-action" @click="goToStudents">
+                        <!-- <button type="button" class="btn-3d btn-ranking-action" @click="goToStudents">
                             <span>🏆 VIEW STUDENT RANKINGS</span>
-                        </button>
+                        </button> -->
                         <button type="button" class="btn-3d btn-primary-action" @click="goToCreateModule">
                             <span>✨ + ADD NEW MODULE</span>
                         </button>
@@ -144,69 +144,195 @@ const openModule = (mod) => {
                         :key="mod.id"
                         class="kingdom-card"
                         :class="`theme-${mod.theme}`"
+                        role="button"
+                        tabindex="0"
+                        :aria-label="'Open learning module: ' + mod.title"
+                        @click="openModule(mod)"
+                        @keydown.enter="openModule(mod)"
+                        @keydown.space.prevent="openModule(mod)"
                     >
-                        <!-- Optional Module Cover Banner -->
-                        <div v-if="mod.cover_image_url" class="module-card-banner-wrap">
-                            <img :src="mod.cover_image_url" :alt="mod.title" class="module-card-banner-img" />
+                        <!-- 3D Clay Decorative Accent: Star perched on top frame rim -->
+                        <div class="clay-accent clay-star" aria-hidden="true">
+                            <svg viewBox="0 0 54 54" class="clay-star-svg" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <filter id="clayStarDropShadow" x="-30%" y="-30%" width="160%" height="160%">
+                                        <feDropShadow dx="-2" dy="5" stdDeviation="3.5" flood-color="#8C5320" flood-opacity="0.32" />
+                                    </filter>
+                                    <radialGradient id="clayStarFill" cx="35%" cy="30%" r="65%">
+                                        <stop offset="0%" stop-color="#FFF2B2" />
+                                        <stop offset="40%" stop-color="#FCD34D" />
+                                        <stop offset="80%" stop-color="#F59E0B" />
+                                        <stop offset="100%" stop-color="#D97706" />
+                                    </radialGradient>
+                                    <linearGradient id="clayStarBevel" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9" />
+                                        <stop offset="100%" stop-color="#B45309" stop-opacity="0.35" />
+                                    </linearGradient>
+                                </defs>
+                                <g filter="url(#clayStarDropShadow)">
+                                    <path d="M27 5 C28.5 5 31.2 15 33 17 C34.8 19 45 20 46 21.5 C47 23 39.5 29.5 38.5 31.5 C37.5 33.5 40 43.5 38.5 44.5 C37 45.5 29 40 27 40 C25 40 17 45.5 15.5 44.5 C14 43.5 16.5 33.5 15.5 31.5 C14.5 29.5 7 23 8 21.5 C9 20 19.2 19 21 17 C22.8 15 25.5 5 27 5 Z"
+                                        fill="url(#clayStarFill)" stroke="url(#clayStarBevel)" stroke-width="2.5" stroke-linejoin="round" />
+                                    <ellipse cx="23" cy="16" rx="3.5" ry="2" transform="rotate(-25 23 16)" fill="#FFFFFF" fill-opacity="0.75" />
+                                </g>
+                            </svg>
                         </div>
 
-                        <!-- Module Top Badge -->
-                        <div class="kingdom-top">
-                            <div class="realm-avatar-badge">
-                                <span class="realm-emoji">{{ mod.icon }}</span>
-                            </div>
-                            <div class="realm-badges-wrap">
-                                <span v-if="mod.is_new" class="realm-new-pill">
-                                    ✨ NEW
-                                </span>
-                                <div class="realm-status-pill" :class="{ 'boss-alert': mod.status === 'draft' }">
-                                    {{ mod.status_label }}
+                        <!-- 3D Clay Decorative Accent: Left Puffy Cloud -->
+                        <div class="clay-accent clay-cloud clay-cloud-left" aria-hidden="true">
+                            <svg viewBox="0 0 110 70" class="clay-cloud-svg" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <filter id="cloudShadowLeft" x="-30%" y="-30%" width="170%" height="170%">
+                                        <feDropShadow dx="-4" dy="7" stdDeviation="5.5" flood-color="#404B6D" flood-opacity="0.22" />
+                                    </filter>
+                                    <linearGradient id="cloudGradLeft" x1="20%" y1="0%" x2="60%" y2="100%">
+                                        <stop offset="0%" stop-color="#FFFFFF" />
+                                        <stop offset="60%" stop-color="#F2F5FB" />
+                                        <stop offset="100%" stop-color="#D7E0F0" />
+                                    </linearGradient>
+                                    <radialGradient id="cloudPuffLeft" cx="30%" cy="25%" r="70%">
+                                        <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95" />
+                                        <stop offset="60%" stop-color="#FFFFFF" stop-opacity="0" />
+                                    </radialGradient>
+                                </defs>
+                                <g filter="url(#cloudShadowLeft)">
+                                    <path d="M26 52 C15 52 8 44 8 36 C8 28 14 22 22 21 C24 12 33 5 45 5 C56 5 65 11 68 20 C72 17 78 17 82 20 C88 24 90 31 88 37 C96 39 102 45 102 52 C102 60 95 65 85 65 L26 65 C18 65 14 59 16 54 Z"
+                                        fill="url(#cloudGradLeft)" />
+                                    <ellipse cx="45" cy="20" rx="16" ry="10" fill="url(#cloudPuffLeft)" />
+                                    <ellipse cx="72" cy="30" rx="12" ry="8" fill="url(#cloudPuffLeft)" />
+                                    <ellipse cx="26" cy="36" rx="10" ry="7" fill="url(#cloudPuffLeft)" />
+                                </g>
+                            </svg>
+                        </div>
+
+                        <!-- 3D Clay Decorative Accent: Right Puffy Cloud -->
+                        <div class="clay-accent clay-cloud clay-cloud-right" aria-hidden="true">
+                            <svg viewBox="0 0 110 70" class="clay-cloud-svg" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <filter id="cloudShadowRight" x="-30%" y="-30%" width="170%" height="170%">
+                                        <feDropShadow dx="4" dy="7" stdDeviation="5.5" flood-color="#404B6D" flood-opacity="0.22" />
+                                    </filter>
+                                    <linearGradient id="cloudGradRight" x1="40%" y1="0%" x2="40%" y2="100%">
+                                        <stop offset="0%" stop-color="#FFFFFF" />
+                                        <stop offset="60%" stop-color="#F2F5FB" />
+                                        <stop offset="100%" stop-color="#D7E0F0" />
+                                    </linearGradient>
+                                    <radialGradient id="cloudPuffRight" cx="35%" cy="25%" r="70%">
+                                        <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95" />
+                                        <stop offset="60%" stop-color="#FFFFFF" stop-opacity="0" />
+                                    </radialGradient>
+                                </defs>
+                                <g filter="url(#cloudShadowRight)">
+                                    <path d="M24 61 C14 61 8 54 8 46 C8 39 13 33 20 31 C21 21 30 14 41 14 C48 14 55 18 58 24 C62 20 68 19 74 22 C81 26 84 34 82 40 C91 41 98 47 98 55 C98 62 91 67 82 67 L24 67 Z"
+                                        fill="url(#cloudGradRight)" />
+                                    <ellipse cx="42" cy="25" rx="14" ry="9" fill="url(#cloudPuffRight)" />
+                                    <ellipse cx="68" cy="33" rx="11" ry="7" fill="url(#cloudPuffRight)" />
+                                </g>
+                            </svg>
+                        </div>
+
+                        <!-- Floating Discrete Status / New Clay Badges -->
+                        <div class="clay-card-badges">
+                            <span v-if="mod.is_new" class="clay-badge-new">✨ NEW</span>
+                            <span v-if="mod.status === 'draft'" class="clay-badge-draft">DRAFT</span>
+                        </div>
+
+                        <!-- Stepped Neumorphic Bezel holding Center Picture Window -->
+                        <div class="frame-inner-bezel">
+                            <div class="frame-window">
+                                <img
+                                    v-if="mod.cover_image_url"
+                                    :src="mod.cover_image_url"
+                                    :alt="mod.title"
+                                    class="frame-center-image"
+                                />
+                                <!-- 3D Cartoon Fallback Fantasy Landscape (when no cover image uploaded) -->
+                                <div v-else class="frame-fallback-scene" aria-hidden="true">
+                                    <svg viewBox="0 0 600 360" preserveAspectRatio="xMidYMid slice" class="fallback-scenery-svg">
+                                        <defs>
+                                            <linearGradient id="scenerySky" x1="0%" y1="0%" x2="0%" y2="100%">
+                                                <stop offset="0%" stop-color="#AEE2FF" />
+                                                <stop offset="45%" stop-color="#D0EDFE" />
+                                                <stop offset="100%" stop-color="#FFF2E7" />
+                                            </linearGradient>
+                                            <linearGradient id="mountPink" x1="0%" y1="0%" x2="0%" y2="100%">
+                                                <stop offset="0%" stop-color="#EAA6BF" />
+                                                <stop offset="100%" stop-color="#C782A6" />
+                                            </linearGradient>
+                                            <linearGradient id="mountPurple" x1="0%" y1="0%" x2="0%" y2="100%">
+                                                <stop offset="0%" stop-color="#CBB5EA" />
+                                                <stop offset="100%" stop-color="#9C82CA" />
+                                            </linearGradient>
+                                            <linearGradient id="hillGreen1" x1="0%" y1="0%" x2="0%" y2="100%">
+                                                <stop offset="0%" stop-color="#B2EDB8" />
+                                                <stop offset="100%" stop-color="#72D086" />
+                                            </linearGradient>
+                                            <linearGradient id="hillGreen2" x1="0%" y1="0%" x2="0%" y2="100%">
+                                                <stop offset="0%" stop-color="#78E3AC" />
+                                                <stop offset="100%" stop-color="#40B880" />
+                                            </linearGradient>
+                                            <linearGradient id="hillYellow" x1="0%" y1="0%" x2="0%" y2="100%">
+                                                <stop offset="0%" stop-color="#FDE89C" />
+                                                <stop offset="100%" stop-color="#F6C852" />
+                                            </linearGradient>
+                                            <linearGradient id="pathGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                <stop offset="0%" stop-color="#FCE1AE" />
+                                                <stop offset="100%" stop-color="#F3C377" />
+                                            </linearGradient>
+                                        </defs>
+
+                                        <!-- Pastel Sky -->
+                                        <rect width="600" height="360" fill="url(#scenerySky)" />
+
+                                        <!-- Background Clouds -->
+                                        <path d="M70 120 C70 100 90 85 115 85 C135 85 152 98 158 112 C168 108 180 114 184 124 C192 126 198 134 198 142 C198 152 188 158 175 158 L75 158 C62 158 55 148 58 138 C58 130 63 123 70 120 Z" fill="#FFFFFF" fill-opacity="0.85" />
+                                        <path d="M360 90 C360 72 378 58 402 58 C422 58 438 70 444 84 C454 80 466 86 470 95 C478 97 484 104 484 112 C484 122 474 128 460 128 L365 128 C352 128 346 118 349 108 C349 100 354 93 360 90 Z" fill="#FFFFFF" fill-opacity="0.88" />
+
+                                        <!-- Distant Snow-Capped Mountains -->
+                                        <path d="M120 250 L195 120 L270 250 Z" fill="url(#mountPink)" />
+                                        <path d="M195 120 L175 160 C185 168 205 168 215 160 Z" fill="#FFFFFF" />
+                                        <path d="M220 260 L330 90 L440 260 Z" fill="url(#mountPurple)" />
+                                        <path d="M330 90 L295 150 C315 162 345 162 365 150 Z" fill="#FFFFFF" />
+                                        <path d="M380 260 L450 145 L520 260 Z" fill="url(#mountPink)" />
+                                        <path d="M450 145 L430 180 C440 188 460 188 470 180 Z" fill="#FFFFFF" />
+
+                                        <!-- Rolling Hills -->
+                                        <path d="M-20 260 Q80 190 220 240 T460 230 Q540 240 620 210 L620 360 L-20 360 Z" fill="url(#hillGreen1)" />
+                                        <path d="M-20 280 Q140 220 310 270 T620 250 L620 360 L-20 360 Z" fill="url(#hillGreen2)" />
+                                        <path d="M-20 310 Q160 260 360 300 T620 280 L620 360 L-20 360 Z" fill="url(#hillYellow)" />
+
+                                        <!-- Winding Cartoon Path -->
+                                        <path d="M250 360 Q280 300 290 260 Q300 240 310 235 L330 238 Q320 245 315 265 Q310 305 350 360 Z" fill="url(#pathGrad)" />
+
+                                        <!-- Candy Trees Left Side -->
+                                        <rect x="75" y="225" width="10" height="35" rx="3" fill="#8B5E3C" />
+                                        <circle cx="80" cy="215" r="28" fill="#B388FF" />
+                                        <circle cx="72" cy="205" r="10" fill="#D1C4E9" fill-opacity="0.6" />
+                                        <rect x="135" y="240" width="8" height="28" rx="2" fill="#8B5E3C" />
+                                        <circle cx="139" cy="235" r="20" fill="#FF80AB" />
+                                        <circle cx="134" cy="228" r="7" fill="#FFD1DC" fill-opacity="0.6" />
+                                        <rect x="180" y="250" width="8" height="24" rx="2" fill="#8B5E3C" />
+                                        <circle cx="184" cy="245" r="18" fill="#80D8FF" />
+
+                                        <!-- Candy Trees Right Side -->
+                                        <rect x="495" y="215" width="12" height="42" rx="3" fill="#8B5E3C" />
+                                        <circle cx="501" cy="205" r="32" fill="#FF6E6E" />
+                                        <circle cx="492" cy="192" r="12" fill="#FFA4A4" fill-opacity="0.6" />
+                                        <rect x="445" y="235" width="10" height="32" rx="2.5" fill="#8B5E3C" />
+                                        <circle cx="450" cy="225" r="22" fill="#FFA726" />
+                                        <circle cx="444" cy="218" r="8" fill="#FFCC80" fill-opacity="0.6" />
+                                        <polygon points="415,260 405,230 425,230" fill="#26A69A" />
+                                        <polygon points="415,240 407,215 423,215" fill="#4DB6AC" />
+                                    </svg>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Module Info -->
-                        <h3 class="kingdom-title">{{ mod.title }}</h3>
-                        <p class="kingdom-grade">{{ mod.grade_level }}</p>
-
-                        <!-- Module Stats Block -->
-                        <div class="kingdom-stats-box">
-                            <div class="stat-item">
-                                <span class="stat-label">Lectures</span>
-                                <span class="stat-value">📖 {{ mod.lectures_count }} Lessons</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">Completion XP</span>
-                                <span class="stat-value buff-value">⚡ +{{ mod.xp_bonus }} XP</span>
-                            </div>
+                        <!-- 3D Extruded Neumorphic Plaque with Module Title -->
+                        <div class="clay-title-plaque">
+                            <span class="plaque-title-text" :title="mod.title">
+                                {{ mod.title }}
+                            </span>
                         </div>
-
-                        <!-- Capacity Info -->
-                        <div class="realm-progress-wrap">
-                            <div class="progress-labels">
-                                <span>Max Students</span>
-                                <span class="progress-pct">🎒 {{ mod.max_students }} Seats</span>
-                            </div>
-                            <div class="realm-track">
-                                <div class="realm-fill" style="width: 100%"></div>
-                            </div>
-                        </div>
-
-                        <!-- Boss Encounter Preview -->
-                        <div class="boss-preview-box">
-                            <span class="boss-icon">👹</span>
-                            <span class="boss-text">Boss: <strong>{{ mod.boss_name }}</strong></span>
-                        </div>
-
-                        <!-- Card Action -->
-                        <button
-                            type="button"
-                            class="btn-3d btn-enter-realm"
-                            @click="openModule(mod)"
-                        >
-                            <span>OPEN MODULE</span>
-                            <span class="arrow-icon">➔</span>
-                        </button>
                     </div>
                 </div>
 
@@ -770,153 +896,231 @@ const openModule = (mod) => {
         inset -2px -2px 5px rgba(14, 82, 135, 0.45);
 }
 
-/* Kingdoms Grid: Fixed 2 Modules Per Row */
+/* Kingdoms Grid: Fixed 2 Modules Per Row with Generous Spacing for 3D Overlaps */
 .kingdoms-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.25rem;
+    gap: 3rem 1.85rem;
+    padding-top: 0.5rem;
+    padding-bottom: 2rem;
 }
 
-/* Molded Neumorphic 3D Cartoon Kingdom Card (Compact) */
+/* 3D CARTOON NEUMORPHISM KINGDOM CARD */
 .kingdom-card {
-    --realm-accent: #2395EB;
-    --realm-accent-dark: #1467A6;
-    --realm-surface-tint: #F4F7FC;
-    --realm-well-bg: #EEF3FA;
-    --realm-well-shadow: rgba(164, 179, 204, 0.45);
+    --frame-grad-1: #D4DEFD;
+    --frame-grad-2: #E8E1F8;
+    --frame-grad-3: #FDE4EB;
+    --frame-grad-4: #FEE7DD;
+    --frame-bezel-1: #C2CEF7;
+    --frame-bezel-2: #E5DBF5;
+    --frame-shadow-dark: rgba(72, 60, 108, 0.24);
 
-    background: linear-gradient(155deg, #FFFFFF 0%, var(--realm-surface-tint) 100%);
-    border: 3px solid var(--game-border);
-    border-top-width: 5px;
-    border-radius: 22px;
-    padding: 1.15rem 1.3rem;
-    display: flex;
-    flex-direction: column;
-    box-shadow:
-        0 6px 0 var(--game-border),
-        -5px -5px 12px var(--neu-light),
-        8px 12px 22px rgba(29, 36, 64, 0.12),
-        inset 2px 2px 5px rgba(255, 255, 255, 0.95),
-        inset -3px -3px 7px rgba(175, 185, 208, 0.32);
-    transition: transform 0.22s var(--spring-bounce), box-shadow 0.22s var(--spring-bounce);
     position: relative;
+    border-radius: 36px;
+    padding: 16px;
+    background: linear-gradient(135deg, var(--frame-grad-1) 0%, var(--frame-grad-2) 32%, var(--frame-grad-3) 68%, var(--frame-grad-4) 100%);
+    box-shadow:
+        -12px 18px 34px -4px var(--frame-shadow-dark),
+        0 6px 14px rgba(0, 0, 0, 0.05),
+        inset 3px 3px 6px rgba(255, 255, 255, 0.95),
+        inset -4px -4px 7px rgba(162, 172, 208, 0.42);
+    cursor: pointer;
+    user-select: none;
+    outline: none;
+    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .kingdom-card:hover {
-    transform: translateY(-4px);
+    transform: translateY(-8px) scale(1.02);
     box-shadow:
-        0 9px 0 var(--game-border),
-        -6px -6px 14px var(--neu-light),
-        10px 16px 26px rgba(29, 36, 64, 0.16),
-        inset 2px 2px 5px rgba(255, 255, 255, 0.98),
-        inset -3px -3px 7px rgba(175, 185, 208, 0.38);
+        -16px 26px 42px -4px var(--frame-shadow-dark),
+        0 10px 22px rgba(0, 0, 0, 0.08),
+        inset 3px 3px 6px rgba(255, 255, 255, 1),
+        inset -4px -4px 7px rgba(162, 172, 208, 0.48);
 }
 
-/* Color-Themed Biome Neumorphic Palettes */
+.kingdom-card:active {
+    transform: translateY(2px) scale(0.985);
+    box-shadow:
+        -6px 10px 18px -2px var(--frame-shadow-dark),
+        0 3px 8px rgba(0, 0, 0, 0.06),
+        inset 4px 4px 8px rgba(140, 150, 185, 0.45),
+        inset -2px -2px 5px rgba(255, 255, 255, 0.85);
+}
+
+.kingdom-card:focus-visible {
+    box-shadow:
+        0 0 0 4px #8B5CF6,
+        -14px 22px 38px var(--frame-shadow-dark);
+}
+
+/* Biome Color Variations for Frame */
 .theme-forest {
-    --realm-accent: #06D6A0;
-    --realm-accent-dark: #038F6A;
-    --realm-surface-tint: #F0FBF7;
-    --realm-well-bg: #E7F7F1;
-    --realm-well-shadow: rgba(6, 160, 120, 0.22);
-    border-top-color: #06D6A0;
+    --frame-grad-1: #D1F4E6;
+    --frame-grad-2: #E1F7EC;
+    --frame-grad-3: #FDE8D7;
+    --frame-grad-4: #FEECE2;
+    --frame-bezel-1: #B4ECCF;
+    --frame-bezel-2: #C8F0DC;
+    --frame-shadow-dark: rgba(30, 95, 75, 0.22);
 }
 
 .theme-ocean {
-    --realm-accent: #2395EB;
-    --realm-accent-dark: #1467A6;
-    --realm-surface-tint: #F0F7FE;
-    --realm-well-bg: #E6F2FC;
-    --realm-well-shadow: rgba(35, 149, 235, 0.22);
-    border-top-color: #2395EB;
+    --frame-grad-1: #CCE6FD;
+    --frame-grad-2: #DEEFFE;
+    --frame-grad-3: #FDE2EE;
+    --frame-grad-4: #FEEDEB;
+    --frame-bezel-1: #B3DAFC;
+    --frame-bezel-2: #CBE6FD;
+    --frame-shadow-dark: rgba(30, 80, 125, 0.24);
 }
 
 .theme-cosmic {
-    --realm-accent: #845EC2;
-    --realm-accent-dark: #58398A;
-    --realm-surface-tint: #F6F2FC;
-    --realm-well-bg: #EFE9FA;
-    --realm-well-shadow: rgba(132, 94, 194, 0.22);
-    border-top-color: #845EC2;
+    --frame-grad-1: #D8D2FB;
+    --frame-grad-2: #E8D8FA;
+    --frame-grad-3: #FCE0ED;
+    --frame-grad-4: #FEDDE3;
+    --frame-bezel-1: #C6BCF8;
+    --frame-bezel-2: #DACAF6;
+    --frame-shadow-dark: rgba(75, 45, 115, 0.26);
 }
 
 .theme-volcano {
-    --realm-accent: #FF6B4A;
-    --realm-accent-dark: #BF3E22;
-    --realm-surface-tint: #FFF3F0;
-    --realm-well-bg: #FDECE7;
-    --realm-well-shadow: rgba(255, 107, 74, 0.22);
-    border-top-color: #FF6B4A;
+    --frame-grad-1: #FEE1D6;
+    --frame-grad-2: #FEDBD4;
+    --frame-grad-3: #FEE7C8;
+    --frame-grad-4: #FEF0D4;
+    --frame-bezel-1: #FCCEC0;
+    --frame-bezel-2: #FDC7B8;
+    --frame-shadow-dark: rgba(135, 55, 35, 0.24);
 }
 
-.kingdom-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.75rem;
-}
-
-.module-card-banner-wrap {
-    margin: -0.35rem -0.45rem 0.85rem -0.45rem;
-    height: 115px;
-    border-radius: 16px;
-    border: 2.5px solid var(--game-border);
-    overflow: hidden;
+/* Stepped Inner Frame Bezel */
+.frame-inner-bezel {
+    border-radius: 26px;
+    padding: 7px;
+    background: linear-gradient(135deg, var(--frame-bezel-1) 0%, var(--frame-bezel-2) 100%);
     box-shadow:
-        0 3px 0 var(--game-border),
-        inset 0 2px 4px rgba(0, 0, 0, 0.15);
+        inset 2.5px 2.5px 5px rgba(50, 40, 80, 0.2),
+        inset -2.5px -2.5px 5px rgba(255, 255, 255, 0.85);
 }
 
-.module-card-banner-img {
+/* Recessed Center Picture Window */
+.frame-window {
+    position: relative;
+    border-radius: 20px;
+    overflow: hidden;
+    aspect-ratio: 16 / 9.5;
+    background: #AEE2FF;
+    box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.32);
+}
+
+.frame-center-image {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
+    transition: transform 0.4s ease;
 }
 
-/* Tactile Neumorphic 3D Avatar Badge */
-.realm-avatar-badge {
-    width: 44px;
-    height: 44px;
-    border-radius: 14px;
-    background: linear-gradient(145deg, #FFFFFF 0%, var(--realm-well-bg) 100%);
-    border: 2px solid var(--game-border);
+.kingdom-card:hover .frame-center-image {
+    transform: scale(1.03);
+}
+
+.frame-fallback-scene {
+    width: 100%;
+    height: 100%;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow:
-        0 3px 0 var(--game-border),
-        3px 4px 8px var(--realm-well-shadow),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.95),
-        inset -2px -2px 4px var(--realm-well-shadow);
 }
 
-.realm-emoji {
-    font-size: 1.45rem;
-    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.12));
+.fallback-scenery-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
 }
 
-.realm-badges-wrap {
+/* 3D Decorative Overlapping Clay Accents */
+.clay-accent {
+    position: absolute;
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* Clay Star: Peeking on top rim */
+.clay-star {
+    top: -14px;
+    right: 28%;
+    width: 48px;
+    height: 48px;
+    transform: rotate(10deg);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.kingdom-card:hover .clay-star {
+    transform: rotate(22deg) scale(1.15) translateY(-3px);
+}
+
+.clay-star-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+}
+
+/* Clay Clouds on Left and Right Frame Edges */
+.clay-cloud-left {
+    top: 36%;
+    left: -18px;
+    width: 82px;
+    height: 54px;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.kingdom-card:hover .clay-cloud-left {
+    transform: translateX(-4px) scale(1.06);
+}
+
+.clay-cloud-right {
+    top: 28%;
+    right: -18px;
+    width: 82px;
+    height: 54px;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.kingdom-card:hover .clay-cloud-right {
+    transform: translateX(4px) scale(1.06);
+}
+
+.clay-cloud-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+}
+
+/* Discrete Floating Clay Status Badges */
+.clay-card-badges {
+    position: absolute;
+    top: 22px;
+    left: 22px;
+    z-index: 11;
     display: flex;
-    align-items: center;
     gap: 0.35rem;
-    flex-wrap: wrap;
+    pointer-events: none;
 }
 
-.realm-new-pill {
+.clay-badge-new {
     font-size: 0.65rem;
     font-weight: 900;
+    letter-spacing: 0.05em;
     background: linear-gradient(135deg, #FFD166 0%, #FF8C00 100%);
     color: #4A1D00;
-    border: 2px solid #FF8C00;
-    padding: 0.18rem 0.55rem;
+    padding: 0.22rem 0.55rem;
     border-radius: 9999px;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
     box-shadow:
-        0 2px 0 #D97706,
-        0 0 10px rgba(255, 179, 0, 0.45),
-        inset 0 1px 2px rgba(255, 255, 255, 0.7);
+        0 3px 6px rgba(255, 140, 0, 0.35),
+        inset 0 1px 2px rgba(255, 255, 255, 0.8);
     animation: newBadgePulse 1.8s infinite ease-in-out;
 }
 
@@ -929,175 +1133,69 @@ const openModule = (mod) => {
     }
 }
 
-.realm-status-pill {
-    font-size: 0.68rem;
+.clay-badge-draft {
+    font-size: 0.65rem;
     font-weight: 900;
-    background: linear-gradient(145deg, #F2FCF9 0%, #E0F7F0 100%);
-    color: #038F6A;
-    border: 2px solid #06D6A0;
-    padding: 0.2rem 0.6rem;
-    border-radius: 9999px;
-    letter-spacing: 0.03em;
-    box-shadow:
-        0 2px 0 rgba(6, 214, 160, 0.35),
-        inset 1px 1px 3px rgba(255, 255, 255, 0.9),
-        inset -1px -1px 3px rgba(6, 214, 160, 0.2);
-}
-
-.realm-status-pill.boss-alert {
-    background: linear-gradient(145deg, #FFF5F5 0%, #FFE3E3 100%);
-    color: #CF1322;
-    border-color: #FF4D4F;
-    box-shadow:
-        0 2px 0 rgba(255, 77, 79, 0.35),
-        inset 1px 1px 3px rgba(255, 255, 255, 0.9),
-        inset -1px -1px 3px rgba(255, 77, 79, 0.25);
-    animation: alertPulse 1.2s infinite alternate;
-}
-
-@keyframes alertPulse {
-    from { transform: scale(1); }
-    to { transform: scale(1.06); }
-}
-
-.kingdom-title {
-    font-size: 1.2rem;
-    font-weight: 900;
-    color: var(--game-navy);
-    margin: 0 0 0.15rem 0;
-    line-height: 1.15;
-    text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.9);
-}
-
-.kingdom-grade {
-    font-size: 0.78rem;
-    color: #7A849E;
-    font-weight: 800;
-    margin: 0 0 0.85rem 0;
-}
-
-/* Recessed Neumorphic Stats Well */
-.kingdom-stats-box {
-    background: var(--realm-well-bg);
-    border: 2px solid rgba(43, 51, 84, 0.14);
-    border-radius: 14px;
-    padding: 0.6rem 0.85rem;
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 0.85rem;
-    box-shadow:
-        inset 3px 3px 6px var(--realm-well-shadow),
-        inset -3px -3px 6px rgba(255, 255, 255, 0.92),
-        0 1px 0 rgba(255, 255, 255, 0.8);
-}
-
-.stat-item {
-    display: flex;
-    flex-direction: column;
-}
-
-.stat-label {
-    font-size: 0.64rem;
-    font-weight: 900;
-    color: #7F8AA6;
-    letter-spacing: 0.04em;
-}
-
-.stat-value {
-    font-size: 0.86rem;
-    font-weight: 900;
-    color: var(--game-navy);
-    text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.8);
-}
-
-.buff-value {
-    color: var(--realm-accent-dark);
-}
-
-.realm-progress-wrap {
-    margin-bottom: 0.85rem;
-}
-
-.progress-labels {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.75rem;
-    font-weight: 900;
-    margin-bottom: 0.3rem;
-}
-
-.progress-pct {
-    color: var(--realm-accent-dark);
-}
-
-/* Carved Neumorphic Progress Tube */
-.realm-track {
-    width: 100%;
-    height: 11px;
-    background: var(--realm-well-bg);
-    border: 2px solid var(--game-border);
-    border-radius: 9999px;
-    overflow: hidden;
-    box-shadow:
-        inset 2px 3px 5px rgba(29, 36, 64, 0.25),
-        inset -2px -2px 4px rgba(255, 255, 255, 0.85),
-        0 1px 0 rgba(255, 255, 255, 0.9);
-}
-
-.realm-fill {
-    height: 100%;
-    background: linear-gradient(90deg, var(--realm-accent), #06D6A0);
+    letter-spacing: 0.05em;
+    background: linear-gradient(135deg, #FFF1F2 0%, #FFE4E6 100%);
+    color: #E11D48;
+    padding: 0.22rem 0.55rem;
     border-radius: 9999px;
     box-shadow:
-        inset 0 2px 3px rgba(255, 255, 255, 0.65),
-        inset 0 -2px 3px rgba(0, 0, 0, 0.2);
+        0 2px 4px rgba(225, 29, 72, 0.2),
+        inset 0 1px 2px rgba(255, 255, 255, 0.9);
 }
 
-/* Pressed Neumorphic Boss Encounter Preview Box */
-.boss-preview-box {
+/* 3D Extruded Neumorphic Plaque with Bubble Title at Bottom */
+.clay-title-plaque {
+    position: absolute;
+    bottom: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 64px);
+    max-width: 88%;
+    min-height: 52px;
+    padding: 0.55rem 1.25rem;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, #FDF2F7 0%, #FCE4EF 35%, #F7C6DF 80%, #F1AED2 100%);
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    box-shadow:
+        0 10px 22px rgba(110, 50, 95, 0.24),
+        0 4px 8px rgba(0, 0, 0, 0.07),
+        inset 0 3px 3px rgba(255, 255, 255, 0.98),
+        inset 0 -3px 5px rgba(180, 50, 115, 0.26);
     display: flex;
     align-items: center;
-    gap: 0.45rem;
-    background: linear-gradient(145deg, #FFF5E4 0%, #FFFBF2 100%);
-    border: 2px dashed #F4B942;
-    border-radius: 12px;
-    padding: 0.4rem 0.7rem;
-    font-size: 0.78rem;
-    font-weight: 800;
-    color: #805B00;
-    margin-bottom: 0.95rem;
-    box-shadow:
-        inset 2px 2px 5px rgba(217, 155, 38, 0.2),
-        inset -2px -2px 5px rgba(255, 255, 255, 0.95);
+    justify-content: center;
+    text-align: center;
+    z-index: 12;
+    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.boss-icon {
-    font-size: 1.05rem;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.12));
+.kingdom-card:hover .clay-title-plaque {
+    transform: translateX(-50%) translateY(-2px);
+    box-shadow:
+        0 14px 28px rgba(110, 50, 95, 0.3),
+        0 6px 10px rgba(0, 0, 0, 0.09),
+        inset 0 3px 3px rgba(255, 255, 255, 1),
+        inset 0 -3px 5px rgba(180, 50, 115, 0.3);
 }
 
-.btn-enter-realm {
-    width: 100%;
-    padding: 0.65rem 0.9rem;
-    font-size: 0.86rem;
-    background: linear-gradient(145deg, #FFE46B 0%, #FFB703 100%);
-    color: #4A3500;
-    border-color: #8A6400;
-    box-shadow:
-        0 4px 0 #8A6400,
-        0 6px 14px rgba(255, 183, 3, 0.28),
-        inset 2px 2px 5px rgba(255, 255, 255, 0.8),
-        inset -2px -3px 5px rgba(184, 133, 0, 0.35);
-    margin-top: auto;
-}
-
-.btn-enter-realm:hover {
-    transform: translateY(-2px);
-    box-shadow:
-        0 6px 0 #8A6400,
-        0 10px 18px rgba(255, 183, 3, 0.38),
-        inset 2px 2px 5px rgba(255, 255, 255, 0.9),
-        inset -2px -3px 5px rgba(184, 133, 0, 0.35);
+.plaque-title-text {
+    font-family: 'Fredoka', cursive, sans-serif;
+    font-weight: 900;
+    font-size: 1.15rem;
+    line-height: 1.15;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: linear-gradient(90deg, #FF6B8B 0%, #FFA26B 20%, #F6C90E 40%, #06D6A0 60%, #4EA8DE 80%, #9D4EDD 95%, #FF6B8B 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 2px 0 #FFFFFF) drop-shadow(0 3px 2px rgba(70, 30, 80, 0.2));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
 }
 
 /* Empty Modules State */
