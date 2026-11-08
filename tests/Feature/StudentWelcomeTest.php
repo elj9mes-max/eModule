@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\ModuleTheme;
+use App\Models\Module;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -45,4 +47,51 @@ test('guest visiting the student welcome page is redirected to login', function 
     $response = $this->get(route('students.welcome'));
 
     $response->assertRedirect(route('login'));
+});
+
+test('student dashboard returns modules list for the student', function () {
+    $teacher = User::factory()->teacher()->create();
+    $student = User::factory()->student()->create(['name' => 'Maya Explorer']);
+
+    $module = Module::factory()->for($teacher, 'teacher')->create([
+        'title' => 'Whispering Forest',
+        'theme' => ModuleTheme::Forest,
+        'xp_bonus' => 300,
+    ]);
+
+    $response = $this->actingAs($student)->get(route('students.dashboard'));
+
+    $response->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('students/Dashboard')
+            ->where('user.name', 'Maya Explorer')
+            ->has('modules', 1)
+            ->where('modules.0.id', $module->id)
+            ->where('modules.0.title', 'Whispering Forest')
+            ->where('modules.0.theme', 'forest')
+            ->where('modules.0.xp_bonus', 300)
+        );
+});
+
+test('student can view the module progress expedition map', function () {
+    $teacher = User::factory()->teacher()->create();
+    $student = User::factory()->student()->create(['name' => 'Maya Explorer']);
+
+    $module = Module::factory()->for($teacher, 'teacher')->create([
+        'title' => 'Whispering Forest',
+        'slug' => 'whispering-forest',
+        'theme' => ModuleTheme::Forest,
+        'xp_bonus' => 300,
+    ]);
+
+    $response = $this->actingAs($student)->get(route('students.modules.show', $module));
+
+    $response->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('students/Progress')
+            ->where('user.name', 'Maya Explorer')
+            ->where('module.id', $module->id)
+            ->where('module.title', 'Whispering Forest')
+            ->where('module.slug', 'whispering-forest')
+        );
 });

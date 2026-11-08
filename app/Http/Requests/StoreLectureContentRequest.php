@@ -26,9 +26,13 @@ class StoreLectureContentRequest extends FormRequest
     {
         return [
             'type' => ['required', Rule::enum(LectureContentType::class)],
+            'layout_style' => ['nullable', 'string', 'max:50'],
             'title' => ['nullable', 'string', 'max:255'],
             'content' => ['nullable', 'string'],
             'media_file' => ['nullable', 'file', 'max:51200'],
+            'narration_audio_file' => ['nullable', 'file', 'max:51200'],
+            'remove_narration_audio' => ['nullable', 'boolean'],
+            'vocabulary_glosses' => ['nullable'],
             'external_url' => ['nullable', 'url', 'max:2048'],
             'duration_seconds' => ['nullable', 'integer', 'min:0', 'max:86400'],
             'alt_text' => ['nullable', 'string', 'max:255'],

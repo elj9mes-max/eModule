@@ -1,13 +1,13 @@
 <script setup>
-import { ref, computed } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const props = defineProps({
     user: {
         type: Object,
         default: () => ({
             id: null,
-            name: 'Teacher',
+            name: 'Master Storyteller',
             email: 'teacher@example.com',
             role: 'teacher',
         }),
@@ -18,9 +18,9 @@ const props = defineProps({
             id: 1,
             title: 'Conflict and Community Values',
             slug: 'conflict-and-community-values',
-            icon: '📘',
+            icon: 'compass',
             theme: 'forest',
-            grade_level: 'Grade 3 • Reading Legends',
+            grade_level: 'Grade 3–6 • Reading Legends',
         }),
     },
     lecture: {
@@ -42,75 +42,754 @@ const props = defineProps({
     },
 });
 
-const contentTypes = [
+/* ==========================================================================
+   PAPER THEMES, FONTS & HIGHLIGHT SWATCHES
+   ========================================================================== */
+const paperThemes = [
+    { id: 'classic', label: 'Classic White', bg: '#FFFFFF', text: '#0F172A', border: '#E2E8F0', accent: '#2563EB' },
+    { id: 'parchment', label: 'Story Parchment', bg: '#FFFDF5', text: '#292524', border: '#FDE68A', accent: '#B45309' },
+    { id: 'emerald', label: 'Forest Scroll', bg: '#F0FDF4', text: '#064E3B', border: '#A7F3D0', accent: '#059669' },
+    { id: 'sky', label: 'Lagoon Breeze', bg: '#F0F9FF', text: '#0C4A6E', border: '#BAE6FD', accent: '#0284C7' },
+    { id: 'lined', label: 'Notebook Lines', bg: '#FFFFFF', text: '#1E293B', border: '#CBD5E1', accent: '#4F46E5', lined: true },
+];
+
+const fontFamilies = [
+    { id: 'Nunito, sans-serif', label: 'Nunito (Story Sans)' },
+    { id: 'Fredoka, sans-serif', label: 'Fredoka (Playful Display)' },
+    { id: 'Georgia, serif', label: 'Georgia (Book Serif)' },
+];
+
+const highlightSwatches = [
+    { label: 'Sunny Gold', color: '#FEF08A', border: '#F59E0B', text: '#78350F' },
+    { label: 'Mint Glow', color: '#A7F3D0', border: '#10B981', text: '#064E3B' },
+    { label: 'Sky Blue', color: '#BAE6FD', border: '#0284C7', text: '#0C4A6E' },
+    { label: 'Rose Coral', color: '#FECDD3', border: '#E11D48', text: '#881337' },
+    { label: 'Lavender', color: '#E9D5FF', border: '#9333EA', text: '#4C1D95' },
+];
+
+/* ==========================================================================
+   CANVA TEMPLATES (INCLUDING INTERACTIVE STORY WORD-MEANING LAYOUT)
+   ========================================================================== */
+const canvaTemplates = [
     {
-        id: 'text',
-        label: 'Story Passage',
-        icon: '📝',
-        desc: 'Rich text passage, moral dilemmas, or key vocabulary',
-        accept: null,
-        hint: 'Write or paste the narrative text for students to read.',
+        id: 'interactive-story-gloss',
+        name: 'Interactive Story (Hover/Tap Word Meanings)',
+        tag: '★ Interactive Story Layout',
+        layoutStyle: 'interactive_story',
+        desc: 'Story layout with highlighted vocabulary words that reveal their meaning on hover or click!',
+        defaultTitle: 'The Lantern of Whispering Pines',
+        presetGlosses: [
+            {
+                word: 'luminous',
+                pronunciation: 'adj. • loo-muh-nuhs',
+                meaning: 'Shining or glowing brightly, especially in the dark.',
+                color: '#FEF08A',
+            },
+            {
+                word: 'ancient',
+                pronunciation: 'adj. • ayn-shuhnt',
+                meaning: 'Belonging to a very distant past; hundreds or thousands of years old.',
+                color: '#BAE6FD',
+            },
+            {
+                word: 'persevere',
+                pronunciation: 'verb • pur-suh-veer',
+                meaning: 'To keep trying and moving forward even when a journey is difficult.',
+                color: '#A7F3D0',
+            },
+        ],
+        html: `<h2>Chapter 1: The Glowing Cedar Trail</h2><p>Deep within the Emerald Woods, the <span class="vocab-gloss-token" data-vocab-word="ancient" data-vocab-pronunciation="adj. • ayn-shuhnt" data-vocab-meaning="Belonging to a very distant past; hundreds or thousands of years old." style="background-color: #BAE6FD; border-bottom: 2px dashed #0284C7; padding: 1px 6px; border-radius: 6px; font-weight: 800; cursor: pointer;">ancient</span> cedar trees hummed with forgotten folklore. Young explorer <strong>Mira</strong> held up her brass lantern, watching its warm golden beam awaken <span class="vocab-gloss-token" data-vocab-word="luminous" data-vocab-pronunciation="adj. • loo-muh-nuhs" data-vocab-meaning="Shining or glowing brightly, especially in the dark." style="background-color: #FEF08A; border-bottom: 2px dashed #D97706; padding: 1px 6px; border-radius: 6px; font-weight: 800; cursor: pointer;">luminous</span> silver letters along the mossy bark.</p><p>Though the mountain mist grew chilly, Mira chose to <span class="vocab-gloss-token" data-vocab-word="persevere" data-vocab-pronunciation="verb • pur-suh-veer" data-vocab-meaning="To keep trying and moving forward even when a journey is difficult." style="background-color: #A7F3D0; border-bottom: 2px dashed #059669; padding: 1px 6px; border-radius: 6px; font-weight: 800; cursor: pointer;">persevere</span> along the winding stepping-stones until the hidden map revealed the Timber Crossing.</p><div class="studio-insert-block" data-studio-block="true" data-block-label="Interactive Story Tip" style="background: #FFFBEB; border: 2px solid #FDE68A; padding: 12px 16px; border-radius: 14px; margin: 16px 0; color: #78350F;"><strong>✨ Reader Tip:</strong> Hover over or tap any highlighted word in the story above to unlock its secret meaning!</div>`,
     },
     {
-        id: 'image',
-        label: 'Illustration',
-        icon: '🖼️',
-        desc: 'Storybook character art, island map, or comic strip',
-        accept: 'image/png,image/jpeg,image/webp,image/gif',
-        hint: 'Upload visual aids, character illustrations, or scene backdrops.',
+        id: 'chapter-opener',
+        name: 'Chapter Opener',
+        tag: 'Story Intro',
+        layoutStyle: 'standard',
+        desc: 'Append a chapter header, narrative paragraph, and guiding question box.',
+        defaultTitle: 'Chapter 1: The Whispering Lantern',
+        html: `<h2>The Mystery Begins in the Woods</h2><p>Deep within the Emerald Woods, the tallest cedar trees hummed with forgotten folklore. Young explorer <strong>Mira</strong> held up her brass lantern, watching its warm golden beam awaken <span class="vocab-gloss-token" data-vocab-word="luminous" data-vocab-pronunciation="adj. • loo-muh-nuhs" data-vocab-meaning="Shining or glowing brightly in the dark." style="background-color: #FEF08A; border-bottom: 2px dashed #D97706; padding: 1px 6px; border-radius: 6px; font-weight: 800; cursor: pointer;">luminous</span> silver letters along the mossy bark.</p><div class="studio-insert-block" data-studio-block="true" data-block-label="Guiding Reading Question" style="background: #EFF6FF; border-left: 4px solid #2563EB; padding: 14px 16px; border-radius: 12px; margin: 16px 0;"><strong>💡 Guiding Reading Question:</strong><br/>Why do you think the ancient storytellers hid their messages inside the cedar trees? Look for context clues in the paragraph above!</div><p>As twilight settled over the valley, Mira opened her leather-bound journal and sketched the first symbol she discovered.</p>`,
     },
     {
-        id: 'audio',
-        label: 'Read-Along Audio',
-        icon: '🎧',
-        desc: 'Voiceover pronunciation, guided narration, or sound effects',
-        accept: 'audio/mpeg,audio/wav,audio/mp4,audio/ogg',
-        hint: 'Upload teacher voice narration to assist struggling readers.',
+        id: 'conflict-dilemma',
+        name: 'Conflict & Perspectives',
+        tag: 'Character Study',
+        layoutStyle: 'standard',
+        desc: 'Compare two character viewpoints during a story dilemma.',
+        defaultTitle: 'Two Sides of the Canyon Bridge',
+        html: `<h2>Understanding Character Perspectives</h2><p>Every great story conflict happens when characters see the same problem in different ways:</p><div class="studio-insert-block" data-studio-block="true" data-block-label="Leo's Perspective" style="background: #F0F9FF; border-left: 4px solid #0284C7; padding: 14px 16px; border-radius: 12px; margin: 12px 0;"><strong>🗣️ Leo's Perspective (Courage):</strong><br/>"If we wait until morning, the village on the ridge won't receive the medicine scroll in time. We must cross carefully now!"</div><div class="studio-insert-block" data-studio-block="true" data-block-label="Toby's Perspective" style="background: #FFF1F2; border-left: 4px solid #E11D48; padding: 14px 16px; border-radius: 12px; margin: 12px 0;"><strong>🗣️ Toby's Perspective (Caution):</strong><br/>"The canyon wind is howling! Waiting for the storm to pass keeps the scroll dry and keeps our team safe."</div><p><strong>Think & Reflect:</strong> Which character's plan would you support, and why?</p>`,
     },
     {
-        id: 'video',
-        label: 'Animated Video',
-        icon: '🎬',
-        desc: 'Animated lesson video, puppet reading, or YouTube embed',
-        accept: 'video/mp4,video/webm',
-        hint: 'Upload short story animations or provide an external video link.',
-    },
-    {
-        id: 'document',
-        label: 'Printable Sheet',
-        icon: '📄',
-        desc: 'PDF story worksheet, coloring page, or reading guide',
-        accept: '.pdf,.doc,.docx',
-        hint: 'Upload supplementary reading worksheets or activity guides.',
+        id: 'fable-moral',
+        name: 'Fable & Moral Lesson',
+        tag: 'Folklore',
+        layoutStyle: 'standard',
+        desc: 'Classic storybook passage paired with a golden moral takeaway banner.',
+        defaultTitle: 'The Fox and the Starlight Stream',
+        html: `<h2>The Fox and the Starlight Stream</h2><p>Once upon a time, a swift ember fox raced ahead of his companions to reach the mountain summit first. Along the steep trail, he came across a fallen boulder blocking the narrow path.</p><div class="studio-insert-block" data-studio-block="true" data-block-label="Moral of the Story Banner" style="background: linear-gradient(135deg, #FEF9C3 0%, #FDE68A 100%); border: 2px solid #F59E0B; padding: 16px 18px; border-radius: 16px; margin: 16px 0; color: #78350F;"><strong>🌟 Moral of the Story:</strong><br/>Speed may take you far alone, but teamwork and kindness open the paths that no single explorer can clear by themselves.</div><p><br/></p>`,
     },
 ];
 
-const selectedType = ref('text');
-const mediaPreviewUrl = ref(null);
+const canvaElements = [
+    {
+        id: 'hint-box',
+        label: 'Reading Hint Box',
+        badge: '💡 Hint',
+        color: '#2563EB',
+        bg: '#EFF6FF',
+        html: `<div class="studio-insert-block" data-studio-block="true" data-block-label="Reading Hint Box" style="background: #EFF6FF; border-left: 4px solid #2563EB; padding: 14px 16px; border-radius: 12px; margin: 14px 0;"><strong>💡 Reading Strategy Hint:</strong><br/>Look closely at the adjectives in this paragraph to discover how the character feels.</div><p><br/></p>`,
+    },
+    {
+        id: 'vocab-card',
+        label: 'Vocabulary Callout',
+        badge: '🔑 Word',
+        color: '#B45309',
+        bg: '#FFFBEB',
+        html: `<div class="studio-insert-block" data-studio-block="true" data-block-label="Vocabulary Callout" style="background: #FFFBEB; border: 2px solid #FDE68A; padding: 14px 16px; border-radius: 14px; margin: 14px 0;"><strong>🔑 Word Spotlight: [Word]</strong><br/><strong>Definition:</strong> Write a kid-friendly definition here.<br/><em>Example: "Use the vocabulary word in a vivid story sentence."</em></div><p><br/></p>`,
+    },
+    {
+        id: 'dialogue-bubble',
+        label: 'Character Dialogue',
+        badge: '🗣️ Quote',
+        color: '#059669',
+        bg: '#ECFDF5',
+        html: `<div class="studio-insert-block" data-studio-block="true" data-block-label="Character Dialogue" style="background: #ECFDF5; border: 2px dashed #34D399; padding: 14px 16px; border-radius: 16px; margin: 14px 0;"><strong>🗣️ Character Speaks:</strong><br/><em>"Every island holds a secret for readers who pay attention to the smallest details!"</em></div><p><br/></p>`,
+    },
+    {
+        id: 'conflict-alert',
+        label: 'Conflict Climax Box',
+        badge: '⚡ Conflict',
+        color: '#E11D48',
+        bg: '#FFF1F2',
+        html: `<div class="studio-insert-block" data-studio-block="true" data-block-label="Conflict Climax Box" style="background: #FFF1F2; border-left: 4px solid #E11D48; padding: 14px 16px; border-radius: 12px; margin: 14px 0;"><strong>⚡ Story Conflict Checkpoint:</strong><br/>What obstacle is standing in the main character's way right now, and what choices do they have?</div><p><br/></p>`,
+    },
+    {
+        id: 'moral-banner',
+        label: 'Golden Moral Banner',
+        badge: '🌟 Moral',
+        color: '#92400E',
+        bg: '#FEF3C7',
+        html: `<div class="studio-insert-block" data-studio-block="true" data-block-label="Golden Moral Banner" style="background: #FEF3C7; border: 2px solid #F59E0B; padding: 16px 18px; border-radius: 16px; margin: 14px 0; text-align: center;"><strong>🌟 Key Takeaway & Lesson</strong><br/>Summarize the big idea or moral lesson of this passage here!</div><p><br/></p>`,
+    },
+    {
+        id: 'story-divider',
+        label: 'Ornamental Divider',
+        badge: '✦ Divider',
+        color: '#6366F1',
+        bg: '#EEF2FF',
+        html: `<div class="studio-insert-block" data-studio-block="true" data-block-label="Ornamental Divider" style="margin: 18px 0; text-align: center;"><hr style="border: none; border-top: 2px dashed #CBD5E1; margin-bottom: 6px;" /><span style="color: #64748B; font-weight: 800; letter-spacing: 0.2em;">✦ ✦ ✦</span></div><p><br/></p>`,
+    },
+];
+
+const storybookStickers = [
+    { id: 's1', label: 'Forest & Mountains Book', src: '/images/book_left_trees_mountains.png' },
+    { id: 's2', label: 'Explorer Boy on Book', src: '/images/boy_left_on_book_laptop.png' },
+    { id: 's3', label: 'Reader Girl on Book', src: '/images/girl_left_reading_book.png' },
+    { id: 's4', label: 'River & Mountains Book', src: '/images/book_right_mountains_river.png' },
+    { id: 's5', label: 'Story Message Girl', src: '/images/book_with_message_and_laptop_girl.png' },
+    { id: 's6', label: 'Tablet Explorer Girl', src: '/images/girl_right_using_tablet.png' },
+];
+
+const uploadMediaCategories = [
+    {
+        id: 'image',
+        label: 'Illustration Frame',
+        badgeColor: '#059669',
+        badgeBg: '#D1FAE5',
+        desc: 'Insert an image/illustration frame directly into your page without losing text',
+        accept: 'image/png,image/jpeg,image/webp,image/gif',
+    },
+    {
+        id: 'audio',
+        label: 'Sound Effect / Clip',
+        badgeColor: '#D97706',
+        badgeBg: '#FEF3C7',
+        desc: 'Embed an inline audio clip block inside the story body',
+        accept: 'audio/mpeg,audio/wav,audio/mp4,audio/ogg',
+    },
+    {
+        id: 'video',
+        label: 'Animated Video Frame',
+        badgeColor: '#7C3AED',
+        badgeBg: '#EDE9FE',
+        desc: 'Embed an animated story video or YouTube link onto your page',
+        accept: 'video/mp4,video/webm',
+    },
+];
+
+/* ==========================================================================
+   REACTIVE STUDIO STATE
+   ========================================================================== */
+const activeToolboxTab = ref('templates'); // 'templates' | 'vocab' | 'elements' | 'media' | 'stickers'
+const isLeftDrawerOpen = ref(true);
+const isRightDeckOpen = ref(true);
+const isFocusMode = ref(false);
+const viewMode = ref('canvas'); // 'canvas' | 'preview'
+const canvasZoom = ref(100);
+const activePaperTheme = ref(paperThemes[0]);
+const selectedFontFamily = ref(fontFamilies[0].id);
+const editingContentId = ref(null);
+const saveSuccessToast = ref('');
+
+// Full-Page Read-Aloud Narration Audio State (Specifically for the whole page!)
+const narrationFileInputRef = ref(null);
+const pageNarrationPreviewUrl = ref(null);
+const pageNarrationDisplayName = ref('');
+
+// Interactive Word Meaning (Vocabulary Gloss) Creator State
+const showVocabGlossModal = ref(false);
+const vocabWordInput = ref('');
+const vocabPronunciationInput = ref('');
+const vocabMeaningInput = ref('');
+const vocabColorInput = ref(highlightSwatches[0]);
+let savedSelectionRange = null;
+
+// Active Hover/Click Word Meaning Popover (Works in both Canvas & Student Preview!)
+const activeVocabTooltip = ref(null); // { word, pronunciation, meaning, x, y }
+
+// Uploaded Inline Media Assets Tray
+const uploadedAssetsTray = ref([]);
+const uploadCategoryFilter = ref('image');
+const externalMediaUrlInput = ref('');
+const externalMediaCaptionInput = ref('');
 const fileInputRef = ref(null);
 const isDraggingFile = ref(false);
 
+// Interactive Canvas Element Selection State (Remove / Move / Duplicate)
+const editorSurfaceRef = ref(null);
+const selectedCanvasBlockEl = ref(null);
+const selectedCanvasBlockLabel = ref('');
+const selectedBlockTopPx = ref(0);
+
 const form = useForm({
     type: 'text',
+    layout_style: 'interactive_story',
     title: '',
     content: '',
     media_file: null,
+    narration_audio_file: null,
+    remove_narration_audio: false,
+    vocabulary_glosses: [],
     external_url: '',
     duration_seconds: null,
     alt_text: '',
     caption: '',
 });
 
-const selectContentType = (typeId) => {
-    selectedType.value = typeId;
-    form.type = typeId;
-    removeSelectedFile();
+/* ==========================================================================
+   MULTI-STEP UNDO & REDO HISTORY ENGINE
+   ========================================================================== */
+const historyStack = ref([]);
+const historyIndex = ref(-1);
+const isRestoringHistory = ref(false);
+let typingDebounceTimer = null;
+
+const canUndo = computed(() => historyIndex.value > 0);
+const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1);
+
+const pushHistorySnapshot = () => {
+    if (isRestoringHistory.value) {
+        return;
+    }
+
+    const currentHtml = editorSurfaceRef.value ? editorSurfaceRef.value.innerHTML : form.content || '';
+    const currentTitle = form.title || '';
+
+    const latest = historyStack.value[historyIndex.value];
+    if (latest && latest.content === currentHtml && latest.title === currentTitle) {
+        return;
+    }
+
+    const nextStack = historyStack.value.slice(0, historyIndex.value + 1);
+    nextStack.push({
+        title: currentTitle,
+        content: currentHtml,
+    });
+
+    if (nextStack.length > 50) {
+        nextStack.shift();
+    }
+
+    historyStack.value = nextStack;
+    historyIndex.value = nextStack.length - 1;
+};
+
+const scheduleHistorySnapshot = () => {
+    if (typingDebounceTimer) {
+        window.clearTimeout(typingDebounceTimer);
+    }
+    typingDebounceTimer = window.setTimeout(() => {
+        pushHistorySnapshot();
+    }, 380);
+};
+
+const handleUndo = () => {
+    if (!canUndo.value) {
+        return;
+    }
+
+    isRestoringHistory.value = true;
+    clearSelectedCanvasBlock();
+    historyIndex.value--;
+    const snapshot = historyStack.value[historyIndex.value];
+    form.title = snapshot.title;
+    form.content = snapshot.content;
+
+    nextTick(() => {
+        if (editorSurfaceRef.value) {
+            editorSurfaceRef.value.innerHTML = snapshot.content;
+        }
+        syncGlossesListFromDom();
+        isRestoringHistory.value = false;
+        triggerToast('↶ Undid last change');
+    });
+};
+
+const handleRedo = () => {
+    if (!canRedo.value) {
+        return;
+    }
+
+    isRestoringHistory.value = true;
+    clearSelectedCanvasBlock();
+    historyIndex.value++;
+    const snapshot = historyStack.value[historyIndex.value];
+    form.title = snapshot.title;
+    form.content = snapshot.content;
+
+    nextTick(() => {
+        if (editorSurfaceRef.value) {
+            editorSurfaceRef.value.innerHTML = snapshot.content;
+        }
+        syncGlossesListFromDom();
+        isRestoringHistory.value = false;
+        triggerToast('↷ Redid change');
+    });
+};
+
+const resetHistoryWithCurrentState = () => {
+    const currentHtml = editorSurfaceRef.value ? editorSurfaceRef.value.innerHTML : form.content || '';
+    historyStack.value = [
+        {
+            title: form.title || '',
+            content: currentHtml,
+        },
+    ];
+    historyIndex.value = 0;
+};
+
+/* ==========================================================================
+   INTERACTIVE WORD MEANING (VOCABULARY GLOSS) FUNCTIONS
+   ========================================================================== */
+const syncGlossesListFromDom = () => {
+    if (!editorSurfaceRef.value) {
+        return;
+    }
+
+    const tokens = editorSurfaceRef.value.querySelectorAll('.vocab-gloss-token, [data-vocab-meaning]');
+    const extracted = [];
+    tokens.forEach((el) => {
+        const word = el.getAttribute('data-vocab-word') || el.innerText.trim();
+        const meaning = el.getAttribute('data-vocab-meaning') || '';
+        const pronunciation = el.getAttribute('data-vocab-pronunciation') || '';
+        if (word && meaning) {
+            extracted.push({
+                word,
+                meaning,
+                pronunciation,
+            });
+        }
+    });
+    form.vocabulary_glosses = extracted;
+};
+
+const openVocabGlossCreatorFromSelection = () => {
+    const selection = window.getSelection();
+    let selectedText = '';
+
+    if (
+        selection &&
+        selection.rangeCount > 0 &&
+        editorSurfaceRef.value &&
+        editorSurfaceRef.value.contains(selection.anchorNode)
+    ) {
+        savedSelectionRange = selection.getRangeAt(0).cloneRange();
+        selectedText = selection.toString().trim();
+    } else {
+        savedSelectionRange = null;
+    }
+
+    vocabWordInput.value = selectedText;
+    vocabPronunciationInput.value = '';
+    vocabMeaningInput.value = '';
+    vocabColorInput.value = highlightSwatches[0];
+    showVocabGlossModal.value = true;
+};
+
+const applyVocabMeaningToWord = () => {
+    const word = vocabWordInput.value.trim();
+    const meaning = vocabMeaningInput.value.trim();
+    const pronunciation = vocabPronunciationInput.value.trim();
+    const swatch = vocabColorInput.value || highlightSwatches[0];
+
+    if (!word || !meaning) {
+        return;
+    }
+
+    const escapedWord = word.replace(/"/g, '&quot;');
+    const escapedMeaning = meaning.replace(/"/g, '&quot;');
+    const escapedPron = pronunciation.replace(/"/g, '&quot;');
+
+    const spanHtml = `<span class="vocab-gloss-token" data-vocab-word="${escapedWord}" data-vocab-pronunciation="${escapedPron}" data-vocab-meaning="${escapedMeaning}" style="background-color: ${swatch.color}; border-bottom: 2px dashed ${swatch.border}; padding: 1px 6px; border-radius: 6px; font-weight: 800; cursor: pointer;">${word}</span>`;
+
+    if (savedSelectionRange && editorSurfaceRef.value) {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(savedSelectionRange);
+
+        if (!savedSelectionRange.collapsed) {
+            document.execCommand('insertHTML', false, spanHtml);
+        } else {
+            editorSurfaceRef.value.innerHTML = (editorSurfaceRef.value.innerHTML || '') + ' ' + spanHtml + ' ';
+        }
+    } else if (editorSurfaceRef.value) {
+        // Check if the word exists in plain text on the canvas and wrap its first un-glossed occurrence, or append
+        const currentHtml = editorSurfaceRef.value.innerHTML || '';
+        const regex = new RegExp(`\\b(${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\b`, 'i');
+        if (regex.test(plainTextContent.value)) {
+            editorSurfaceRef.value.innerHTML = currentHtml.replace(regex, spanHtml);
+        } else {
+            editorSurfaceRef.value.innerHTML = currentHtml + `<p>${spanHtml}</p>`;
+        }
+    }
+
+    if (editorSurfaceRef.value) {
+        form.content = editorSurfaceRef.value.innerHTML;
+        form.layout_style = 'interactive_story';
+        syncGlossesListFromDom();
+        pushHistorySnapshot();
+    }
+
+    showVocabGlossModal.value = false;
+    savedSelectionRange = null;
+    triggerToast(`✨ Attached interactive meaning to "${word}"!`);
+};
+
+const removeVocabGlossWord = (wordToRemove) => {
+    if (!editorSurfaceRef.value) {
+        return;
+    }
+
+    const tokens = editorSurfaceRef.value.querySelectorAll('.vocab-gloss-token, [data-vocab-meaning]');
+    tokens.forEach((el) => {
+        const w = el.getAttribute('data-vocab-word') || el.innerText.trim();
+        if (w.toLowerCase() === wordToRemove.toLowerCase()) {
+            const textNode = document.createTextNode(el.innerText);
+            el.replaceWith(textNode);
+        }
+    });
+
+    form.content = editorSurfaceRef.value.innerHTML;
+    syncGlossesListFromDom();
+    pushHistorySnapshot();
+    activeVocabTooltip.value = null;
+    triggerToast(`Removed word meaning from "${wordToRemove}"`);
+};
+
+const handleVocabHoverOrClick = (event) => {
+    const tokenEl = event.target.closest('.vocab-gloss-token, [data-vocab-meaning]');
+    if (!tokenEl) {
+        if (event.type === 'click') {
+            activeVocabTooltip.value = null;
+        }
+
+        return;
+    }
+
+    const word = tokenEl.getAttribute('data-vocab-word') || tokenEl.innerText.trim();
+    const meaning = tokenEl.getAttribute('data-vocab-meaning') || '';
+    const pronunciation = tokenEl.getAttribute('data-vocab-pronunciation') || '';
+
+    if (meaning) {
+        activeVocabTooltip.value = {
+            word,
+            meaning,
+            pronunciation,
+        };
+    }
+};
+
+/* ==========================================================================
+   FULL-PAGE READ-ALOUD NARRATION AUDIO HANDLERS
+   ========================================================================== */
+const triggerPageNarrationUpload = () => {
+    narrationFileInputRef.value?.click();
+};
+
+const handlePageNarrationFileChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+        return;
+    }
+
+    form.narration_audio_file = file;
+    form.remove_narration_audio = false;
+    pageNarrationDisplayName.value = file.name;
+
+    if (pageNarrationPreviewUrl.value && pageNarrationPreviewUrl.value.startsWith('blob:')) {
+        URL.revokeObjectURL(pageNarrationPreviewUrl.value);
+    }
+    pageNarrationPreviewUrl.value = URL.createObjectURL(file);
+    triggerToast(`🔊 Attached full-page Read-Aloud audio: "${file.name}"`);
+};
+
+const removePageNarrationAudio = () => {
+    if (pageNarrationPreviewUrl.value && pageNarrationPreviewUrl.value.startsWith('blob:')) {
+        URL.revokeObjectURL(pageNarrationPreviewUrl.value);
+    }
+    pageNarrationPreviewUrl.value = null;
+    pageNarrationDisplayName.value = '';
+    form.narration_audio_file = null;
+    form.remove_narration_audio = true;
+    if (narrationFileInputRef.value) {
+        narrationFileInputRef.value.value = '';
+    }
+    triggerToast('Removed page Read-Aloud narration audio.');
+};
+
+/* ==========================================================================
+   COMPUTED DOCUMENT METRICS (WORD COUNT, CHAR COUNT, READING TIME)
+   ========================================================================== */
+const plainTextContent = computed(() => {
+    const raw = form.content || '';
+
+    return raw
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+});
+
+const wordCount = computed(() => {
+    if (!plainTextContent.value) {
+        return 0;
+    }
+
+    return plainTextContent.value.split(' ').filter(Boolean).length;
+});
+
+const charCount = computed(() => plainTextContent.value.length);
+
+const estimatedReadingMinutes = computed(() => {
+    if (wordCount.value === 0) {
+        return 1;
+    }
+
+    return Math.max(1, Math.ceil(wordCount.value / 130));
+});
+
+const activeEditingPageIndex = computed(() => {
+    if (!editingContentId.value) {
+        return (props.existing_contents?.length || 0) + 1;
+    }
+
+    const idx = (props.existing_contents || []).findIndex((c) => c.id === editingContentId.value);
+
+    return idx >= 0 ? idx + 1 : 1;
+});
+
+/* ==========================================================================
+   INTERACTIVE BLOCK SELECTION & REMOVAL INSIDE THE CANVAS
+   ========================================================================== */
+const clearSelectedCanvasBlock = () => {
+    if (selectedCanvasBlockEl.value) {
+        selectedCanvasBlockEl.value.classList.remove('is-selected-studio-block');
+    }
+    selectedCanvasBlockEl.value = null;
+    selectedCanvasBlockLabel.value = '';
+};
+
+const handleCanvasClick = (event) => {
+    handleVocabHoverOrClick(event);
+
+    if (!editorSurfaceRef.value) {
+        return;
+    }
+
+    const blockEl = event.target.closest('[data-studio-block="true"], figure, .studio-insert-block');
+    if (blockEl && editorSurfaceRef.value.contains(blockEl)) {
+        if (selectedCanvasBlockEl.value && selectedCanvasBlockEl.value !== blockEl) {
+            selectedCanvasBlockEl.value.classList.remove('is-selected-studio-block');
+        }
+        selectedCanvasBlockEl.value = blockEl;
+        blockEl.classList.add('is-selected-studio-block');
+        selectedCanvasBlockLabel.value =
+            blockEl.getAttribute('data-block-label') ||
+            blockEl.querySelector('figcaption')?.innerText ||
+            'Inserted Canvas Element';
+
+        const surfaceRect = editorSurfaceRef.value.getBoundingClientRect();
+        const blockRect = blockEl.getBoundingClientRect();
+        selectedBlockTopPx.value = Math.max(0, blockRect.top - surfaceRect.top - 42);
+    } else {
+        clearSelectedCanvasBlock();
+    }
+};
+
+const removeSelectedCanvasBlock = () => {
+    if (!selectedCanvasBlockEl.value || !editorSurfaceRef.value) {
+        return;
+    }
+
+    const label = selectedCanvasBlockLabel.value;
+    selectedCanvasBlockEl.value.remove();
+    clearSelectedCanvasBlock();
+    form.content = editorSurfaceRef.value.innerHTML;
+    syncGlossesListFromDom();
+    pushHistorySnapshot();
+    triggerToast(`Removed "${label}" from page`);
+};
+
+const moveSelectedCanvasBlock = (direction) => {
+    if (!selectedCanvasBlockEl.value || !editorSurfaceRef.value) {
+        return;
+    }
+
+    const el = selectedCanvasBlockEl.value;
+    if (direction === 'up' && el.previousElementSibling) {
+        el.parentNode.insertBefore(el, el.previousElementSibling);
+    } else if (direction === 'down' && el.nextElementSibling) {
+        el.parentNode.insertBefore(el.nextElementSibling, el);
+    }
+    form.content = editorSurfaceRef.value.innerHTML;
+    pushHistorySnapshot();
+};
+
+const duplicateSelectedCanvasBlock = () => {
+    if (!selectedCanvasBlockEl.value || !editorSurfaceRef.value) {
+        return;
+    }
+
+    const clone = selectedCanvasBlockEl.value.cloneNode(true);
+    clone.classList.remove('is-selected-studio-block');
+    selectedCanvasBlockEl.value.insertAdjacentElement('afterend', clone);
+    form.content = editorSurfaceRef.value.innerHTML;
+    pushHistorySnapshot();
+    triggerToast(`Duplicated "${selectedCanvasBlockLabel.value}"`);
+};
+
+/* ==========================================================================
+   WYSIWYG DOCUMENT EDITOR & CANVA INSERTION FUNCTIONS
+   ========================================================================== */
+const syncEditorFromForm = () => {
+    nextTick(() => {
+        if (editorSurfaceRef.value) {
+            clearSelectedCanvasBlock();
+            const cleanHtml = (form.content || '').replace(/is-selected-studio-block/g, '');
+            if (editorSurfaceRef.value.innerHTML !== cleanHtml) {
+                editorSurfaceRef.value.innerHTML = cleanHtml;
+            }
+            syncGlossesListFromDom();
+        }
+    });
+};
+
+const onEditorInput = () => {
+    if (editorSurfaceRef.value) {
+        form.content = editorSurfaceRef.value.innerHTML;
+        syncGlossesListFromDom();
+        scheduleHistorySnapshot();
+    }
+};
+
+const appendHtmlToPresentation = (htmlSnippet, toastMessage) => {
+    nextTick(() => {
+        if (editorSurfaceRef.value) {
+            clearSelectedCanvasBlock();
+            const current = editorSurfaceRef.value.innerHTML || '';
+            editorSurfaceRef.value.innerHTML = current + htmlSnippet;
+            form.content = editorSurfaceRef.value.innerHTML;
+            syncGlossesListFromDom();
+            pushHistorySnapshot();
+            if (toastMessage) {
+                triggerToast(toastMessage);
+            }
+        }
+    });
+};
+
+const execFormat = (command, value = null) => {
+    nextTick(() => {
+        if (editorSurfaceRef.value) {
+            editorSurfaceRef.value.focus();
+            document.execCommand(command, false, value);
+            form.content = editorSurfaceRef.value.innerHTML;
+            pushHistorySnapshot();
+        }
+    });
+};
+
+const applyBlockHeading = (tag) => {
+    execFormat('formatBlock', tag);
+};
+
+const applyHighlightColor = (hexColor) => {
+    execFormat('hiliteColor', hexColor);
+};
+
+const applyTemplateToCanvas = (tpl, mode = 'append') => {
+    if (!form.title) {
+        form.title = tpl.defaultTitle;
+    }
+    if (tpl.layoutStyle) {
+        form.layout_style = tpl.layoutStyle;
+    }
+
+    if (mode === 'replace' || !plainTextContent.value) {
+        form.content = tpl.html;
+        syncEditorFromForm();
+        nextTick(() => pushHistorySnapshot());
+        triggerToast(`Applied "${tpl.name}" layout to page!`);
+
+        return;
+    }
+
+    appendHtmlToPresentation(tpl.html, `Added "${tpl.name}" section to your presentation!`);
+};
+
+const insertCanvaElement = (element) => {
+    appendHtmlToPresentation(element.html, `Inserted "${element.label}" onto page!`);
+};
+
+const insertStoryStickerIntoDoc = (sticker) => {
+    const stickerHtml = `<figure class="studio-insert-block" data-studio-block="true" data-block-label="${sticker.label}" style="margin: 18px auto; text-align: center; max-width: 280px; padding: 12px; border-radius: 16px; background: rgba(248, 250, 252, 0.7); border: 2px dashed #CBD5E1;"><img src="${sticker.src}" alt="${sticker.label}" style="width: 100%; height: auto; filter: drop-shadow(0 8px 16px rgba(15,23,42,0.15)); border-radius: 10px;" /><figcaption style="font-size: 0.82rem; color: #475569; font-weight: 700; margin-top: 6px;">${sticker.label}</figcaption></figure><p><br/></p>`;
+    appendHtmlToPresentation(stickerHtml, `Added "${sticker.label}" artwork! (Click it anytime to remove or move)`);
+};
+
+/* ==========================================================================
+   UPLOADS TAB: INSERT IMAGES / AUDIO / VIDEO INTO PRESENTATION WITHOUT LOSING TEXT
+   ========================================================================== */
+const currentUploadCategoryMeta = computed(() => {
+    return (
+        uploadMediaCategories.find((c) => c.id === uploadCategoryFilter.value) ||
+        uploadMediaCategories[0]
+    );
+});
+
+const triggerUploadBrowser = (categoryId = null) => {
+    if (categoryId) {
+        uploadCategoryFilter.value = categoryId;
+    }
+    nextTick(() => {
+        fileInputRef.value?.click();
+    });
 };
 
 const handleFileSelect = (event) => {
     const file = event.target.files?.[0];
     if (file) {
-        applyFile(file);
+        processUploadedMediaFile(file);
+    }
+    if (fileInputRef.value) {
+        fileInputRef.value.value = '';
     }
 };
 
@@ -118,1174 +797,3219 @@ const handleFileDrop = (event) => {
     isDraggingFile.value = false;
     const file = event.dataTransfer?.files?.[0];
     if (file) {
-        applyFile(file);
+        processUploadedMediaFile(file);
     }
 };
 
-const applyFile = (file) => {
-    form.media_file = file;
-    if (mediaPreviewUrl.value) {
-        URL.revokeObjectURL(mediaPreviewUrl.value);
-    }
-    if (file.type.startsWith('image/') || file.type.startsWith('audio/') || file.type.startsWith('video/')) {
-        mediaPreviewUrl.value = URL.createObjectURL(file);
+const insertMediaAssetOntoCanvas = (asset) => {
+    let mediaHtml = '';
+    if (asset.kind === 'image') {
+        mediaHtml = `<figure class="studio-insert-block" data-studio-block="true" data-block-label="Illustration: ${asset.name}" style="margin: 18px auto; text-align: center; max-width: 520px; padding: 14px; border-radius: 18px; background: #F8FAFC; border: 2px solid #E2E8F0; box-shadow: 0 6px 16px rgba(15,23,42,0.06);"><img src="${asset.src}" alt="${asset.name}" style="max-width: 100%; max-height: 360px; border-radius: 12px; object-fit: contain; margin: 0 auto; display: block;" /><figcaption style="font-size: 0.84rem; color: #475569; font-weight: 700; margin-top: 8px;">🖼️ ${asset.caption || asset.name}</figcaption></figure><p><br/></p>`;
+    } else if (asset.kind === 'audio') {
+        mediaHtml = `<div class="studio-insert-block" data-studio-block="true" data-block-label="Audio Clip: ${asset.name}" style="margin: 16px 0; padding: 14px 18px; border-radius: 16px; background: #FFFBEB; border: 2px solid #FDE68A;"><strong>🎧 Inline Sound Clip: ${asset.caption || asset.name}</strong><audio controls src="${asset.src}" style="width: 100%; margin-top: 8px;"></audio></div><p><br/></p>`;
     } else {
-        mediaPreviewUrl.value = null;
+        mediaHtml = `<figure class="studio-insert-block" data-studio-block="true" data-block-label="Video: ${asset.name}" style="margin: 18px auto; text-align: center; max-width: 540px; padding: 14px; border-radius: 18px; background: #F5F3FF; border: 2px solid #DDD6FE;"><video controls src="${asset.src}" style="width: 100%; max-height: 340px; border-radius: 12px;"></video><figcaption style="font-size: 0.84rem; color: #5B21B6; font-weight: 700; margin-top: 8px;">🎬 ${asset.caption || asset.name}</figcaption></figure><p><br/></p>`;
+    }
+
+    appendHtmlToPresentation(mediaHtml, `Inserted "${asset.name}" into your presentation!`);
+};
+
+const processUploadedMediaFile = (file) => {
+    form.media_file = file;
+
+    const isImg = file.type.startsWith('image/');
+    const isAud = file.type.startsWith('audio/');
+    const kind = isImg ? 'image' : isAud ? 'audio' : 'video';
+
+    if (isImg) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const dataUrl = e.target?.result;
+            if (typeof dataUrl === 'string') {
+                const newAsset = {
+                    id: Date.now(),
+                    name: file.name,
+                    kind: 'image',
+                    src: dataUrl,
+                    sizeKb: Math.max(1, Math.round(file.size / 1024)),
+                    caption: externalMediaCaptionInput.value || file.name.replace(/\.[^/.]+$/, ''),
+                };
+                uploadedAssetsTray.value.unshift(newAsset);
+                insertMediaAssetOntoCanvas(newAsset);
+            }
+        };
+        reader.readAsDataURL(file);
+    } else {
+        const blobUrl = URL.createObjectURL(file);
+        const newAsset = {
+            id: Date.now(),
+            name: file.name,
+            kind,
+            src: blobUrl,
+            sizeKb: Math.max(1, Math.round(file.size / 1024)),
+            caption: externalMediaCaptionInput.value || file.name.replace(/\.[^/.]+$/, ''),
+        };
+        uploadedAssetsTray.value.unshift(newAsset);
+        insertMediaAssetOntoCanvas(newAsset);
     }
 };
 
-const removeSelectedFile = () => {
-    if (mediaPreviewUrl.value) {
-        URL.revokeObjectURL(mediaPreviewUrl.value);
-        mediaPreviewUrl.value = null;
+const insertExternalMediaLinkOntoCanvas = () => {
+    const url = externalMediaUrlInput.value.trim();
+    if (!url) {
+        return;
     }
+
+    const caption = externalMediaCaptionInput.value.trim() || 'Embedded Media Resource';
+    const isImageLink = /\.(png|jpe?g|webp|gif|svg)(\?.*)?$/i.test(url);
+
+    if (isImageLink) {
+        insertMediaAssetOntoCanvas({
+            id: Date.now(),
+            name: caption,
+            kind: 'image',
+            src: url,
+            caption,
+        });
+    } else {
+        const embedHtml = `<div class="studio-insert-block" data-studio-block="true" data-block-label="Media Link: ${caption}" style="margin: 16px 0; padding: 14px 18px; border-radius: 16px; background: #F5F3FF; border-left: 4px solid #7C3AED;"><strong>🎬 Embedded Media: ${caption}</strong><br/><a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #6D28D9; font-weight: 800; text-decoration: underline;">${url}</a></div><p><br/></p>`;
+        appendHtmlToPresentation(embedHtml, 'Inserted external media block into your presentation!');
+    }
+
+    externalMediaUrlInput.value = '';
+    externalMediaCaptionInput.value = '';
+};
+
+/* ==========================================================================
+   PAGE / BLOCK MANAGEMENT (CREATE NEW, LOAD EXISTING, UPDATE, DUPLICATE, DELETE)
+   ========================================================================== */
+const startNewBlankPage = () => {
+    clearSelectedCanvasBlock();
+    activeVocabTooltip.value = null;
+    editingContentId.value = null;
+    form.type = 'text';
+    form.layout_style = 'interactive_story';
+    form.title = '';
+    form.content = '<p><br/></p>';
+    form.external_url = '';
+    form.duration_seconds = null;
+    form.alt_text = '';
+    form.caption = '';
     form.media_file = null;
-    if (fileInputRef.value) {
-        fileInputRef.value.value = '';
+    form.narration_audio_file = null;
+    form.remove_narration_audio = false;
+    form.vocabulary_glosses = [];
+    pageNarrationPreviewUrl.value = null;
+    pageNarrationDisplayName.value = '';
+    syncEditorFromForm();
+    nextTick(() => resetHistoryWithCurrentState());
+};
+
+const loadExistingPageOntoCanvas = (block) => {
+    clearSelectedCanvasBlock();
+    activeVocabTooltip.value = null;
+    editingContentId.value = block.id;
+    form.type = 'text';
+    form.layout_style = block.layout_style || 'interactive_story';
+    form.title = block.title || '';
+
+    if (block.type === 'image' && block.media_url && !block.content) {
+        form.content = `<figure class="studio-insert-block" data-studio-block="true" data-block-label="Illustration" style="margin: 18px auto; text-align: center; max-width: 520px; padding: 14px; border-radius: 18px; background: #F8FAFC; border: 2px solid #E2E8F0;"><img src="${block.media_url}" alt="${block.title || 'Illustration'}" style="max-width: 100%; max-height: 360px; border-radius: 12px;" /><figcaption style="font-size: 0.84rem; color: #475569; font-weight: 700; margin-top: 8px;">🖼️ ${block.caption || block.title || 'Illustration'}</figcaption></figure><p><br/></p>`;
+    } else {
+        form.content = block.content || '<p><br/></p>';
     }
+
+    form.external_url = block.external_url || '';
+    form.duration_seconds = block.duration_seconds ?? null;
+    form.alt_text = block.alt_text || '';
+    form.caption = block.caption || '';
+    form.media_file = null;
+    form.narration_audio_file = null;
+    form.remove_narration_audio = false;
+    form.vocabulary_glosses = block.vocabulary_glosses || [];
+    pageNarrationPreviewUrl.value = block.narration_audio_url || null;
+    pageNarrationDisplayName.value = block.narration_audio_name || (block.narration_audio_url ? 'Saved Page Narration Audio' : '');
+    syncEditorFromForm();
+    nextTick(() => resetHistoryWithCurrentState());
+};
+
+const duplicateBlockAsNewDraft = (block) => {
+    loadExistingPageOntoCanvas(block);
+    editingContentId.value = null;
+    form.title = block.title ? `${block.title} (Copy)` : 'Copied Story Page';
+    triggerToast('Duplicated as a new draft page!');
+};
+
+const deleteExistingBlock = (block) => {
+    router.delete(
+        `/teachers/modules/${props.module.slug}/lectures/${props.lecture.slug}/contents/${block.id}`,
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                if (editingContentId.value === block.id) {
+                    startNewBlankPage();
+                }
+                triggerToast('Page block removed from lecture.');
+            },
+        },
+    );
 };
 
 const submitContent = () => {
-    form.post(`/teachers/modules/${props.module.slug}/lectures/${props.lecture.slug}/contents`, {
+    clearSelectedCanvasBlock();
+    if (editorSurfaceRef.value) {
+        form.content = editorSurfaceRef.value.innerHTML.replace(/is-selected-studio-block/g, '');
+        syncGlossesListFromDom();
+    }
+    form.type = 'text';
+
+    const targetUrl = editingContentId.value
+        ? `/teachers/modules/${props.module.slug}/lectures/${props.lecture.slug}/contents/${editingContentId.value}`
+        : `/teachers/modules/${props.module.slug}/lectures/${props.lecture.slug}/contents`;
+
+    const wasEditing = Boolean(editingContentId.value);
+
+    form.transform((data) => ({
+        ...data,
+        vocabulary_glosses: JSON.stringify(data.vocabulary_glosses || []),
+    })).post(targetUrl, {
         forceFormData: true,
+        preserveScroll: true,
         onSuccess: () => {
-            // Reset fields for convenient continuous block creation
-            form.title = '';
-            form.content = '';
-            form.external_url = '';
-            form.duration_seconds = null;
-            form.alt_text = '';
-            form.caption = '';
-            removeSelectedFile();
+            if (wasEditing) {
+                triggerToast('Saved updates to page block!');
+            } else {
+                triggerToast('New page block published to lecture!');
+                startNewBlankPage();
+            }
         },
     });
+};
+
+const toggleFocusMode = () => {
+    isFocusMode.value = !isFocusMode.value;
+    if (isFocusMode.value) {
+        isLeftDrawerOpen.value = false;
+        isRightDeckOpen.value = false;
+    } else {
+        isLeftDrawerOpen.value = true;
+        isRightDeckOpen.value = true;
+    }
+};
+
+const triggerToast = (msg) => {
+    saveSuccessToast.value = msg;
+    window.setTimeout(() => {
+        if (saveSuccessToast.value === msg) {
+            saveSuccessToast.value = '';
+        }
+    }, 2800);
 };
 
 const goToModule = () => {
     router.visit(`/teachers/modules/${props.module.slug}`);
 };
 
-const handleLogout = () => {
-    router.post('/logout');
+const stripHtmlPreview = (html) => {
+    if (!html) {
+        return '';
+    }
+
+    return html
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 };
 
-const getContentTypeMeta = (typeKey) => {
-    return contentTypes.find((t) => t.id === typeKey) || contentTypes[0];
+const handleGlobalKeydown = (e) => {
+    const isMod = e.ctrlKey || e.metaKey;
+    if (isMod && e.key.toLowerCase() === 'z') {
+        if (e.shiftKey) {
+            e.preventDefault();
+            handleRedo();
+        } else {
+            e.preventDefault();
+            handleUndo();
+        }
+
+        return;
+    }
+
+    if (isMod && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        handleRedo();
+
+        return;
+    }
+
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCanvasBlockEl.value) {
+        const activeTag = document.activeElement?.tagName?.toLowerCase();
+        if (activeTag !== 'input' && activeTag !== 'textarea') {
+            const selection = window.getSelection();
+            if (!selection || selection.isCollapsed) {
+                e.preventDefault();
+                removeSelectedCanvasBlock();
+            }
+        }
+    }
 };
+
+onMounted(() => {
+    window.addEventListener('keydown', handleGlobalKeydown);
+
+    if (!form.content && (props.existing_contents?.length || 0) === 0) {
+        const starterTpl = canvaTemplates[0];
+        form.title = starterTpl.defaultTitle;
+        form.content = starterTpl.html;
+        form.layout_style = 'interactive_story';
+    }
+    syncEditorFromForm();
+    nextTick(() => resetHistoryWithCurrentState());
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('keydown', handleGlobalKeydown);
+});
 </script>
 
 <template>
-    <Head :title="`Lecture Content • ${lecture.title}`" />
+    <Head :title="`Studio • ${lecture.title} • WEBREAD`" />
 
-    <div class="content-builder-page">
+    <div class="word-canva-studio-shell">
         <!-- Google Fonts: Fredoka & Nunito -->
         <component :is="'style'">
-            @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700;800;900&family=Nunito:wght@600;700;800;900&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700;800&family=Nunito:wght@600;700;800;900&display=swap');
         </component>
 
-        <!-- Ambient Floating Decorative Elements -->
-        <div class="floating-bg-assets" aria-hidden="true">
-            <img src="/images/book_left_trees_mountains.png" alt="" class="bg-asset bg-book-left" />
-            <img src="/images/book_right_mountains_river.png" alt="" class="bg-asset bg-book-right" />
-            <div class="floating-sparkle sp-1">✨</div>
-            <div class="floating-sparkle sp-2">⭐</div>
-            <div class="floating-sparkle sp-3">🎧</div>
-        </div>
+        <!-- Hidden File Inputs: 1) Inline Media Uploads, 2) Dedicated Full-Page Read-Aloud Narration Audio -->
+        <input
+            ref="fileInputRef"
+            type="file"
+            class="sr-only-file-input"
+            :accept="currentUploadCategoryMeta.accept"
+            @change="handleFileSelect"
+        />
+        <input
+            ref="narrationFileInputRef"
+            type="file"
+            class="sr-only-file-input"
+            accept="audio/mpeg,audio/wav,audio/mp4,audio/ogg,audio/webm,audio/aac"
+            @change="handlePageNarrationFileChange"
+        />
 
-        <!-- Top Navigation Bar -->
-        <header class="top-nav-bar">
-            <div class="nav-left">
-                <button type="button" class="btn-3d-back" @click="goToModule">
-                    <span class="back-arrow">❮</span>
-                    <span>Back to Journey Map</span>
+        <!-- =========================================================================
+             1. ZONE 1: FULL-WIDTH TOP STUDIO COMMAND BAR
+             ========================================================================= -->
+        <header class="studio-top-command-bar">
+            <div class="cmd-left-group">
+                <button type="button" class="studio-back-btn" @click="goToModule">
+                    <svg viewBox="0 0 20 20" class="cmd-icon-svg" aria-hidden="true">
+                        <path
+                            d="M12.5 4.5L7 10l5.5 5.5"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2.6"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                    <span>Journey Map</span>
                 </button>
 
-                <div class="brand-group">
-                    <span class="brand-text">
-                        <span class="brand-web">WEB</span><span class="brand-read">READ</span>
-                    </span>
-                    <span class="nav-badge">Content Studio</span>
+                <div class="studio-doc-identity">
+                    <div class="studio-brand-row">
+                        <span class="studio-badge-pill">INTERACTIVE STORY STUDIO</span>
+                        <span class="studio-module-crumb">{{ module.title }}</span>
+                    </div>
+                    <div class="studio-lecture-row">
+                        <h1 class="studio-lecture-heading">{{ lecture.title }}</h1>
+                        <span
+                            class="studio-page-mode-pill"
+                            :class="editingContentId ? 'mode-editing' : 'mode-new'"
+                        >
+                            {{
+                                editingContentId
+                                    ? `Editing Page #${activeEditingPageIndex}`
+                                    : `New Draft (Page #${activeEditingPageIndex})`
+                            }}
+                        </span>
+                    </div>
                 </div>
             </div>
 
-            <div class="nav-lecture-chip">
-                <span class="chip-icon">📜</span>
-                <span class="chip-lecture-title">{{ lecture.title }}</span>
-                <span class="chip-count-pill">{{ existing_contents.length }} Blocks</span>
+            <!-- Center: Workspace View Switcher -->
+            <div class="cmd-center-switcher" role="tablist" aria-label="Studio workspace mode">
+                <button
+                    type="button"
+                    role="tab"
+                    :aria-selected="viewMode === 'canvas'"
+                    class="workspace-mode-btn"
+                    :class="{ 'is-active': viewMode === 'canvas' }"
+                    @click="viewMode = 'canvas'"
+                >
+                    <svg viewBox="0 0 18 18" class="mode-svg" aria-hidden="true">
+                        <rect x="2.5" y="2.5" width="13" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="2" />
+                        <line x1="5.5" y1="6.5" x2="12.5" y2="6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                        <line x1="5.5" y1="10" x2="10.5" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    </svg>
+                    <span>Studio Canvas</span>
+                </button>
+
+                <button
+                    type="button"
+                    role="tab"
+                    :aria-selected="viewMode === 'preview'"
+                    class="workspace-mode-btn"
+                    :class="{ 'is-active': viewMode === 'preview' }"
+                    @click="viewMode = 'preview'"
+                >
+                    <svg viewBox="0 0 18 18" class="mode-svg" aria-hidden="true">
+                        <rect x="4.5" y="1.8" width="9" height="14.4" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
+                        <circle cx="9" cy="13.5" r="0.9" fill="currentColor" />
+                    </svg>
+                    <span>Student Preview</span>
+                </button>
+
+                <button
+                    type="button"
+                    class="workspace-mode-btn"
+                    :class="{ 'is-active': isFocusMode }"
+                    title="Expand canvas to 100% screen width"
+                    @click="toggleFocusMode"
+                >
+                    <svg viewBox="0 0 18 18" class="mode-svg" aria-hidden="true">
+                        <path
+                            d="M3 6.5V3h3.5M15 6.5V3h-3.5M3 11.5V15h3.5M15 11.5V15h-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                    <span>{{ isFocusMode ? 'Exit Full Focus' : 'Full Screen' }}</span>
+                </button>
             </div>
 
-            <div class="nav-right">
-                <div class="teacher-chip">
-                    <span>🧙‍♂️</span>
-                    <span>{{ user.name }}</span>
-                </div>
-                <button type="button" class="btn-exit-mini" @click="handleLogout">
-                    Exit
+            <!-- Right: New Page & Publish / Save Action Buttons -->
+            <div class="cmd-right-actions">
+                <button
+                    type="button"
+                    class="studio-new-page-btn"
+                    title="Start a fresh blank page block"
+                    @click="startNewBlankPage()"
+                >
+                    <span>+ New Page</span>
+                </button>
+
+                <button
+                    type="button"
+                    class="studio-publish-btn"
+                    :disabled="form.processing"
+                    @click="submitContent"
+                >
+                    <span v-if="form.processing">Saving...</span>
+                    <span v-else-if="editingContentId">💾 Save Page #{{ activeEditingPageIndex }}</span>
+                    <span v-else>✨ Publish Page to Lecture</span>
                 </button>
             </div>
         </header>
 
-        <!-- Main Studio Container -->
-        <main class="studio-container">
-            <!-- Header Block -->
-            <div class="studio-header">
-                <span class="banner-pill">🎨 MULTIMEDIA STORY STUDIO</span>
-                <h1 class="studio-title">Enrich Lecture Content</h1>
-                <p class="studio-subtitle">
-                    Add story passages, voice narrations, animated visual aids, and interactive reading questions to <strong>{{ lecture.title }}</strong>.
-                </p>
+        <!-- =========================================================================
+             2. ZONE 2: MICROSOFT WORD + CANVA FORMATTING RIBBON BAR
+             ========================================================================= -->
+        <div class="studio-formatting-ribbon">
+            <!-- Undo & Redo History Controls -->
+            <div class="ribbon-group">
+                <button
+                    type="button"
+                    class="ribbon-history-btn"
+                    :disabled="!canUndo"
+                    title="Undo (Ctrl+Z)"
+                    @click="handleUndo"
+                >
+                    <span>↶ Undo</span>
+                </button>
+                <button
+                    type="button"
+                    class="ribbon-history-btn"
+                    :disabled="!canRedo"
+                    title="Redo (Ctrl+Y)"
+                    @click="handleRedo"
+                >
+                    <span>↷ Redo</span>
+                </button>
             </div>
 
-            <!-- Studio 2-Column Layout -->
-            <div class="studio-grid">
-                <!-- LEFT COLUMN: CONTENT CREATOR CARD -->
-                <section class="neu-card builder-form-card">
-                    <!-- Step 1: Content Type Selector Tabs -->
-                    <div class="content-type-selector">
-                        <span class="selector-label">1. CHOOSE CONTENT BLOCK TYPE</span>
-                        <div class="type-tabs-grid">
-                            <button
-                                v-for="type in contentTypes"
-                                :key="type.id"
-                                type="button"
-                                class="type-tab-btn"
-                                :class="{ 'active': selectedType === type.id }"
-                                @click="selectContentType(type.id)"
-                            >
-                                <span class="tab-icon">{{ type.icon }}</span>
-                                <div class="tab-meta">
-                                    <span class="tab-title">{{ type.label }}</span>
-                                    <span class="tab-desc">{{ type.desc }}</span>
-                                </div>
-                            </button>
+            <span class="ribbon-divider" aria-hidden="true"></span>
+
+            <!-- INTERACTIVE WORD MEANING BUTTON (SELECT ANY WORD TO ATTACH HOVER/CLICK MEANING!) -->
+            <div class="ribbon-group">
+                <button
+                    type="button"
+                    class="ribbon-vocab-meaning-btn"
+                    title="Highlight a selected word and attach an interactive meaning for students"
+                    @click="openVocabGlossCreatorFromSelection"
+                >
+                    <span>🔍 + Add Word Meaning</span>
+                </button>
+            </div>
+
+            <span class="ribbon-divider" aria-hidden="true"></span>
+
+            <!-- Font Family Picker -->
+            <div class="ribbon-group">
+                <select
+                    v-model="selectedFontFamily"
+                    class="ribbon-select"
+                    aria-label="Font Family"
+                >
+                    <option v-for="f in fontFamilies" :key="f.id" :value="f.id">
+                        {{ f.label }}
+                    </option>
+                </select>
+            </div>
+
+            <!-- Heading Style Buttons -->
+            <div class="ribbon-group">
+                <button
+                    type="button"
+                    class="ribbon-tool-btn"
+                    title="Normal Paragraph"
+                    @click="applyBlockHeading('P')"
+                >
+                    Body
+                </button>
+                <button
+                    type="button"
+                    class="ribbon-tool-btn font-bold"
+                    title="Large Chapter Heading"
+                    @click="applyBlockHeading('H2')"
+                >
+                    H1
+                </button>
+                <button
+                    type="button"
+                    class="ribbon-tool-btn font-bold"
+                    title="Section Subheading"
+                    @click="applyBlockHeading('H3')"
+                >
+                    H2
+                </button>
+            </div>
+
+            <span class="ribbon-divider" aria-hidden="true"></span>
+
+            <!-- Bold / Italic / Underline / Lists -->
+            <div class="ribbon-group">
+                <button
+                    type="button"
+                    class="ribbon-icon-btn font-bold"
+                    title="Bold (Ctrl+B)"
+                    @click="execFormat('bold')"
+                >
+                    B
+                </button>
+                <button
+                    type="button"
+                    class="ribbon-icon-btn italic"
+                    title="Italic (Ctrl+I)"
+                    @click="execFormat('italic')"
+                >
+                    I
+                </button>
+                <button
+                    type="button"
+                    class="ribbon-icon-btn underline"
+                    title="Underline (Ctrl+U)"
+                    @click="execFormat('underline')"
+                >
+                    U
+                </button>
+                <button
+                    type="button"
+                    class="ribbon-icon-btn"
+                    title="Bullet List"
+                    @click="execFormat('insertUnorderedList')"
+                >
+                    • List
+                </button>
+            </div>
+
+            <span class="ribbon-divider" aria-hidden="true"></span>
+
+            <!-- Simple Text Color Highlight Swatches -->
+            <div class="ribbon-group">
+                <span class="ribbon-group-lbl">HIGHLIGHT:</span>
+                <div class="highlight-swatch-row">
+                    <button
+                        v-for="sw in highlightSwatches"
+                        :key="sw.label"
+                        type="button"
+                        class="swatch-dot-btn"
+                        :style="{ backgroundColor: sw.color }"
+                        :title="`Highlight selected text: ${sw.label}`"
+                        @click="applyHighlightColor(sw.color)"
+                    ></button>
+                </div>
+            </div>
+
+            <span class="ribbon-divider" aria-hidden="true"></span>
+
+            <!-- Paper Canvas Theme Selector -->
+            <div class="ribbon-group">
+                <span class="ribbon-group-lbl">PAPER:</span>
+                <div class="paper-theme-dots">
+                    <button
+                        v-for="pt in paperThemes"
+                        :key="pt.id"
+                        type="button"
+                        class="paper-theme-chip"
+                        :class="{ 'is-active': activePaperTheme.id === pt.id }"
+                        :style="{ backgroundColor: pt.bg, borderColor: pt.border }"
+                        :title="pt.label"
+                        @click="activePaperTheme = pt"
+                    >
+                        {{ pt.label.split(' ')[0] }}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick Selected Block Delete Pill in Ribbon when an Element/Art is Selected -->
+            <template v-if="selectedCanvasBlockEl">
+                <span class="ribbon-divider" aria-hidden="true"></span>
+                <div class="ribbon-group">
+                    <button
+                        type="button"
+                        class="ribbon-delete-element-btn"
+                        @click="removeSelectedCanvasBlock"
+                    >
+                        🗑 Remove "{{ selectedCanvasBlockLabel }}"
+                    </button>
+                </div>
+            </template>
+        </div>
+
+        <!-- =========================================================================
+             3. MAIN FULL-SCREEN 3-PANE STUDIO WORKSPACE
+             ========================================================================= -->
+        <div class="studio-workspace-body">
+            <!-- =====================================================================
+                 LEFT PANE: CANVA-STYLE CREATIVE TOOLBOX RAIL & SLIDE-OUT DRAWER
+                 ===================================================================== -->
+            <aside class="canva-left-dock" :class="{ 'drawer-collapsed': !isLeftDrawerOpen }">
+                <div class="canva-icon-rail">
+                    <button
+                        type="button"
+                        class="rail-tab-btn"
+                        :class="{ 'is-active': isLeftDrawerOpen && activeToolboxTab === 'templates' }"
+                        @click="
+                            activeToolboxTab = 'templates';
+                            isLeftDrawerOpen = true;
+                        "
+                    >
+                        <svg viewBox="0 0 22 22" class="rail-svg" aria-hidden="true">
+                            <rect x="3" y="3" width="16" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="2" />
+                            <rect x="3" y="12" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2" />
+                            <rect x="12" y="12" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2" />
+                        </svg>
+                        <span>Layouts</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        class="rail-tab-btn"
+                        :class="{ 'is-active': isLeftDrawerOpen && activeToolboxTab === 'vocab' }"
+                        @click="
+                            activeToolboxTab = 'vocab';
+                            isLeftDrawerOpen = true;
+                        "
+                    >
+                        <svg viewBox="0 0 22 22" class="rail-svg" aria-hidden="true">
+                            <circle cx="10" cy="10" r="6" fill="none" stroke="currentColor" stroke-width="2" />
+                            <line x1="14.5" y1="14.5" x2="19" y2="19" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+                        </svg>
+                        <span>Meanings</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        class="rail-tab-btn"
+                        :class="{ 'is-active': isLeftDrawerOpen && activeToolboxTab === 'elements' }"
+                        @click="
+                            activeToolboxTab = 'elements';
+                            isLeftDrawerOpen = true;
+                        "
+                    >
+                        <svg viewBox="0 0 22 22" class="rail-svg" aria-hidden="true">
+                            <polygon points="11,2.5 13.8,8.2 20,9.1 15.5,13.5 16.6,19.6 11,16.7 5.4,19.6 6.5,13.5 2,9.1 8.2,8.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                        </svg>
+                        <span>Elements</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        class="rail-tab-btn"
+                        :class="{ 'is-active': isLeftDrawerOpen && activeToolboxTab === 'media' }"
+                        @click="
+                            activeToolboxTab = 'media';
+                            isLeftDrawerOpen = true;
+                        "
+                    >
+                        <svg viewBox="0 0 22 22" class="rail-svg" aria-hidden="true">
+                            <path d="M4 15v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2M11 3v11M7 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <span>Uploads</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        class="rail-tab-btn"
+                        :class="{ 'is-active': isLeftDrawerOpen && activeToolboxTab === 'stickers' }"
+                        @click="
+                            activeToolboxTab = 'stickers';
+                            isLeftDrawerOpen = true;
+                        "
+                    >
+                        <svg viewBox="0 0 22 22" class="rail-svg" aria-hidden="true">
+                            <circle cx="11" cy="11" r="8" fill="none" stroke="currentColor" stroke-width="2" />
+                            <circle cx="8.5" cy="9.5" r="1" fill="currentColor" />
+                            <circle cx="13.5" cy="9.5" r="1" fill="currentColor" />
+                            <path d="M8 13.5c.8 1.3 2 2 3 2s2.2-.7 3-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                        </svg>
+                        <span>Story Art</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        class="rail-collapse-btn"
+                        :title="isLeftDrawerOpen ? 'Collapse Toolbox' : 'Expand Toolbox'"
+                        @click="isLeftDrawerOpen = !isLeftDrawerOpen"
+                    >
+                        {{ isLeftDrawerOpen ? '«' : '»' }}
+                    </button>
+                </div>
+
+                <!-- Expandable Canva Shelf Drawer -->
+                <div v-if="isLeftDrawerOpen" class="canva-shelf-drawer">
+                    <!-- TAB 1: 1-CLICK STORY PAGE TEMPLATES -->
+                    <div v-if="activeToolboxTab === 'templates'" class="shelf-section">
+                        <div class="shelf-header">
+                            <h3>Story Layouts</h3>
+                            <p>Includes Interactive Story Layout with hover/click word meanings!</p>
                         </div>
-                    </div>
 
-                    <!-- Step 2: Form Input Fields -->
-                    <form @submit.prevent="submitContent" class="block-form">
-                        <div class="form-section-title">
-                            <span>2. CONFIGURE {{ selectedType.toUpperCase() }} BLOCK</span>
-                        </div>
-
-                        <!-- Block Title -->
-                        <div class="form-group">
-                            <label for="block-title" class="form-label">
-                                <span>Block Title / Heading</span>
-                                <span class="optional-tag">(Optional)</span>
-                            </label>
-                            <input
-                                id="block-title"
-                                v-model="form.title"
-                                type="text"
-                                class="neu-input"
-                                :placeholder="`e.g., ${selectedType === 'audio' ? 'Teacher Read-Along Voiceover' : selectedType === 'image' ? 'Island Scene Map' : 'Story Passage: Meeting the Guardian'}`"
-                            />
-                            <p v-if="form.errors.title" class="error-msg">{{ form.errors.title }}</p>
-                        </div>
-
-                        <!-- 1. TEXT TYPE: Rich Textarea -->
-                        <div v-if="selectedType === 'text'" class="form-group">
-                            <label for="block-content" class="form-label">
-                                <span>Reading Story Passage & Vocabulary</span>
-                                <span class="required-star">*</span>
-                            </label>
-                            <textarea
-                                id="block-content"
-                                v-model="form.content"
-                                rows="8"
-                                class="neu-textarea"
-                                placeholder="Type or paste the reading story, moral dilemma, guided comprehension questions, or vocabulary focus words here..."
-                                required
-                            ></textarea>
-                            <p v-if="form.errors.content" class="error-msg">{{ form.errors.content }}</p>
-                        </div>
-
-                        <!-- 2. IMAGE / AUDIO / VIDEO / DOCUMENT: File Upload Zone -->
-                        <div v-if="['image', 'audio', 'video', 'document'].includes(selectedType)" class="form-group">
-                            <label class="form-label">
-                                <span>Upload {{ selectedType.toUpperCase() }} File</span>
-                            </label>
-
-                            <!-- Dropzone -->
+                        <div class="shelf-cards-list">
                             <div
-                                class="file-dropzone"
-                                :class="{ 'dragging': isDraggingFile, 'has-file': form.media_file }"
-                                @dragover.prevent="isDraggingFile = true"
-                                @dragleave.prevent="isDraggingFile = false"
-                                @drop.prevent="handleFileDrop"
-                                @click="fileInputRef?.click()"
+                                v-for="tpl in canvaTemplates"
+                                :key="tpl.id"
+                                class="canva-template-card"
+                                :class="{ 'featured-story-tpl': tpl.id === 'interactive-story-gloss' }"
                             >
-                                <input
-                                    ref="fileInputRef"
-                                    type="file"
-                                    class="hidden-file-input"
-                                    :accept="getContentTypeMeta(selectedType).accept"
-                                    @change="handleFileSelect"
-                                />
-
-                                <div v-if="!form.media_file" class="dropzone-empty">
-                                    <span class="dropzone-icon">{{ getContentTypeMeta(selectedType).icon }}</span>
-                                    <strong class="dropzone-prompt">Click to select or drag & drop file here</strong>
-                                    <span class="dropzone-hint">{{ getContentTypeMeta(selectedType).hint }} (Max 50MB)</span>
+                                <div class="tpl-top-row">
+                                    <span class="tpl-tag-pill">{{ tpl.tag }}</span>
                                 </div>
-
-                                <div v-else class="dropzone-filled" @click.stop>
-                                    <div class="file-info-badge">
-                                        <span class="file-icon">{{ getContentTypeMeta(selectedType).icon }}</span>
-                                        <div class="file-details">
-                                            <span class="file-name">{{ form.media_file.name }}</span>
-                                            <span class="file-size">{{ Math.round(form.media_file.size / 1024) }} KB</span>
-                                        </div>
-                                    </div>
-                                    <button type="button" class="btn-remove-file" @click="removeSelectedFile">
-                                        ✕ Remove
+                                <strong class="tpl-name">{{ tpl.name }}</strong>
+                                <p class="tpl-desc">{{ tpl.desc }}</p>
+                                <div class="tpl-action-btns">
+                                    <button
+                                        type="button"
+                                        class="tpl-btn-append"
+                                        @click="applyTemplateToCanvas(tpl, 'append')"
+                                    >
+                                        + Add to Page
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="tpl-btn-replace"
+                                        @click="applyTemplateToCanvas(tpl, 'replace')"
+                                    >
+                                        Replace Page
                                     </button>
                                 </div>
                             </div>
-                            <p v-if="form.errors.media_file" class="error-msg">{{ form.errors.media_file }}</p>
+                        </div>
+                    </div>
 
-                            <!-- Live Media Previews -->
-                            <div v-if="mediaPreviewUrl" class="live-preview-box">
-                                <span class="preview-tag">File Preview</span>
-
-                                <!-- Image Preview -->
-                                <img
-                                    v-if="selectedType === 'image'"
-                                    :src="mediaPreviewUrl"
-                                    alt="Uploaded preview"
-                                    class="preview-img"
-                                />
-
-                                <!-- Audio Player Preview -->
-                                <audio
-                                    v-else-if="selectedType === 'audio'"
-                                    controls
-                                    class="preview-audio"
-                                    :src="mediaPreviewUrl"
-                                ></audio>
-
-                                <!-- Video Player Preview -->
-                                <video
-                                    v-else-if="selectedType === 'video'"
-                                    controls
-                                    class="preview-video"
-                                    :src="mediaPreviewUrl"
-                                ></video>
-                            </div>
+                    <!-- TAB 2: INTERACTIVE WORD MEANINGS (VOCABULARY GLOSSARY MANAGER) -->
+                    <div v-else-if="activeToolboxTab === 'vocab'" class="shelf-section">
+                        <div class="shelf-header">
+                            <h3>Interactive Word Meanings</h3>
+                            <p>
+                                Highlight any word in your story on the canvas and click below so students can hover or tap it to reveal its meaning!
+                            </p>
                         </div>
 
-                        <!-- External URL Option (for Videos / Audios) -->
-                        <div v-if="['video', 'audio'].includes(selectedType)" class="form-group">
-                            <label for="block-external-url" class="form-label">
-                                <span>Or Stream via External Link / Embed</span>
-                                <span class="optional-tag">(YouTube, Vimeo, Cloud Stream)</span>
-                            </label>
-                            <input
-                                id="block-external-url"
-                                v-model="form.external_url"
-                                type="url"
-                                class="neu-input"
-                                placeholder="https://www.youtube.com/watch?v=..."
-                            />
-                            <p v-if="form.errors.external_url" class="error-msg">{{ form.errors.external_url }}</p>
-                        </div>
+                        <button
+                            type="button"
+                            class="btn-open-vocab-creator"
+                            @click="openVocabGlossCreatorFromSelection"
+                        >
+                            🔍 + Highlight Word & Add Meaning
+                        </button>
 
-                        <!-- Media Duration & Caption Row -->
-                        <div v-if="['image', 'audio', 'video', 'document'].includes(selectedType)" class="form-row-duo">
-                            <!-- Duration in seconds -->
-                            <div v-if="['audio', 'video'].includes(selectedType)" class="form-group">
-                                <label for="block-duration" class="form-label">
-                                    <span>Duration (Seconds)</span>
-                                </label>
-                                <input
-                                    id="block-duration"
-                                    v-model.number="form.duration_seconds"
-                                    type="number"
-                                    min="0"
-                                    class="neu-input"
-                                    placeholder="e.g., 120"
-                                />
-                            </div>
+                        <div class="vocab-gloss-list-wrap">
+                            <span class="shelf-mini-lbl">
+                                Active Words on This Page ({{ form.vocabulary_glosses?.length || 0 }}):
+                            </span>
 
-                            <!-- Alt Text for Images -->
-                            <div v-if="selectedType === 'image'" class="form-group">
-                                <label for="block-alt" class="form-label">
-                                    <span>Accessibility Alt Text</span>
-                                </label>
-                                <input
-                                    id="block-alt"
-                                    v-model="form.alt_text"
-                                    type="text"
-                                    class="neu-input"
-                                    placeholder="Describe the image for screen readers"
-                                />
-                            </div>
-
-                            <!-- Caption -->
-                            <div class="form-group">
-                                <label for="block-caption" class="form-label">
-                                    <span>Student Caption / Note</span>
-                                </label>
-                                <input
-                                    id="block-caption"
-                                    v-model="form.caption"
-                                    type="text"
-                                    class="neu-input"
-                                    placeholder="Short caption displayed under media"
-                                />
-                            </div>
-                        </div>
-
-                        <!-- Submit Block Button -->
-                        <div class="form-submit-row">
-                            <button
-                                type="submit"
-                                class="btn-3d-add-block"
-                                :disabled="form.processing"
+                            <div
+                                v-if="form.vocabulary_glosses && form.vocabulary_glosses.length > 0"
+                                class="vocab-gloss-cards"
                             >
-                                <span v-if="!form.processing">✨ Add Block to Lecture</span>
-                                <span v-else>Uploading & Saving...</span>
+                                <div
+                                    v-for="(item, gIdx) in form.vocabulary_glosses"
+                                    :key="`${item.word}-${gIdx}`"
+                                    class="vocab-gloss-item-card"
+                                >
+                                    <div class="vocab-item-top">
+                                        <strong class="vocab-item-word">{{ item.word }}</strong>
+                                        <button
+                                            type="button"
+                                            class="vocab-item-del"
+                                            title="Remove interactive meaning from this word"
+                                            @click="removeVocabGlossWord(item.word)"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                    <span v-if="item.pronunciation" class="vocab-item-pron">
+                                        {{ item.pronunciation }}
+                                    </span>
+                                    <p class="vocab-item-meaning">{{ item.meaning }}</p>
+                                </div>
+                            </div>
+
+                            <div v-else class="vocab-empty-box">
+                                Select a word on the page and click <strong>"+ Highlight Word & Add Meaning"</strong> to create interactive hover definitions.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 3: INSERTABLE CANVA STORY CALLOUT ELEMENTS -->
+                    <div v-else-if="activeToolboxTab === 'elements'" class="shelf-section">
+                        <div class="shelf-header">
+                            <h3>Story Callout Elements</h3>
+                            <p>Click to insert onto your page. Click any element on the page to remove or reorder it!</p>
+                        </div>
+
+                        <div class="shelf-cards-list">
+                            <button
+                                v-for="el in canvaElements"
+                                :key="el.id"
+                                type="button"
+                                class="canva-element-card"
+                                :style="{ borderLeftColor: el.color, backgroundColor: el.bg }"
+                                @click="insertCanvaElement(el)"
+                            >
+                                <span class="el-badge" :style="{ color: el.color }">{{ el.badge }}</span>
+                                <strong class="el-title">{{ el.label }}</strong>
+                                <span class="el-plus">+ Insert</span>
                             </button>
                         </div>
-                    </form>
-                </section>
+                    </div>
 
-                <!-- RIGHT COLUMN: EXISTING CONTENTS TIMELINE / FEED -->
-                <aside class="neu-card timeline-card">
-                    <div class="timeline-header">
-                        <div class="timeline-title-wrap">
-                            <span class="timeline-icon">📚</span>
-                            <div>
-                                <h3 class="timeline-title">Lecture Story Flow</h3>
-                                <span class="timeline-subtitle">{{ existing_contents.length }} content block{{ existing_contents.length === 1 ? '' : 's' }} in order</span>
+                    <!-- TAB 4: CANVA UPLOADS (INSERTS IMAGES/MEDIA DIRECTLY INTO PRESENTATION WITHOUT HIDING TEXT!) -->
+                    <div v-else-if="activeToolboxTab === 'media'" class="shelf-section">
+                        <div class="shelf-header">
+                            <h3>Insert Media into Page</h3>
+                            <p>Add images, sound clips, or videos right into your presentation alongside your text</p>
+                        </div>
+
+                        <div class="upload-caption-field">
+                            <label class="shelf-mini-lbl">Optional Caption for Next Media:</label>
+                            <input
+                                v-model="externalMediaCaptionInput"
+                                type="text"
+                                class="shelf-mini-input"
+                                placeholder="e.g., Map of Whispering Woods"
+                            />
+                        </div>
+
+                        <div class="shelf-media-types">
+                            <button
+                                v-for="cat in uploadMediaCategories"
+                                :key="cat.id"
+                                type="button"
+                                class="media-switch-card"
+                                @click="triggerUploadBrowser(cat.id)"
+                            >
+                                <span
+                                    class="media-badge-dot"
+                                    :style="{ backgroundColor: cat.badgeColor }"
+                                ></span>
+                                <div class="media-switch-copy">
+                                    <strong>+ Upload {{ cat.label }}</strong>
+                                    <span>{{ cat.desc }}</span>
+                                </div>
+                            </button>
+                        </div>
+
+                        <div
+                            class="shelf-dropzone-box"
+                            :class="{ 'is-dragging': isDraggingFile }"
+                            @dragover.prevent="isDraggingFile = true"
+                            @dragleave.prevent="isDraggingFile = false"
+                            @drop.prevent="handleFileDrop"
+                            @click="triggerUploadBrowser('image')"
+                        >
+                            <strong>📂 Drag & Drop Image / Audio / Video</strong>
+                            <span>Automatically inserts onto your presentation canvas</span>
+                        </div>
+
+                        <div class="shelf-external-box">
+                            <label class="shelf-mini-lbl">Or Insert by Image / Video URL:</label>
+                            <div class="external-url-row">
+                                <input
+                                    v-model="externalMediaUrlInput"
+                                    type="url"
+                                    class="shelf-mini-input"
+                                    placeholder="https://..."
+                                />
+                                <button
+                                    type="button"
+                                    class="btn-insert-url"
+                                    @click="insertExternalMediaLinkOntoCanvas"
+                                >
+                                    Add
+                                </button>
                             </div>
                         </div>
 
-                        <button type="button" class="btn-return-map" @click="goToModule">
-                            <span>➔ Done & Return</span>
+                        <div v-if="uploadedAssetsTray.length > 0" class="uploaded-tray-section">
+                            <span class="shelf-mini-lbl">Uploaded in this Session (Click to Insert):</span>
+                            <div class="uploaded-tray-list">
+                                <div
+                                    v-for="asset in uploadedAssetsTray"
+                                    :key="asset.id"
+                                    class="tray-asset-card"
+                                >
+                                    <img
+                                        v-if="asset.kind === 'image'"
+                                        :src="asset.src"
+                                        :alt="asset.name"
+                                        class="tray-asset-thumb"
+                                    />
+                                    <div class="tray-asset-meta">
+                                        <strong>{{ asset.name }}</strong>
+                                        <button
+                                            type="button"
+                                            class="tray-reinsert-btn"
+                                            @click="insertMediaAssetOntoCanvas(asset)"
+                                        >
+                                            + Insert on Page
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 5: BUILT-IN 3D STORYBOOK STICKERS -->
+                    <div v-else-if="activeToolboxTab === 'stickers'" class="shelf-section">
+                        <div class="shelf-header">
+                            <h3>3D Storybook Art</h3>
+                            <p>Click to embed into your story page. Click any sticker on the canvas to remove it!</p>
+                        </div>
+
+                        <div class="stickers-grid">
+                            <button
+                                v-for="st in storybookStickers"
+                                :key="st.id"
+                                type="button"
+                                class="sticker-art-card"
+                                @click="insertStoryStickerIntoDoc(st)"
+                            >
+                                <img :src="st.src" :alt="st.label" class="sticker-thumb-img" />
+                                <span class="sticker-lbl">{{ st.label }}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- =====================================================================
+                 CENTER PANE: UNIFIED INTERACTIVE WORD / CANVA ARTBOARD STAGE
+                 ===================================================================== -->
+            <main class="studio-center-stage">
+                <div class="artboard-desk-scroller" @click.self="clearSelectedCanvasBlock">
+                    <!-- MODE A: UNIFIED WORD / CANVA PRESENTATION CANVAS -->
+                    <div
+                        v-if="viewMode === 'canvas'"
+                        class="paper-artboard-sheet"
+                        :class="{ 'paper-is-lined': activePaperTheme.lined }"
+                        :style="{
+                            backgroundColor: activePaperTheme.bg,
+                            color: activePaperTheme.text,
+                            borderColor: activePaperTheme.border,
+                            transform: `scale(${canvasZoom / 100})`,
+                            transformOrigin: 'top center',
+                        }"
+                        @dragover.prevent="isDraggingFile = true"
+                        @dragleave.prevent="isDraggingFile = false"
+                        @drop.prevent="handleFileDrop"
+                    >
+                        <!-- Top Document Metadata Ribbon inside the Sheet -->
+                        <div class="sheet-top-meta-bar">
+                            <span class="sheet-type-chip">
+                                INTERACTIVE STORY PAGE #{{ activeEditingPageIndex }}
+                            </span>
+
+                            <div class="sheet-meta-right">
+                                <span class="sheet-undo-hint">
+                                    ✨ {{ form.vocabulary_glosses?.length || 0 }} interactive word{{ (form.vocabulary_glosses?.length || 0) === 1 ? '' : 's' }} on page
+                                </span>
+                                <span class="sheet-xp-indicator">
+                                    +{{ lecture.xp_reward || 150 }} XP
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- =========================================================
+                             DEDICATED FULL-PAGE READ-ALOUD NARRATION AUDIO BAR
+                             (Specifically for students who want to listen to the whole page!)
+                             ========================================================= -->
+                        <div class="page-narration-audio-bar">
+                            <div class="narration-bar-left">
+                                <span class="narration-icon-badge" aria-hidden="true">🔊</span>
+                                <div class="narration-bar-copy">
+                                    <strong>Full-Page Read-Aloud Narration Audio</strong>
+                                    <span>
+                                        For students who prefer listening to the reading of this entire page instead of reading silently
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="narration-bar-controls">
+                                <template v-if="pageNarrationPreviewUrl">
+                                    <audio
+                                        controls
+                                        :src="pageNarrationPreviewUrl"
+                                        class="narration-mini-player"
+                                    ></audio>
+                                    <button
+                                        type="button"
+                                        class="btn-narration-replace"
+                                        @click="triggerPageNarrationUpload"
+                                    >
+                                        Replace Audio
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn-narration-remove"
+                                        @click="removePageNarrationAudio"
+                                    >
+                                        ✕
+                                    </button>
+                                </template>
+                                <template v-else>
+                                    <button
+                                        type="button"
+                                        class="btn-upload-page-narration"
+                                        @click="triggerPageNarrationUpload"
+                                    >
+                                        🎙️ Upload Page Read-Aloud Audio
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Direct On-Canvas Title Heading Input -->
+                        <div class="sheet-title-field-wrap">
+                            <input
+                                v-model="form.title"
+                                type="text"
+                                class="sheet-heading-input"
+                                placeholder="Untitled Story Chapter or Presentation Heading..."
+                                @input="scheduleHistorySnapshot"
+                            />
+                            <p v-if="form.errors.title" class="canvas-error-msg">{{ form.errors.title }}</p>
+                        </div>
+
+                        <!-- LIVE INTERACTIVE WORD MEANING POPOVER BANNER (WHEN HOVERING/CLICKING A HIGHLIGHTED WORD) -->
+                        <Transition name="studio-toast-pop">
+                            <div v-if="activeVocabTooltip" class="live-vocab-meaning-banner">
+                                <div class="vocab-banner-main">
+                                    <span class="vocab-pill-tag">📖 WORD MEANING</span>
+                                    <strong class="vocab-banner-word">{{ activeVocabTooltip.word }}</strong>
+                                    <em v-if="activeVocabTooltip.pronunciation" class="vocab-banner-pron">
+                                        ({{ activeVocabTooltip.pronunciation }})
+                                    </em>
+                                    <span class="vocab-banner-def">— {{ activeVocabTooltip.meaning }}</span>
+                                </div>
+                                <div class="vocab-banner-actions">
+                                    <button
+                                        type="button"
+                                        class="vocab-banner-remove-btn"
+                                        @click="removeVocabGlossWord(activeVocabTooltip.word)"
+                                    >
+                                        Remove Highlight
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="vocab-banner-close-btn"
+                                        @click="activeVocabTooltip = null"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            </div>
+                        </Transition>
+
+                        <!-- UNIFIED WYSIWYG PRESENTATION SURFACE -->
+                        <div class="sheet-document-body-wrap">
+                            <!-- FLOATING CANVA ELEMENT TOOLBAR WHEN AN INSERTED BLOCK / STICKER / IMAGE IS SELECTED -->
+                            <Transition name="studio-toast-pop">
+                                <div
+                                    v-if="selectedCanvasBlockEl"
+                                    class="floating-block-action-bar"
+                                    :style="{ top: `${selectedBlockTopPx}px` }"
+                                    @click.stop
+                                >
+                                    <span class="block-sel-name">{{ selectedCanvasBlockLabel }}</span>
+                                    <button
+                                        type="button"
+                                        class="block-act-pill"
+                                        title="Move element up"
+                                        @click="moveSelectedCanvasBlock('up')"
+                                    >
+                                        ↑ Up
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="block-act-pill"
+                                        title="Move element down"
+                                        @click="moveSelectedCanvasBlock('down')"
+                                    >
+                                        ↓ Down
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="block-act-pill"
+                                        title="Duplicate element"
+                                        @click="duplicateSelectedCanvasBlock"
+                                    >
+                                        ⧉ Duplicate
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="block-act-pill pill-danger"
+                                        title="Remove this element from page"
+                                        @click="removeSelectedCanvasBlock"
+                                    >
+                                        ✕ Remove
+                                    </button>
+                                </div>
+                            </Transition>
+
+                            <div
+                                ref="editorSurfaceRef"
+                                class="wysiwyg-story-surface"
+                                :style="{ fontFamily: selectedFontFamily }"
+                                contenteditable="true"
+                                role="textbox"
+                                aria-multiline="true"
+                                aria-label="Story presentation content editor"
+                                data-placeholder="Click here and start writing your story passage, select any word and click '+ Add Word Meaning' in the top bar, or insert layouts & images from the left panel..."
+                                @input="onEditorInput"
+                                @click="handleCanvasClick"
+                                @mouseover="handleVocabHoverOrClick"
+                            ></div>
+                            <p v-if="form.errors.content" class="canvas-error-msg">{{ form.errors.content }}</p>
+                        </div>
+                    </div>
+
+                    <!-- MODE B: LIVE STUDENT MOBILE 3D CLAY PREVIEW (WITH FULL-PAGE AUDIO & HOVER/TAP WORD MEANINGS) -->
+                    <div v-else class="student-device-preview-frame">
+                        <div class="device-notch-bar" aria-hidden="true">
+                            <span class="device-speaker"></span>
+                        </div>
+
+                        <div class="device-screen-body">
+                            <span class="preview-kicker-pill">
+                                LIVE STUDENT VIEW • PAGE #{{ activeEditingPageIndex }}
+                            </span>
+                            <h2 class="preview-story-title">
+                                {{ form.title || `Story Scroll Part ${activeEditingPageIndex}` }}
+                            </h2>
+
+                            <!-- Dedicated Student Full-Page Read-Aloud Audio Player -->
+                            <div v-if="pageNarrationPreviewUrl" class="student-preview-narration-card">
+                                <div class="student-narration-head">
+                                    <span>🔊 Listen to Full Page Reading</span>
+                                    <small>Press play to hear this story page read aloud!</small>
+                                </div>
+                                <audio
+                                    controls
+                                    :src="pageNarrationPreviewUrl"
+                                    class="student-narration-player"
+                                ></audio>
+                            </div>
+
+                            <!-- Interactive Word Meaning Popover Card in Student Preview -->
+                            <Transition name="studio-toast-pop">
+                                <div v-if="activeVocabTooltip" class="student-vocab-popover-card">
+                                    <div class="student-vocab-top">
+                                        <span class="student-vocab-badge">✨ WORD MEANING</span>
+                                        <button
+                                            type="button"
+                                            class="student-vocab-close"
+                                            @click="activeVocabTooltip = null"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                    <strong class="student-vocab-word">{{ activeVocabTooltip.word }}</strong>
+                                    <span v-if="activeVocabTooltip.pronunciation" class="student-vocab-pron">
+                                        {{ activeVocabTooltip.pronunciation }}
+                                    </span>
+                                    <p class="student-vocab-def">{{ activeVocabTooltip.meaning }}</p>
+                                </div>
+                            </Transition>
+
+                            <div
+                                class="preview-rich-story-card"
+                                @click="handleVocabHoverOrClick"
+                                @mouseover="handleVocabHoverOrClick"
+                                v-html="form.content || '<p>No story content written yet.</p>'"
+                            ></div>
+
+                            <div class="preview-complete-btn-mock">
+                                COMPLETE QUEST & CLAIM +{{ lecture.xp_reward || 150 }} XP ✓
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bottom Artboard Status & Zoom Bar -->
+                <footer class="studio-bottom-status-bar">
+                    <div class="status-left-metrics">
+                        <span class="status-metric-pill">
+                            <strong>{{ wordCount }}</strong> {{ wordCount === 1 ? 'word' : 'words' }}
+                        </span>
+                        <span class="status-metric-pill">
+                            <strong>{{ form.vocabulary_glosses?.length || 0 }}</strong> interactive word meanings
+                        </span>
+                        <span class="status-metric-pill">
+                            ⏱ ~{{ estimatedReadingMinutes }} min student read
+                        </span>
+                        <span class="status-metric-pill">
+                            History: {{ historyIndex + 1 }}/{{ historyStack.length }}
+                        </span>
+                    </div>
+
+                    <div class="status-right-zoom">
+                        <button
+                            type="button"
+                            class="zoom-step-btn"
+                            @click="canvasZoom = Math.max(75, canvasZoom - 10)"
+                        >
+                            −
+                        </button>
+                        <span class="zoom-readout">{{ canvasZoom }}%</span>
+                        <button
+                            type="button"
+                            class="zoom-step-btn"
+                            @click="canvasZoom = Math.min(135, canvasZoom + 10)"
+                        >
+                            +
+                        </button>
+                        <button
+                            type="button"
+                            class="zoom-reset-btn"
+                            @click="canvasZoom = 100"
+                        >
+                            100%
                         </button>
                     </div>
+                </footer>
+            </main>
 
-                    <!-- List of Existing Blocks -->
-                    <div v-if="existing_contents.length > 0" class="contents-feed">
-                        <div
-                            v-for="(block, idx) in existing_contents"
-                            :key="block.id"
-                            class="feed-block-card"
-                            :class="`block-${block.type}`"
-                        >
-                            <div class="feed-block-top">
-                                <div class="feed-type-pill">
-                                    <span>{{ getContentTypeMeta(block.type).icon }}</span>
-                                    <span>#{{ idx + 1 }} • {{ getContentTypeMeta(block.type).label }}</span>
-                                </div>
-                                <span v-if="block.created_at" class="feed-time">{{ block.created_at }}</span>
-                            </div>
+            <!-- =====================================================================
+                 RIGHT PANE: CANVA / POWERPOINT STORY PAGES & LAYERS NAVIGATOR
+                 ===================================================================== -->
+            <aside class="studio-right-pages-dock" :class="{ 'deck-collapsed': !isRightDeckOpen }">
+                <div class="pages-dock-header">
+                    <button
+                        type="button"
+                        class="deck-toggle-btn"
+                        :title="isRightDeckOpen ? 'Collapse Pages Deck' : 'Expand Pages Deck'"
+                        @click="isRightDeckOpen = !isRightDeckOpen"
+                    >
+                        {{ isRightDeckOpen ? '»' : '«' }}
+                    </button>
 
-                            <h4 class="feed-block-title">
-                                {{ block.title || `Untitled ${getContentTypeMeta(block.type).label}` }}
-                            </h4>
+                    <div v-if="isRightDeckOpen" class="pages-dock-title-wrap">
+                        <h3>Story Pages Deck</h3>
+                        <span>{{ existing_contents.length }} saved • Click any page to edit</span>
+                    </div>
+                </div>
 
-                            <!-- Text Content Preview -->
-                            <p v-if="block.type === 'text' && block.content" class="feed-text-preview">
-                                {{ block.content }}
-                            </p>
+                <div v-if="isRightDeckOpen" class="pages-deck-scroller">
+                    <div
+                        class="page-thumb-card draft-thumb-card"
+                        :class="{ 'is-selected-page': editingContentId === null }"
+                        role="button"
+                        tabindex="0"
+                        @click="startNewBlankPage()"
+                    >
+                        <div class="thumb-card-top">
+                            <span class="thumb-page-num badge-draft">+ NEW DRAFT</span>
+                            <span class="thumb-type-tag">Story Page</span>
+                        </div>
+                        <strong class="thumb-page-title">
+                            {{
+                                editingContentId === null && form.title
+                                    ? form.title
+                                    : 'New Blank Story Page'
+                            }}
+                        </strong>
+                        <p class="thumb-page-snippet">
+                            Click to compose a brand-new presentation page on the canvas.
+                        </p>
+                    </div>
 
-                            <!-- Image Media Preview -->
-                            <div v-else-if="block.type === 'image' && block.media_url" class="feed-media-wrap">
-                                <img :src="block.media_url" :alt="block.alt_text || 'Illustration'" class="feed-img" />
-                            </div>
-
-                            <!-- Audio Media Preview -->
-                            <div v-else-if="block.type === 'audio' && (block.media_url || block.external_url)" class="feed-media-wrap">
-                                <audio controls class="feed-audio-player" :src="block.media_url || block.external_url"></audio>
-                            </div>
-
-                            <!-- Video Preview -->
-                            <div v-else-if="block.type === 'video'" class="feed-media-wrap">
-                                <video v-if="block.media_url" controls class="feed-video-player" :src="block.media_url"></video>
-                                <a
-                                    v-else-if="block.external_url"
-                                    :href="block.external_url"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    class="external-video-link"
-                                >
-                                    🎬 Open Video Link ➔
-                                </a>
-                            </div>
-
-                            <!-- Caption -->
-                            <div v-if="block.caption" class="feed-caption">
-                                <em>💬 {{ block.caption }}</em>
+                    <div
+                        v-for="(block, idx) in existing_contents"
+                        :key="block.id"
+                        class="page-thumb-card"
+                        :class="{ 'is-selected-page': editingContentId === block.id }"
+                        role="button"
+                        tabindex="0"
+                        @click="loadExistingPageOntoCanvas(block)"
+                    >
+                        <div class="thumb-card-top">
+                            <span class="thumb-page-num">PAGE #{{ idx + 1 }}</span>
+                            <div class="thumb-badges-right">
+                                <span v-if="block.narration_audio_url" class="thumb-audio-indicator" title="Has Page Read-Aloud Audio">
+                                    🔊
+                                </span>
+                                <span class="thumb-type-tag">
+                                    {{ (block.vocabulary_glosses?.length || 0) > 0 ? `${block.vocabulary_glosses.length} Words` : 'Saved' }}
+                                </span>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Empty State -->
-                    <div v-else class="empty-feed-card">
-                        <span class="empty-icon">📜</span>
-                        <h4>No Content Blocks Added Yet</h4>
-                        <p>Use the form on the left to write reading passages, upload audio narration, or embed animated story videos!</p>
+                        <strong class="thumb-page-title">
+                            {{ block.title || `Story Page #${idx + 1}` }}
+                        </strong>
+
+                        <p v-if="block.content" class="thumb-page-snippet">
+                            {{ stripHtmlPreview(block.content) || 'Formatted story presentation' }}
+                        </p>
+
+                        <div class="thumb-card-actions" @click.stop>
+                            <button
+                                type="button"
+                                class="thumb-act-btn"
+                                title="Duplicate into new draft"
+                                @click="duplicateBlockAsNewDraft(block)"
+                            >
+                                Duplicate
+                            </button>
+                            <button
+                                type="button"
+                                class="thumb-act-btn act-delete"
+                                title="Delete this page block"
+                                @click="deleteExistingBlock(block)"
+                            >
+                                Delete
+                            </button>
+                        </div>
                     </div>
-                </aside>
+                </div>
+
+                <div v-if="isRightDeckOpen" class="pages-dock-footer">
+                    <button type="button" class="btn-finish-return-map" @click="goToModule">
+                        <span>✓ Done & Return to Journey Map</span>
+                    </button>
+                </div>
+            </aside>
+        </div>
+
+        <!-- =========================================================================
+             INTERACTIVE WORD MEANING CREATOR MODAL
+             ========================================================================= -->
+        <Teleport to="body">
+            <Transition name="studio-toast-pop">
+                <div
+                    v-if="showVocabGlossModal"
+                    class="vocab-modal-backdrop"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="vocab-modal-title"
+                    @click.self="showVocabGlossModal = false"
+                >
+                    <div class="vocab-modal-card">
+                        <div class="vocab-modal-header">
+                            <span class="vocab-modal-badge">📖 INTERACTIVE STORY VOCABULARY</span>
+                            <h3 id="vocab-modal-title">Highlight Word & Attach Meaning</h3>
+                            <p>
+                                When students hover over or tap this word in the story, a 3D meaning card will pop up!
+                            </p>
+                        </div>
+
+                        <div class="vocab-modal-body">
+                            <div class="vocab-field">
+                                <label>Word or Phrase to Highlight *</label>
+                                <input
+                                    v-model="vocabWordInput"
+                                    type="text"
+                                    class="vocab-input"
+                                    placeholder="e.g., luminous"
+                                />
+                            </div>
+
+                            <div class="vocab-field">
+                                <label>Pronunciation / Part of Speech (Optional)</label>
+                                <input
+                                    v-model="vocabPronunciationInput"
+                                    type="text"
+                                    class="vocab-input"
+                                    placeholder="e.g., adj. • loo-muh-nuhs"
+                                />
+                            </div>
+
+                            <div class="vocab-field">
+                                <label>Student-Friendly Meaning / Definition *</label>
+                                <textarea
+                                    v-model="vocabMeaningInput"
+                                    rows="3"
+                                    class="vocab-textarea"
+                                    placeholder="e.g., Shining or glowing brightly, especially in the dark."
+                                ></textarea>
+                            </div>
+
+                            <div class="vocab-field">
+                                <label>Highlight Badge Color</label>
+                                <div class="vocab-color-picker">
+                                    <button
+                                        v-for="sw in highlightSwatches"
+                                        :key="sw.label"
+                                        type="button"
+                                        class="vocab-color-pill"
+                                        :class="{ 'is-chosen': vocabColorInput.label === sw.label }"
+                                        :style="{ backgroundColor: sw.color, borderColor: sw.border, color: sw.text }"
+                                        @click="vocabColorInput = sw"
+                                    >
+                                        {{ sw.label }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="vocab-modal-footer">
+                            <button
+                                type="button"
+                                class="btn-vocab-cancel"
+                                @click="showVocabGlossModal = false"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                class="btn-vocab-save"
+                                :disabled="!vocabWordInput.trim() || !vocabMeaningInput.trim()"
+                                @click="applyVocabMeaningToWord"
+                            >
+                                ✨ Highlight & Attach Meaning
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+
+        <!-- =========================================================================
+             FLOATING STUDIO TOAST NOTIFICATION
+             ========================================================================= -->
+        <Transition name="studio-toast-pop">
+            <div v-if="saveSuccessToast" class="studio-floating-toast" role="status" aria-live="polite">
+                <span>✨ {{ saveSuccessToast }}</span>
             </div>
-        </main>
+        </Transition>
     </div>
 </template>
 
 <style scoped>
-.content-builder-page {
-    --brand-navy: #1D2440;
-    --brand-blue: #2395EB;
-    --brand-coral: #FF6B4A;
-    --brand-green: #06D6A0;
-    --brand-gold: #FFC000;
+/* ==========================================================================
+   FULL-SCREEN (100VW × 100VH) MICROSOFT WORD + CANVA STORY STUDIO
+   ========================================================================== */
+.word-canva-studio-shell {
+    --font-heading: 'Fredoka', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-body: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
     --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
-    --font-heading: 'Fredoka', system-ui, sans-serif;
-    --font-body: 'Nunito', system-ui, sans-serif;
 
-    /* Neumorphic Tokens */
-    --neu-card-shadow: 10px 10px 24px rgba(14, 116, 144, 0.16), -10px -10px 24px rgba(255, 255, 255, 0.95);
-
-    min-height: 100vh;
-    background: linear-gradient(180deg, #e0f2fe 0%, #bae6fd 60%, #7dd3fc 100%);
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: #F1F5F9;
+    color: #0F172A;
     font-family: var(--font-body);
-    color: var(--brand-navy);
-    position: relative;
-    padding-bottom: 5rem;
-    overflow-x: hidden;
 }
 
-/* Background floating scenery */
-.floating-bg-assets {
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 1;
+.sr-only-file-input {
+    display: none;
 }
 
-.bg-asset {
-    position: absolute;
-    width: 25vw;
-    max-width: 320px;
-    opacity: 0.35;
-    filter: drop-shadow(0 14px 24px rgba(14, 116, 144, 0.18));
-}
-
-.bg-book-left {
-    top: 15%;
-    left: -3%;
-    animation: floatLeft 7s ease-in-out infinite alternate;
-}
-
-.bg-book-right {
-    bottom: 8%;
-    right: -3%;
-    animation: floatRight 8s ease-in-out infinite alternate;
-}
-
-@keyframes floatLeft {
-    from { transform: translateY(0) rotate(-1deg); }
-    to { transform: translateY(-16px) rotate(1deg); }
-}
-
-@keyframes floatRight {
-    from { transform: translateY(0) rotate(1deg); }
-    to { transform: translateY(-16px) rotate(-1deg); }
-}
-
-.floating-sparkle {
-    position: absolute;
-    font-size: 1.8rem;
-    opacity: 0.6;
-}
-
-.sp-1 { top: 10%; left: 20%; }
-.sp-2 { top: 30%; right: 15%; }
-.sp-3 { bottom: 25%; left: 12%; }
-
-/* Top Navigation Bar */
-.top-nav-bar {
+/* ==========================================================================
+   1. ZONE 1: TOP STUDIO COMMAND BAR
+   ========================================================================== */
+.studio-top-command-bar {
+    height: 60px;
+    flex-shrink: 0;
+    background: linear-gradient(90deg, #0F172A 0%, #1E1B4B 55%, #1E3A8A 100%);
+    color: #FFFFFF;
+    padding: 0 1rem;
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    align-items: center;
-    padding: 0.85rem 1.75rem;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(12px);
-    border-bottom: 2px solid rgba(226, 232, 240, 0.8);
-    position: sticky;
-    top: 0;
-    z-index: 50;
     gap: 1rem;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.12);
+    z-index: 40;
 }
 
-.nav-left {
+.cmd-left-group {
     display: flex;
     align-items: center;
-    gap: 1.25rem;
+    gap: 0.85rem;
+    min-width: 0;
 }
 
-.btn-3d-back {
-    background: #f1f5f9;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 9999px;
-    padding: 0.45rem 1rem;
+.studio-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.42rem 0.8rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1.5px solid rgba(255, 255, 255, 0.24);
+    color: #FFFFFF;
     font-family: var(--font-heading);
-    font-weight: 800;
-    font-size: 0.82rem;
-    color: #334155;
+    font-size: 0.78rem;
+    font-weight: 700;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    transition: all 0.2s ease;
+    flex-shrink: 0;
+    transition: all 0.18s ease;
 }
 
-.btn-3d-back:hover {
-    background: #e2e8f0;
+.studio-back-btn:hover {
+    background: rgba(255, 255, 255, 0.22);
     transform: translateX(-2px);
 }
 
-.brand-group {
+.cmd-icon-svg {
+    width: 15px;
+    height: 15px;
+}
+
+.studio-doc-identity {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.studio-brand-row {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.45rem;
 }
 
-.brand-text {
-    font-family: var(--font-heading);
-    font-weight: 900;
-    font-size: 1.35rem;
-}
-
-.brand-web { color: #2395eb; }
-.brand-read { color: #ff6b4a; }
-
-.nav-badge {
-    background: #e0f2fe;
-    color: #0284c7;
-    font-family: var(--font-heading);
-    font-size: 0.68rem;
-    font-weight: 800;
-    padding: 0.15rem 0.5rem;
+.studio-badge-pill {
+    padding: 0.1rem 0.45rem;
     border-radius: 6px;
+    background: linear-gradient(90deg, #38BDF8 0%, #818CF8 100%);
+    color: #0F172A;
+    font-family: var(--font-heading);
+    font-size: 0.58rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
 }
 
-.nav-lecture-chip {
+.studio-module-crumb {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #94A3B8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+.studio-lecture-row {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    background: #ffffff;
-    border: 1.5px solid #e0f2fe;
-    padding: 0.4rem 0.95rem;
-    border-radius: 9999px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
-.chip-lecture-title {
-    font-family: var(--font-heading);
-    font-weight: 800;
-    font-size: 0.88rem;
-    color: #0369a1;
-    max-width: 260px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.chip-count-pill {
-    background: #dcfce7;
-    color: #15803d;
-    font-family: var(--font-heading);
-    font-weight: 900;
-    font-size: 0.72rem;
-    padding: 0.15rem 0.5rem;
-    border-radius: 9999px;
-}
-
-.nav-right {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.teacher-chip {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    background: #f1f5f9;
-    padding: 0.35rem 0.75rem;
-    border-radius: 9999px;
-    font-family: var(--font-heading);
-    font-weight: 800;
-    font-size: 0.82rem;
-}
-
-.btn-exit-mini {
-    background: #fee2e2;
-    color: #b91c1c;
-    border: 1px solid #fecaca;
-    padding: 0.35rem 0.75rem;
-    border-radius: 9999px;
-    font-family: var(--font-heading);
-    font-weight: 800;
-    font-size: 0.78rem;
-    cursor: pointer;
-}
-
-/* Studio Layout */
-.studio-container {
-    position: relative;
-    z-index: 10;
-    max-width: 1200px;
-    margin: 2rem auto 0 auto;
-    padding: 0 1.25rem;
-}
-
-.studio-header {
-    text-align: center;
-    margin-bottom: 2rem;
-}
-
-.banner-pill {
-    display: inline-block;
-    padding: 0.35rem 0.95rem;
-    background: #e0f2fe;
-    color: #0284c7;
-    border-radius: 9999px;
-    font-family: var(--font-heading);
-    font-weight: 800;
-    font-size: 0.72rem;
-    letter-spacing: 0.06em;
-    margin-bottom: 0.6rem;
-    border: 1.5px solid #bae6fd;
-}
-
-.studio-title {
-    font-family: var(--font-heading);
-    font-size: 2.2rem;
-    font-weight: 900;
-    color: #0369a1;
-    margin: 0 0 0.5rem 0;
-    text-shadow: 0 2px 4px rgba(2, 132, 199, 0.15);
-}
-
-.studio-subtitle {
-    font-size: 0.95rem;
-    color: #475569;
-    max-width: 620px;
-    margin: 0 auto;
-    line-height: 1.5;
-}
-
-.studio-grid {
-    display: grid;
-    grid-template-columns: 1.15fr 0.85fr;
-    gap: 1.75rem;
-    align-items: start;
-}
-
-/* Neumorphic Cards */
-.neu-card {
-    background: rgba(255, 255, 255, 0.94);
-    backdrop-filter: blur(14px);
-    border-radius: 28px;
-    box-shadow: var(--neu-card-shadow);
-    border: 2.5px solid #ffffff;
-    padding: 2rem;
-}
-
-/* Content Type Tabs */
-.content-type-selector {
-    margin-bottom: 1.75rem;
-}
-
-.selector-label {
-    display: block;
-    font-family: var(--font-heading);
-    font-size: 0.76rem;
-    font-weight: 900;
-    letter-spacing: 0.06em;
-    color: #0284c7;
-    margin-bottom: 0.75rem;
-}
-
-.type-tabs-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 0.65rem;
-}
-
-.type-tab-btn {
-    background: #f8fafc;
-    border: 2px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 0.85rem 0.65rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s var(--spring-bounce);
-}
-
-.type-tab-btn:hover {
-    background: #ffffff;
-    border-color: #2395eb;
-    transform: translateY(-2px);
-}
-
-.type-tab-btn.active {
-    background: #ffffff;
-    border-color: #f97316;
-    box-shadow: 0 6px 14px rgba(249, 115, 22, 0.2);
-    transform: translateY(-3px);
-}
-
-.tab-icon {
-    font-size: 1.6rem;
-    margin-bottom: 0.35rem;
-}
-
-.tab-title {
-    font-family: var(--font-heading);
-    font-size: 0.82rem;
-    font-weight: 900;
-    color: var(--brand-navy);
-}
-
-.tab-desc {
-    font-size: 0.68rem;
-    color: #64748b;
-    margin-top: 0.2rem;
-    line-height: 1.25;
-    display: none;
-}
-
-/* Block Form */
-.form-section-title {
-    font-family: var(--font-heading);
-    font-size: 0.76rem;
-    font-weight: 900;
-    letter-spacing: 0.06em;
-    color: #ea580c;
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1.5px solid #f1f5f9;
-}
-
-.form-group {
-    margin-bottom: 1.25rem;
-}
-
-.form-label {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-family: var(--font-heading);
-    font-size: 0.85rem;
-    font-weight: 800;
-    color: var(--brand-navy);
-    margin-bottom: 0.4rem;
-}
-
-.required-star { color: #ef4444; }
-.optional-tag { font-size: 0.72rem; color: #94a3b8; font-weight: 600; }
-
-.neu-input,
-.neu-textarea {
-    width: 100%;
-    background: #ffffff;
-    border: 2px solid #e2e8f0;
-    border-radius: 14px;
-    padding: 0.75rem 1rem;
-    font-family: var(--font-body);
-    font-size: 0.95rem;
-    color: #1e293b;
-    box-sizing: border-box;
-    transition: all 0.2s ease;
-}
-
-.neu-input:focus,
-.neu-textarea:focus {
-    outline: none;
-    border-color: #2395eb;
-    box-shadow: 0 0 0 3px rgba(35, 149, 235, 0.18);
-}
-
-.form-row-duo {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-}
-
-/* Dropzone */
-.file-dropzone {
-    border: 2px dashed #93c5fd;
-    border-radius: 18px;
-    background: #f0f9ff;
-    padding: 1.5rem;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.file-dropzone:hover,
-.file-dropzone.dragging {
-    border-color: #2563eb;
-    background: #e0f2fe;
-}
-
-.file-dropzone.has-file {
-    border-style: solid;
-    border-color: #86efac;
-    background: #f0fdf4;
-}
-
-.hidden-file-input {
-    display: none;
-}
-
-.dropzone-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.35rem;
-}
-
-.dropzone-icon {
-    font-size: 2.2rem;
-}
-
-.dropzone-prompt {
-    font-family: var(--font-heading);
-    font-size: 0.95rem;
-    color: #0369a1;
-}
-
-.dropzone-hint {
-    font-size: 0.75rem;
-    color: #64748b;
-}
-
-.dropzone-filled {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.file-info-badge {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-}
-
-.file-icon {
-    font-size: 1.7rem;
-}
-
-.file-details {
-    text-align: left;
-}
-
-.file-name {
-    display: block;
-    font-family: var(--font-heading);
-    font-size: 0.88rem;
-    font-weight: 800;
-    color: #1e293b;
-    max-width: 280px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.file-size {
-    font-size: 0.72rem;
-    color: #64748b;
-}
-
-.btn-remove-file {
-    background: #fee2e2;
-    color: #b91c1c;
-    border: none;
-    padding: 0.35rem 0.75rem;
-    border-radius: 9999px;
-    font-family: var(--font-heading);
-    font-size: 0.75rem;
-    font-weight: 800;
-    cursor: pointer;
-}
-
-/* Media Live Preview */
-.live-preview-box {
-    margin-top: 0.85rem;
-    padding: 0.85rem;
-    background: #ffffff;
-    border-radius: 14px;
-    border: 1.5px solid #e2e8f0;
-}
-
-.preview-tag {
-    display: block;
-    font-size: 0.68rem;
-    font-weight: 800;
-    color: #64748b;
-    margin-bottom: 0.45rem;
-}
-
-.preview-img {
-    max-width: 100%;
-    max-height: 220px;
-    object-fit: contain;
-    border-radius: 10px;
-}
-
-.preview-audio {
-    width: 100%;
-}
-
-.preview-video {
-    max-width: 100%;
-    max-height: 240px;
-    border-radius: 10px;
-}
-
-/* Submit Block Button */
-.form-submit-row {
-    margin-top: 1.5rem;
-}
-
-.btn-3d-add-block {
-    width: 100%;
-    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-    border: none;
-    border-radius: 16px;
-    padding: 0.95rem 1.5rem;
-    font-family: var(--font-heading);
-    font-weight: 900;
-    font-size: 1rem;
-    color: #ffffff;
-    box-shadow: 0 4px 0 #9a3412, 0 8px 16px rgba(234, 88, 12, 0.35);
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.btn-3d-add-block:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 0 #9a3412, 0 12px 20px rgba(234, 88, 12, 0.45);
-}
-
-.btn-3d-add-block:active:not(:disabled) {
-    transform: translateY(2px);
-    box-shadow: 0 2px 0 #9a3412;
-}
-
-.btn-3d-add-block:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-/* Timeline Column */
-.timeline-card {
-    display: flex;
-    flex-direction: column;
-}
-
-.timeline-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-bottom: 1rem;
-    border-bottom: 1.5px solid #f1f5f9;
-    margin-bottom: 1.25rem;
-}
-
-.timeline-title-wrap {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-}
-
-.timeline-icon {
-    font-size: 1.8rem;
-}
-
-.timeline-title {
-    font-family: var(--font-heading);
-    font-size: 1.15rem;
-    font-weight: 900;
+.studio-lecture-heading {
     margin: 0;
-    color: var(--brand-navy);
-}
-
-.timeline-subtitle {
-    font-size: 0.75rem;
-    color: #64748b;
-}
-
-.btn-return-map {
-    background: #dcfce7;
-    color: #15803d;
-    border: none;
     font-family: var(--font-heading);
-    font-weight: 900;
-    font-size: 0.78rem;
-    padding: 0.45rem 0.85rem;
+    font-size: 0.96rem;
+    font-weight: 800;
+    color: #FFFFFF;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 260px;
+}
+
+.studio-page-mode-pill {
+    padding: 0.12rem 0.5rem;
     border-radius: 9999px;
-    cursor: pointer;
-    transition: transform 0.2s ease;
+    font-family: var(--font-heading);
+    font-size: 0.62rem;
+    font-weight: 700;
+    flex-shrink: 0;
 }
 
-.btn-return-map:hover {
-    transform: scale(1.05);
+.mode-new {
+    background: rgba(16, 185, 129, 0.22);
+    border: 1px solid #34D399;
+    color: #A7F3D0;
 }
 
-.contents-feed {
-    display: flex;
-    flex-direction: column;
-    gap: 0.85rem;
-    max-height: 640px;
-    overflow-y: auto;
-    padding-right: 0.35rem;
+.mode-editing {
+    background: rgba(245, 158, 11, 0.25);
+    border: 1px solid #FBBF24;
+    color: #FDE68A;
 }
 
-.feed-block-card {
-    background: #f8fafc;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 1rem;
-    transition: transform 0.2s ease;
-}
-
-.feed-block-card:hover {
-    transform: translateX(3px);
-    background: #ffffff;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-}
-
-.feed-block-top {
-    display: flex;
-    justify-content: space-between;
+.cmd-center-switcher {
+    display: inline-flex;
     align-items: center;
-    margin-bottom: 0.35rem;
+    background: rgba(15, 23, 42, 0.55);
+    padding: 0.22rem;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    gap: 0.2rem;
 }
 
-.feed-type-pill {
+.workspace-mode-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
+    padding: 0.36rem 0.78rem;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: #CBD5E1;
     font-family: var(--font-heading);
-    font-weight: 800;
-    font-size: 0.72rem;
-    padding: 0.2rem 0.55rem;
-    border-radius: 9999px;
-    background: #e0f2fe;
-    color: #0369a1;
+    font-size: 0.74rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.18s ease;
 }
 
-.feed-time {
-    font-size: 0.7rem;
-    color: #94a3b8;
+.workspace-mode-btn.is-active {
+    background: #FFFFFF;
+    color: #0F172A;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
-.feed-block-title {
+.mode-svg {
+    width: 14px;
+    height: 14px;
+}
+
+.cmd-right-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-shrink: 0;
+}
+
+.studio-new-page-btn {
+    padding: 0.44rem 0.85rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    color: #FFFFFF;
     font-family: var(--font-heading);
-    font-size: 0.92rem;
-    font-weight: 800;
-    margin: 0 0 0.35rem 0;
-    color: #1e293b;
+    font-size: 0.76rem;
+    font-weight: 700;
+    cursor: pointer;
 }
 
-.feed-text-preview {
+.studio-publish-btn {
+    position: relative;
+    padding: 0.48rem 1.1rem;
+    border-radius: 13px;
+    background: linear-gradient(180deg, #34D399 0%, #059669 100%);
+    color: #FFFFFF;
+    border: 2px solid #A7F3D0;
+    box-shadow: 0 3.5px 0 #065F46, 0 8px 16px rgba(16, 185, 129, 0.32);
+    font-family: var(--font-heading);
     font-size: 0.8rem;
-    color: #475569;
-    line-height: 1.4;
-    margin: 0;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+/* ==========================================================================
+   2. ZONE 2: WORD + CANVA FORMATTING RIBBON BAR
+   ========================================================================== */
+.studio-formatting-ribbon {
+    min-height: 48px;
+    flex-shrink: 0;
+    background: #FFFFFF;
+    border-bottom: 1.5px solid #E2E8F0;
+    padding: 0.35rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    overflow-x: auto;
+    z-index: 35;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.ribbon-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex-shrink: 0;
+}
+
+.ribbon-group-lbl {
+    font-family: var(--font-heading);
+    font-size: 0.64rem;
+    font-weight: 800;
+    color: #64748B;
+    letter-spacing: 0.04em;
+    margin-right: 0.15rem;
+}
+
+.ribbon-history-btn {
+    padding: 0.3rem 0.65rem;
+    border-radius: 8px;
+    border: 1.5px solid #CBD5E1;
+    background: #F8FAFC;
+    color: #0F172A;
+    font-family: var(--font-heading);
+    font-size: 0.74rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.ribbon-history-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.ribbon-vocab-meaning-btn {
+    padding: 0.32rem 0.78rem;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #FEF08A 0%, #F59E0B 100%);
+    color: #78350F;
+    border: 1.5px solid #D97706;
+    box-shadow: 0 2px 0 #B45309;
+    font-family: var(--font-heading);
+    font-size: 0.74rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+
+.ribbon-vocab-meaning-btn:hover {
+    transform: translateY(-1px);
+}
+
+.ribbon-divider {
+    width: 1.5px;
+    height: 24px;
+    background: #E2E8F0;
+    flex-shrink: 0;
+}
+
+.ribbon-select {
+    padding: 0.28rem 0.55rem;
+    border-radius: 8px;
+    border: 1.5px solid #CBD5E1;
+    background: #F8FAFC;
+    font-family: var(--font-body);
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #1E293B;
+    cursor: pointer;
+}
+
+.ribbon-tool-btn,
+.ribbon-icon-btn {
+    padding: 0.28rem 0.55rem;
+    border-radius: 8px;
+    border: 1px solid #E2E8F0;
+    background: #FFFFFF;
+    color: #1E293B;
+    font-family: var(--font-body);
+    font-size: 0.74rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.highlight-swatch-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.swatch-dot-btn {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    border: 1.5px solid rgba(15, 23, 42, 0.2);
+    cursor: pointer;
+}
+
+.paper-theme-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.paper-theme-chip {
+    padding: 0.2rem 0.48rem;
+    border-radius: 6px;
+    border: 1.5px solid #CBD5E1;
+    font-family: var(--font-heading);
+    font-size: 0.66rem;
+    font-weight: 700;
+    color: #334155;
+    cursor: pointer;
+}
+
+.paper-theme-chip.is-active {
+    box-shadow: 0 0 0 2px #2563EB;
+}
+
+.ribbon-delete-element-btn {
+    padding: 0.28rem 0.68rem;
+    border-radius: 8px;
+    background: #FFE4E6;
+    border: 1.5px solid #F43F5E;
+    color: #BE123C;
+    font-family: var(--font-heading);
+    font-size: 0.72rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+/* ==========================================================================
+   3. MAIN 3-PANE WORKSPACE BODY
+   ========================================================================== */
+.studio-workspace-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
     overflow: hidden;
 }
 
-.feed-media-wrap {
-    margin-top: 0.45rem;
+/* ==========================================================================
+   LEFT PANE: CANVA CREATIVE TOOLBOX RAIL & DRAWER
+   ========================================================================== */
+.canva-left-dock {
+    display: flex;
+    flex-shrink: 0;
+    background: #FFFFFF;
+    border-right: 1.5px solid #E2E8F0;
+    z-index: 25;
 }
 
-.feed-img {
-    max-width: 100%;
-    max-height: 120px;
+.canva-icon-rail {
+    width: 68px;
+    background: #0F172A;
+    color: #94A3B8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.65rem 0.35rem;
+    gap: 0.45rem;
+    flex-shrink: 0;
+}
+
+.rail-tab-btn {
+    width: 100%;
+    padding: 0.52rem 0.2rem;
+    border-radius: 12px;
+    border: none;
+    background: transparent;
+    color: #94A3B8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.22rem;
+    font-family: var(--font-heading);
+    font-size: 0.6rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.rail-tab-btn.is-active {
+    background: linear-gradient(135deg, #2563EB 0%, #4F46E5 100%);
+    color: #FFFFFF;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+}
+
+.rail-svg {
+    width: 20px;
+    height: 20px;
+}
+
+.rail-collapse-btn {
+    margin-top: auto;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.06);
+    color: #CBD5E1;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.canva-shelf-drawer {
+    width: 285px;
+    height: 100%;
+    overflow-y: auto;
+    padding: 0.9rem 0.85rem;
+    background: #F8FAFC;
+}
+
+.shelf-header {
+    margin-bottom: 0.85rem;
+}
+
+.shelf-header h3 {
+    margin: 0 0 0.2rem;
+    font-family: var(--font-heading);
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #0F172A;
+}
+
+.shelf-header p {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #64748B;
+    line-height: 1.35;
+}
+
+.shelf-cards-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.canva-template-card {
+    text-align: left;
+    padding: 0.75rem 0.8rem;
+    border-radius: 14px;
+    background: #FFFFFF;
+    border: 1.5px solid #E2E8F0;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+}
+
+.canva-template-card.featured-story-tpl {
+    border: 2px solid #F59E0B;
+    background: linear-gradient(180deg, #FFFFFF 0%, #FFFBEB 100%);
+}
+
+.tpl-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tpl-tag-pill {
+    padding: 0.12rem 0.45rem;
+    border-radius: 6px;
+    background: #FEF3C7;
+    color: #B45309;
+    font-family: var(--font-heading);
+    font-size: 0.6rem;
+    font-weight: 800;
+}
+
+.tpl-name {
+    font-family: var(--font-heading);
+    font-size: 0.84rem;
+    font-weight: 800;
+    color: #0F172A;
+}
+
+.tpl-desc {
+    margin: 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #64748B;
+    line-height: 1.35;
+}
+
+.tpl-action-btns {
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.25rem;
+}
+
+.tpl-btn-append {
+    flex: 1 1 auto;
+    padding: 0.34rem 0.5rem;
+    border-radius: 8px;
+    background: #2563EB;
+    color: #FFFFFF;
+    border: none;
+    font-family: var(--font-heading);
+    font-size: 0.68rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.tpl-btn-replace {
+    padding: 0.34rem 0.5rem;
+    border-radius: 8px;
+    background: #F1F5F9;
+    color: #475569;
+    border: 1px solid #CBD5E1;
+    font-family: var(--font-heading);
+    font-size: 0.65rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+/* Interactive Word Meanings Shelf Tab */
+.btn-open-vocab-creator {
+    width: 100%;
+    padding: 0.65rem 0.8rem;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #FEF08A 0%, #F59E0B 100%);
+    color: #78350F;
+    border: 2px solid #D97706;
+    box-shadow: 0 3px 0 #B45309;
+    font-family: var(--font-heading);
+    font-size: 0.78rem;
+    font-weight: 800;
+    cursor: pointer;
+    margin-bottom: 0.85rem;
+}
+
+.vocab-gloss-list-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.vocab-gloss-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.vocab-gloss-item-card {
+    background: #FFFFFF;
+    border: 1.5px solid #FDE68A;
+    border-radius: 12px;
+    padding: 0.6rem 0.7rem;
+}
+
+.vocab-item-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.vocab-item-word {
+    font-family: var(--font-heading);
+    font-size: 0.82rem;
+    color: #92400E;
+    background: #FEF3C7;
+    padding: 0.1rem 0.45rem;
+    border-radius: 6px;
+}
+
+.vocab-item-del {
+    border: none;
+    background: #FFE4E6;
+    color: #E11D48;
+    border-radius: 6px;
+    width: 22px;
+    height: 22px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.vocab-item-pron {
+    display: block;
+    font-size: 0.66rem;
+    font-style: italic;
+    color: #64748B;
+    margin-top: 0.2rem;
+}
+
+.vocab-item-meaning {
+    margin: 0.25rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #334155;
+    line-height: 1.35;
+}
+
+.vocab-empty-box {
+    background: #FFFFFF;
+    border: 1.5px dashed #CBD5E1;
+    border-radius: 12px;
+    padding: 0.85rem;
+    font-size: 0.72rem;
+    color: #64748B;
+    line-height: 1.4;
+}
+
+/* Insertable Elements & Uploads */
+.canva-element-card {
+    text-align: left;
+    padding: 0.68rem 0.75rem;
+    border-radius: 12px;
+    border: 1.5px solid #E2E8F0;
+    border-left-width: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+}
+
+.el-badge {
+    font-family: var(--font-heading);
+    font-size: 0.65rem;
+    font-weight: 800;
+}
+
+.el-title {
+    flex: 1 1 auto;
+    font-family: var(--font-heading);
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: #1E293B;
+}
+
+.el-plus {
+    font-family: var(--font-heading);
+    font-size: 0.66rem;
+    font-weight: 800;
+    color: #2563EB;
+}
+
+.upload-caption-field {
+    margin-bottom: 0.65rem;
+}
+
+.shelf-mini-lbl {
+    display: block;
+    font-family: var(--font-heading);
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: #334155;
+    margin-bottom: 0.25rem;
+}
+
+.shelf-mini-input {
+    width: 100%;
+    padding: 0.45rem 0.65rem;
+    border-radius: 9px;
+    border: 1.5px solid #CBD5E1;
+    background: #FFFFFF;
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: #0F172A;
+}
+
+.shelf-media-types {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.media-switch-card {
+    text-align: left;
+    padding: 0.68rem 0.75rem;
+    border-radius: 12px;
+    background: #FFFFFF;
+    border: 1.5px solid #E2E8F0;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    cursor: pointer;
+}
+
+.media-badge-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-top: 0.25rem;
+    flex-shrink: 0;
+}
+
+.media-switch-copy {
+    display: flex;
+    flex-direction: column;
+}
+
+.media-switch-copy strong {
+    font-family: var(--font-heading);
+    font-size: 0.8rem;
+    color: #0F172A;
+}
+
+.media-switch-copy span {
+    font-size: 0.68rem;
+    color: #64748B;
+}
+
+.shelf-dropzone-box {
+    margin-top: 0.7rem;
+    padding: 0.85rem 0.65rem;
+    border-radius: 12px;
+    border: 2px dashed #94A3B8;
+    background: #FFFFFF;
+    text-align: center;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.shelf-external-box {
+    margin-top: 0.75rem;
+    padding-top: 0.65rem;
+    border-top: 1px dashed #CBD5E1;
+}
+
+.external-url-row {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.btn-insert-url {
+    padding: 0.42rem 0.7rem;
+    border-radius: 9px;
+    background: #0F172A;
+    color: #FFFFFF;
+    border: none;
+    font-family: var(--font-heading);
+    font-size: 0.72rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.uploaded-tray-section {
+    margin-top: 0.85rem;
+    padding-top: 0.65rem;
+    border-top: 1px dashed #CBD5E1;
+}
+
+.uploaded-tray-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.tray-asset-card {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem;
+    border-radius: 10px;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+}
+
+.tray-asset-thumb {
+    width: 44px;
+    height: 44px;
     border-radius: 8px;
     object-fit: cover;
 }
 
-.feed-audio-player {
-    width: 100%;
-    height: 36px;
+.tray-asset-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1 1 auto;
 }
 
-.feed-video-player {
-    max-width: 100%;
-    max-height: 140px;
-    border-radius: 8px;
-}
-
-.external-video-link {
-    display: inline-block;
+.tray-reinsert-btn {
+    align-self: flex-start;
+    margin-top: 0.18rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 6px;
+    background: #DBEAFE;
+    color: #1D4ED8;
+    border: none;
     font-family: var(--font-heading);
+    font-size: 0.62rem;
     font-weight: 800;
-    font-size: 0.78rem;
-    color: #2563eb;
-    text-decoration: underline;
+    cursor: pointer;
 }
 
-.feed-caption {
-    margin-top: 0.35rem;
-    font-size: 0.72rem;
-    color: #64748b;
+.stickers-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.55rem;
 }
 
-.empty-feed-card {
-    text-align: center;
-    padding: 3rem 1.5rem;
-    background: #f8fafc;
-    border-radius: 20px;
-    border: 2px dashed #cbd5e1;
+.sticker-art-card {
+    background: #FFFFFF;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    cursor: pointer;
 }
 
-.empty-icon {
-    font-size: 2.5rem;
-    margin-bottom: 0.5rem;
-    display: inline-block;
+.sticker-thumb-img {
+    width: 100%;
+    height: 68px;
+    object-fit: contain;
 }
 
-.empty-feed-card h4 {
+.sticker-lbl {
     font-family: var(--font-heading);
-    font-size: 1.05rem;
-    font-weight: 900;
+    font-size: 0.62rem;
+    font-weight: 700;
     color: #334155;
-    margin: 0 0 0.35rem 0;
+    text-align: center;
 }
 
-.empty-feed-card p {
-    font-size: 0.82rem;
-    color: #64748b;
-    margin: 0;
-    line-height: 1.45;
+/* ==========================================================================
+   CENTER PANE: INTERACTIVE PAPER ARTBOARD STAGE
+   ========================================================================== */
+.studio-center-stage {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background-color: #E2E8F0;
+    background-image: radial-gradient(#94A3B8 1px, transparent 1px);
+    background-size: 20px 20px;
+    position: relative;
 }
 
-.error-msg {
-    margin: 0.35rem 0 0 0;
-    color: #ef4444;
+.artboard-desk-scroller {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 1.5rem 2rem 3.5rem;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+.paper-artboard-sheet {
+    width: 100%;
+    max-width: 820px;
+    min-height: 680px;
+    border-radius: 20px;
+    border: 2px solid #E2E8F0;
+    box-shadow:
+        0 20px 50px rgba(15, 23, 42, 0.14),
+        0 4px 12px rgba(15, 23, 42, 0.06);
+    padding: 1.85rem 2.5rem 2.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.95rem;
+    transition: background-color 0.25s ease, border-color 0.25s ease, transform 0.2s ease;
+}
+
+.paper-artboard-sheet.paper-is-lined {
+    background-image: repeating-linear-gradient(
+        transparent,
+        transparent 31px,
+        rgba(148, 163, 184, 0.25) 31px,
+        rgba(148, 163, 184, 0.25) 32px
+    );
+}
+
+.sheet-top-meta-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding-bottom: 0.55rem;
+    border-bottom: 1.5px dashed rgba(148, 163, 184, 0.4);
+}
+
+.sheet-type-chip {
+    padding: 0.22rem 0.65rem;
+    border-radius: 9999px;
+    background: #DBEAFE;
+    color: #1D4ED8;
+    font-family: var(--font-heading);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+
+.sheet-meta-right {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.sheet-undo-hint {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #059669;
+}
+
+.sheet-xp-indicator {
+    font-family: var(--font-heading);
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #D97706;
+}
+
+/* DEDICATED FULL-PAGE READ-ALOUD NARRATION BAR */
+.page-narration-audio-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.65rem 0.9rem;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
+    border: 2px solid #FDE68A;
+    box-shadow: 0 3px 0 rgba(217, 119, 6, 0.18);
+}
+
+.narration-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-width: 0;
+    flex: 1 1 220px;
+}
+
+.narration-icon-badge {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: #F59E0B;
+    color: #FFFFFF;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    flex-shrink: 0;
+}
+
+.narration-bar-copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.narration-bar-copy strong {
+    font-family: var(--font-heading);
     font-size: 0.78rem;
+    color: #78350F;
+}
+
+.narration-bar-copy span {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #92400E;
+}
+
+.narration-bar-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+
+.narration-mini-player {
+    height: 32px;
+    max-width: 210px;
+}
+
+.btn-upload-page-narration {
+    padding: 0.42rem 0.85rem;
+    border-radius: 10px;
+    background: #D97706;
+    color: #FFFFFF;
+    border: none;
+    font-family: var(--font-heading);
+    font-size: 0.72rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 2.5px 0 #92400E;
+}
+
+.btn-narration-replace {
+    padding: 0.3rem 0.6rem;
+    border-radius: 8px;
+    background: #FFFFFF;
+    color: #92400E;
+    border: 1.5px solid #F59E0B;
+    font-family: var(--font-heading);
+    font-size: 0.66rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.btn-narration-remove {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: #FFE4E6;
+    color: #E11D48;
+    border: 1px solid #FECDD3;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+/* LIVE INTERACTIVE WORD MEANING POPOVER BANNER */
+.live-vocab-meaning-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.6rem 0.9rem;
+    border-radius: 14px;
+    background: #0F172A;
+    color: #FFFFFF;
+    border: 2px solid #FACC15;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.25);
+}
+
+.vocab-banner-main {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    font-size: 0.8rem;
+}
+
+.vocab-pill-tag {
+    padding: 0.14rem 0.48rem;
+    border-radius: 6px;
+    background: #FACC15;
+    color: #78350F;
+    font-family: var(--font-heading);
+    font-size: 0.6rem;
+    font-weight: 800;
+}
+
+.vocab-banner-word {
+    font-family: var(--font-heading);
+    font-size: 0.92rem;
+    color: #FEF08A;
+}
+
+.vocab-banner-pron {
+    color: #94A3B8;
+    font-size: 0.74rem;
+}
+
+.vocab-banner-def {
+    color: #F8FAFC;
     font-weight: 700;
 }
 
-@media (max-width: 960px) {
-    .studio-grid {
-        grid-template-columns: 1fr;
-    }
+.vocab-banner-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+.vocab-banner-remove-btn {
+    padding: 0.2rem 0.5rem;
+    border-radius: 6px;
+    background: #E11D48;
+    color: #FFFFFF;
+    border: none;
+    font-family: var(--font-heading);
+    font-size: 0.64rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.vocab-banner-close-btn {
+    background: transparent;
+    border: none;
+    color: #94A3B8;
+    cursor: pointer;
+    font-weight: 800;
+}
+
+/* On-Canvas Document Heading Input */
+.sheet-heading-input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    font-family: var(--font-heading);
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: inherit;
+    outline: none;
+    padding: 0.2rem 0;
+    border-bottom: 2px solid transparent;
+}
+
+.sheet-heading-input:focus {
+    border-bottom-color: #3B82F6;
+}
+
+/* Rich WYSIWYG Story Surface & Interactive Block Selection */
+.sheet-document-body-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.floating-block-action-bar {
+    position: absolute;
+    right: 0;
+    z-index: 30;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.32rem 0.55rem;
+    border-radius: 12px;
+    background: #0F172A;
+    color: #FFFFFF;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.3);
+    border: 1.5px solid #38BDF8;
+}
+
+.block-sel-name {
+    font-family: var(--font-heading);
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #93C5FD;
+    padding-right: 0.3rem;
+    max-width: 160px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.block-act-pill {
+    padding: 0.2rem 0.48rem;
+    border-radius: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    color: #FFFFFF;
+    font-family: var(--font-heading);
+    font-size: 0.65rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.block-act-pill.pill-danger {
+    background: #E11D48;
+    border-color: #FDA4AF;
+    color: #FFFFFF;
+}
+
+.wysiwyg-story-surface {
+    flex: 1 1 auto;
+    min-height: 440px;
+    outline: none;
+    font-size: 1.05rem;
+    line-height: 1.8;
+    color: inherit;
+    cursor: text;
+}
+
+.wysiwyg-story-surface:empty::before {
+    content: attr(data-placeholder);
+    color: #94A3B8;
+    pointer-events: none;
+}
+
+.wysiwyg-story-surface :deep(h2) {
+    font-family: var(--font-heading);
+    font-size: 1.4rem;
+    font-weight: 800;
+    margin: 0.75rem 0 0.4rem;
+}
+
+.wysiwyg-story-surface :deep(p) {
+    margin: 0 0 0.85rem;
+}
+
+.wysiwyg-story-surface :deep(.vocab-gloss-token) {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.wysiwyg-story-surface :deep(.vocab-gloss-token:hover) {
+    box-shadow: 0 3px 8px rgba(217, 119, 6, 0.3);
+}
+
+.wysiwyg-story-surface :deep([data-studio-block='true']),
+.wysiwyg-story-surface :deep(figure) {
+    cursor: pointer;
+    transition: box-shadow 0.15s ease;
+}
+
+.wysiwyg-story-surface :deep(.is-selected-studio-block) {
+    box-shadow: 0 0 0 3px #2563EB !important;
+}
+
+/* Student Mobile Preview Frame */
+.student-device-preview-frame {
+    width: 390px;
+    min-height: 650px;
+    border-radius: 40px;
+    background: linear-gradient(180deg, #E0F2FE 0%, #BAE6FD 100%);
+    border: 8px solid #1E293B;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+    padding: 0.85rem 1rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.device-notch-bar {
+    width: 110px;
+    height: 18px;
+    background: #1E293B;
+    border-radius: 9999px;
+    margin: 0 auto 0.85rem;
+}
+
+.device-screen-body {
+    flex: 1 1 auto;
+    background: #FFFFFF;
+    border-radius: 28px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.preview-kicker-pill {
+    align-self: flex-start;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    background: #DCFCE7;
+    color: #065F46;
+    font-family: var(--font-heading);
+    font-size: 0.64rem;
+    font-weight: 800;
+}
+
+.preview-story-title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #1E1B4B;
+}
+
+.student-preview-narration-card {
+    background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+    border: 2px solid #F59E0B;
+    border-radius: 16px;
+    padding: 0.6rem 0.75rem;
+    box-shadow: 0 4px 0 #D97706;
+}
+
+.student-narration-head {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0.35rem;
+}
+
+.student-narration-head span {
+    font-family: var(--font-heading);
+    font-size: 0.76rem;
+    font-weight: 800;
+    color: #78350F;
+}
+
+.student-narration-head small {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #92400E;
+}
+
+.student-narration-player {
+    width: 100%;
+    height: 34px;
+}
+
+.student-vocab-popover-card {
+    background: linear-gradient(135deg, #1E1B4B 0%, #312E81 100%);
+    color: #FFFFFF;
+    border-radius: 16px;
+    padding: 0.65rem 0.8rem;
+    border: 2px solid #FACC15;
+    box-shadow: 0 6px 0 #0F172A;
+}
+
+.student-vocab-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.2rem;
+}
+
+.student-vocab-badge {
+    font-family: var(--font-heading);
+    font-size: 0.58rem;
+    font-weight: 800;
+    color: #FDE047;
+}
+
+.student-vocab-close {
+    background: transparent;
+    border: none;
+    color: #CBD5E1;
+    cursor: pointer;
+}
+
+.student-vocab-word {
+    font-family: var(--font-heading);
+    font-size: 0.95rem;
+    color: #FEF08A;
+    margin-right: 0.4rem;
+}
+
+.student-vocab-pron {
+    font-size: 0.7rem;
+    color: #93C5FD;
+    font-style: italic;
+}
+
+.student-vocab-def {
+    margin: 0.25rem 0 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #F8FAFC;
+    line-height: 1.35;
+}
+
+.preview-rich-story-card {
+    flex: 1 1 auto;
+    background: #F8FAFC;
+    border: 2px solid #E2E8F0;
+    border-radius: 18px;
+    padding: 0.9rem;
+    font-size: 0.88rem;
+    line-height: 1.65;
+    color: #334155;
+    overflow-y: auto;
+}
+
+.preview-complete-btn-mock {
+    padding: 0.75rem;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #34D399 0%, #059669 100%);
+    color: #FFFFFF;
+    text-align: center;
+    font-family: var(--font-heading);
+    font-size: 0.8rem;
+    font-weight: 800;
+    box-shadow: 0 4px 0 #065F46;
+}
+
+/* Bottom Status & Zoom Bar */
+.studio-bottom-status-bar {
+    height: 38px;
+    flex-shrink: 0;
+    background: #FFFFFF;
+    border-top: 1.5px solid #CBD5E1;
+    padding: 0 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.74rem;
+    color: #475569;
+}
+
+.status-left-metrics {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.status-right-zoom {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.zoom-step-btn,
+.zoom-reset-btn {
+    padding: 0.15rem 0.48rem;
+    border-radius: 6px;
+    border: 1px solid #CBD5E1;
+    background: #F8FAFC;
+    font-family: var(--font-heading);
+    font-size: 0.7rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.zoom-readout {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    min-width: 40px;
+    text-align: center;
+}
+
+/* ==========================================================================
+   RIGHT PANE: STORY PAGES DECK NAVIGATOR
+   ========================================================================== */
+.studio-right-pages-dock {
+    width: 280px;
+    flex-shrink: 0;
+    background: #FFFFFF;
+    border-left: 1.5px solid #E2E8F0;
+    display: flex;
+    flex-direction: column;
+    z-index: 25;
+}
+
+.studio-right-pages-dock.deck-collapsed {
+    width: 48px;
+}
+
+.pages-dock-header {
+    padding: 0.75rem 0.8rem;
+    border-bottom: 1.5px solid #E2E8F0;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+}
+
+.deck-toggle-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid #CBD5E1;
+    background: #F8FAFC;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.pages-dock-title-wrap h3 {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 0.88rem;
+    font-weight: 800;
+    color: #0F172A;
+}
+
+.pages-dock-title-wrap span {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #64748B;
+}
+
+.pages-deck-scroller {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    background: #F8FAFC;
+}
+
+.page-thumb-card {
+    background: #FFFFFF;
+    border: 2px solid #E2E8F0;
+    border-radius: 14px;
+    padding: 0.68rem 0.75rem;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+}
+
+.page-thumb-card.is-selected-page {
+    border-color: #2563EB;
+    background: #EFF6FF;
+}
+
+.draft-thumb-card {
+    border-style: dashed;
+}
+
+.thumb-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.thumb-badges-right {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.thumb-audio-indicator {
+    font-size: 0.72rem;
+}
+
+.thumb-page-num {
+    font-family: var(--font-heading);
+    font-size: 0.62rem;
+    font-weight: 800;
+    color: #475569;
+}
+
+.badge-draft {
+    color: #059669;
+}
+
+.thumb-type-tag {
+    padding: 0.1rem 0.42rem;
+    border-radius: 6px;
+    background: #E2E8F0;
+    color: #334155;
+    font-family: var(--font-heading);
+    font-size: 0.58rem;
+    font-weight: 800;
+}
+
+.thumb-page-title {
+    font-family: var(--font-heading);
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #0F172A;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.thumb-page-snippet {
+    margin: 0;
+    font-size: 0.68rem;
+    color: #64748B;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.thumb-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    padding-top: 0.3rem;
+    border-top: 1px dashed #E2E8F0;
+}
+
+.thumb-act-btn {
+    padding: 0.15rem 0.45rem;
+    border-radius: 6px;
+    border: 1px solid #CBD5E1;
+    background: #FFFFFF;
+    font-family: var(--font-heading);
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: #475569;
+    cursor: pointer;
+}
+
+.thumb-act-btn.act-delete {
+    color: #E11D48;
+    border-color: #FECDD3;
+    background: #FFF1F2;
+}
+
+.pages-dock-footer {
+    padding: 0.75rem;
+    border-top: 1.5px solid #E2E8F0;
+    background: #FFFFFF;
+}
+
+.btn-finish-return-map {
+    width: 100%;
+    padding: 0.62rem;
+    border-radius: 12px;
+    background: #0F172A;
+    color: #FFFFFF;
+    border: none;
+    font-family: var(--font-heading);
+    font-size: 0.76rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+/* ==========================================================================
+   VOCABULARY MEANING CREATOR MODAL
+   ========================================================================== */
+.vocab-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 150;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.vocab-modal-card {
+    width: 100%;
+    max-width: 440px;
+    background: #FFFFFF;
+    border-radius: 24px;
+    border: 3px solid #FDE68A;
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.35);
+    padding: 1.35rem;
+}
+
+.vocab-modal-badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    background: #FEF3C7;
+    color: #B45309;
+    font-family: var(--font-heading);
+    font-size: 0.64rem;
+    font-weight: 800;
+    margin-bottom: 0.35rem;
+}
+
+.vocab-modal-header h3 {
+    margin: 0 0 0.25rem;
+    font-family: var(--font-heading);
+    font-size: 1.2rem;
+    color: #0F172A;
+}
+
+.vocab-modal-header p {
+    margin: 0 0 1rem;
+    font-size: 0.78rem;
+    color: #64748B;
+}
+
+.vocab-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.vocab-field label {
+    display: block;
+    font-family: var(--font-heading);
+    font-size: 0.74rem;
+    font-weight: 800;
+    color: #334155;
+    margin-bottom: 0.25rem;
+}
+
+.vocab-input,
+.vocab-textarea {
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    border-radius: 12px;
+    border: 1.5px solid #CBD5E1;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #0F172A;
+}
+
+.vocab-color-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.vocab-color-pill {
+    padding: 0.28rem 0.6rem;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    font-family: var(--font-heading);
+    font-size: 0.68rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.vocab-color-pill.is-chosen {
+    box-shadow: 0 0 0 2px #0F172A;
+}
+
+.vocab-modal-footer {
+    margin-top: 1.15rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.55rem;
+}
+
+.btn-vocab-cancel {
+    padding: 0.55rem 1rem;
+    border-radius: 12px;
+    background: #F1F5F9;
+    color: #475569;
+    border: none;
+    font-family: var(--font-heading);
+    font-size: 0.78rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.btn-vocab-save {
+    padding: 0.55rem 1.1rem;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #F59E0B 0%, #D97706 100%);
+    color: #FFFFFF;
+    border: none;
+    font-family: var(--font-heading);
+    font-size: 0.8rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 3px 0 #92400E;
+}
+
+.btn-vocab-save:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Floating Studio Toast */
+.studio-floating-toast {
+    position: fixed;
+    bottom: 3.2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 90;
+    padding: 0.6rem 1.2rem;
+    border-radius: 9999px;
+    background: #0F172A;
+    color: #FDE047;
+    border: 2px solid #38BDF8;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.35);
+    font-family: var(--font-heading);
+    font-size: 0.8rem;
+    font-weight: 800;
+}
+
+.studio-toast-pop-enter-active,
+.studio-toast-pop-leave-active {
+    transition: all 0.25s var(--spring-bounce);
+}
+
+.studio-toast-pop-enter-from,
+.studio-toast-pop-leave-to {
+    opacity: 0;
+    transform: translate(-50%, 16px);
 }
 </style>
-

@@ -6,6 +6,7 @@ use App\Enums\ModuleTheme;
 use App\Models\Lecture;
 use App\Models\LectureContent;
 use App\Models\Module;
+use App\Models\Quiz;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -328,4 +329,146 @@ test('teacher can view create lecture content page and store a content block', f
         ->and($content->file_path)->not->toBeNull();
 
     Storage::disk('public')->assertExists($content->file_path);
+});
+
+test('teacher can store an interactive story lecture page with word meanings and full-page read-aloud narration audio', function () {
+    Storage::fake('public');
+
+    $teacher = User::factory()->teacher()->create();
+    $student = User::factory()->student()->create();
+
+    $module = Module::factory()->for($teacher, 'teacher')->create([
+        'status' => ModuleStatus::Published,
+    ]);
+    $lecture = Lecture::factory()->for($module)->create([
+        'title' => 'The Lantern of Whispering Pines',
+        'slug' => 'the-lantern-of-whispering-pines',
+        'is_published' => true,
+    ]);
+
+    $narrationAudio = UploadedFile::fake()->create('page-1-reading.mp3', 640, 'audio/mpeg');
+
+    $response = $this->actingAs($teacher)->post(route('teachers.lectures.contents.store', [
+        'module' => $module->slug,
+        'lecture' => $lecture->slug,
+    ]), [
+        'type' => 'text',
+        'layout_style' => 'interactive_story',
+        'title' => 'Page 1: The Glowing Bark',
+        'content' => '<p>Mira held up her <span class="vocab-gloss-token" data-vocab-word="luminous" data-vocab-pronunciation="LOO-muh-nus" data-vocab-meaning="Shining brightly in the dark.">luminous</span> brass lantern.</p>',
+        'narration_audio_file' => $narrationAudio,
+        'vocabulary_glosses' => [
+            [
+                'word' => 'luminous',
+                'pronunciation' => 'LOO-muh-nus',
+                'meaning' => 'Shining brightly in the dark.',
+            ],
+        ],
+    ]);
+
+    $response->assertRedirect(route('teachers.lectures.contents.create', [
+        'module' => $module->slug,
+        'lecture' => $lecture->slug,
+    ]));
+
+    $content = LectureContent::where('lecture_id', $lecture->id)->firstOrFail();
+
+    expect($content->layout_style)->toBe('interactive_story')
+        ->and($content->narration_audio_path)->not->toBeNull()
+        ->and($content->narration_audio_name)->toBe('page-1-reading.mp3')
+        ->and($content->narrationAudioUrl())->toContain($content->narration_audio_path)
+        ->and($content->vocabulary_glosses)->toHaveCount(1)
+        ->and($content->vocabulary_glosses[0]['word'])->toBe('luminous')
+        ->and($content->vocabulary_glosses[0]['meaning'])->toBe('Shining brightly in the dark.');
+
+    Storage::disk('public')->assertExists($content->narration_audio_path);
+
+    $this->actingAs($student)
+        ->get(route('students.modules.show', $module->slug))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('students/Progress')
+            ->where('lectures.0.contents.0.layout_style', 'interactive_story')
+            ->where('lectures.0.contents.0.narration_audio_name', 'page-1-reading.mp3')
+            ->where('lectures.0.contents.0.vocabulary_glosses.0.word', 'luminous')
+        );
+
+    $this->actingAs($student)
+        ->get(route('students.lectures.show', ['module' => $module->slug, 'lecture' => $lecture->slug]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('students/views/modules/LectureContent')
+            ->where('lecture.title', 'The Lantern of Whispering Pines')
+            ->where('contents.0.layout_style', 'interactive_story')
+            ->where('contents.0.narration_audio_name', 'page-1-reading.mp3')
+            ->where('contents.0.vocabulary_glosses.0.word', 'luminous')
+        );
+});
+
+test('teacher can open the unified quiz studio with existing quizzes and delete a quiz', function () {
+    $teacher = User::factory()->teacher()->create();
+
+    $module = Module::factory()->for($teacher, 'teacher')->create([
+        'title' => 'Conflict Resolution Studio Module',
+        'slug' => 'conflict-resolution-studio-module',
+    ]);
+
+    $this->actingAs($teacher)->post(route('teachers.quizzes.multiple-choice.store', $module->slug), [
+        'title' => 'Barangay Harmony Check',
+        'description' => 'Assess character choices in community disputes.',
+        'xp_reward' => 150,
+        'passing_percentage' => 70,
+        'is_published' => true,
+        'contexts' => [
+            [
+                'scenario' => 'Two neighbors disagree over a mango tree branch.',
+                'hint' => 'Focus on peaceful dialogue.',
+            ],
+        ],
+        'questions' => [
+            [
+                'question_text' => 'What is the most peaceful first step?',
+                'selection_type' => 'single',
+                'explanation' => 'Calm dialogue resolves misunderstandings.',
+                'points' => 10,
+                'options' => [
+                    ['option_text' => 'Talk calmly with the neighbor', 'is_correct' => true],
+                    ['option_text' => 'Cut the tree down immediately', 'is_correct' => false],
+                ],
+            ],
+        ],
+    ])->assertRedirect(route('teachers.modules.show', $module->slug));
+
+    $quiz = Quiz::where('module_id', $module->id)->firstOrFail();
+
+    $student = User::factory()->student()->create();
+    $this->actingAs($student)
+        ->get(route('students.quizzes.show', ['module' => $module->slug, 'quiz' => $quiz->slug]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('students/views/quiz/Quiz')
+            ->where('module.slug', 'conflict-resolution-studio-module')
+            ->where('quiz.title', 'Barangay Harmony Check')
+            ->where('quiz.type', 'multiple_choice')
+            ->has('quiz.questions', 1)
+        );
+
+    $this->actingAs($teacher)
+        ->get(route('teachers.quizzes.studio', ['module' => $module->slug, 'type' => 'color-the-conflict']))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('teachers/create/quizes/QuizStudio')
+            ->where('module.slug', 'conflict-resolution-studio-module')
+            ->where('initialQuizType', 'color-the-conflict')
+            ->has('existingQuizzes', 1)
+            ->where('existingQuizzes.0.title', 'Barangay Harmony Check')
+            ->where('existingQuizzes.0.type', 'multiple_choice')
+            ->has('existingQuizzes.0.questions', 1)
+        );
+
+    $this->actingAs($teacher)
+        ->delete(route('teachers.quizzes.destroy', ['module' => $module->slug, 'quiz' => $quiz->id]))
+        ->assertRedirect();
+
+    $this->assertDatabaseMissing('quizzes', ['id' => $quiz->id]);
 });

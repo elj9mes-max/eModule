@@ -154,39 +154,18 @@ const handleSelectQuiz = (quiz) => {
 };
 
 const launchQuizBuilder = (quiz) => {
-    if (quiz.id === 'multiple-choice') {
-        closeAllModals();
-        router.visit(`/teachers/modules/${props.module.slug}/quizzes/multiple-choice/create`);
-        return;
-    }
+    const supportedTypes = [
+        'multiple-choice',
+        'color-the-conflict',
+        'the-conflict-map',
+        'matching-type',
+        'evaluation',
+        'reflection',
+    ];
 
-    if (quiz.id === 'color-the-conflict') {
+    if (supportedTypes.includes(quiz.id)) {
         closeAllModals();
-        router.visit(`/teachers/modules/${props.module.slug}/quizzes/color-the-conflict/create`);
-        return;
-    }
-
-    if (quiz.id === 'the-conflict-map') {
-        closeAllModals();
-        router.visit(`/teachers/modules/${props.module.slug}/quizzes/the-conflict-map/create`);
-        return;
-    }
-
-    if (quiz.id === 'matching-type') {
-        closeAllModals();
-        router.visit(`/teachers/modules/${props.module.slug}/quizzes/matching-type/create`);
-        return;
-    }
-
-    if (quiz.id === 'evaluation') {
-        closeAllModals();
-        router.visit(`/teachers/modules/${props.module.slug}/quizzes/evaluation/create`);
-        return;
-    }
-
-    if (quiz.id === 'reflection') {
-        closeAllModals();
-        router.visit(`/teachers/modules/${props.module.slug}/quizzes/reflection/create`);
+        router.visit(`/teachers/modules/${props.module.slug}/quizzes/studio?type=${quiz.id}`);
         return;
     }
 

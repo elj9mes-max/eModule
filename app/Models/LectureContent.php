@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Storage;
 #[Fillable([
     'lecture_id',
     'type',
+    'layout_style',
     'title',
     'content',
     'file_disk',
@@ -23,6 +24,10 @@ use Illuminate\Support\Facades\Storage;
     'duration_seconds',
     'alt_text',
     'caption',
+    'narration_audio_disk',
+    'narration_audio_path',
+    'narration_audio_name',
+    'vocabulary_glosses',
     'metadata',
     'sort_order',
 ])]
@@ -38,7 +43,9 @@ class LectureContent extends Model
      */
     protected $attributes = [
         'type' => LectureContentType::Text,
+        'layout_style' => 'standard',
         'file_disk' => 'public',
+        'narration_audio_disk' => 'public',
         'sort_order' => 0,
     ];
 
@@ -53,6 +60,7 @@ class LectureContent extends Model
             'type' => LectureContentType::class,
             'file_size' => 'integer',
             'duration_seconds' => 'integer',
+            'vocabulary_glosses' => 'array',
             'metadata' => 'array',
             'sort_order' => 'integer',
         ];
@@ -78,5 +86,17 @@ class LectureContent extends Model
         }
 
         return $this->external_url;
+    }
+
+    /**
+     * Resolve the public URL for the full-page Read-Aloud narration audio track.
+     */
+    public function narrationAudioUrl(): ?string
+    {
+        if ($this->narration_audio_path !== null) {
+            return Storage::disk($this->narration_audio_disk ?? 'public')->url($this->narration_audio_path);
+        }
+
+        return null;
     }
 }

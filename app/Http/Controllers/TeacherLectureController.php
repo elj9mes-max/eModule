@@ -128,9 +128,13 @@ class TeacherLectureController extends Controller
             'existing_contents' => $lecture->contents->map(fn (LectureContent $content): array => [
                 'id' => $content->id,
                 'type' => $content->type->value,
+                'layout_style' => $content->layout_style ?? 'standard',
                 'title' => $content->title,
                 'content' => $content->content,
                 'media_url' => $content->mediaUrl(),
+                'narration_audio_url' => $content->narrationAudioUrl(),
+                'narration_audio_name' => $content->narration_audio_name,
+                'vocabulary_glosses' => $content->vocabulary_glosses ?? [],
                 'external_url' => $content->external_url,
                 'duration_seconds' => $content->duration_seconds,
                 'alt_text' => $content->alt_text,
@@ -168,14 +172,32 @@ class TeacherLectureController extends Controller
             $fileSize = $file->getSize();
         }
 
+        $narrationAudioPath = null;
+        $narrationAudioName = null;
+        if ($request->hasFile('narration_audio_file')) {
+            $narrationFile = $request->file('narration_audio_file');
+            $narrationAudioPath = $narrationFile->store('lectures/page-narration', $fileDisk);
+            $narrationAudioName = $narrationFile->getClientOriginalName();
+        }
+
+        $rawGlosses = $validated['vocabulary_glosses'] ?? null;
+        $vocabularyGlosses = is_string($rawGlosses)
+            ? (json_decode($rawGlosses, true) ?: [])
+            : (is_array($rawGlosses) ? $rawGlosses : []);
+
         $nextOrder = ((int) $lecture->contents()->max('sort_order')) + 1;
 
         $lecture->contents()->create([
             'type' => $validated['type'],
+            'layout_style' => $validated['layout_style'] ?? 'standard',
             'title' => $validated['title'] ?? null,
             'content' => $validated['content'] ?? null,
             'file_disk' => $fileDisk,
             'file_path' => $filePath,
+            'narration_audio_disk' => $fileDisk,
+            'narration_audio_path' => $narrationAudioPath,
+            'narration_audio_name' => $narrationAudioName,
+            'vocabulary_glosses' => $vocabularyGlosses,
             'external_url' => $validated['external_url'] ?? null,
             'mime_type' => $mimeType,
             'file_size' => $fileSize,
@@ -184,6 +206,114 @@ class TeacherLectureController extends Controller
             'caption' => $validated['caption'] ?? null,
             'sort_order' => $nextOrder,
         ]);
+
+        return redirect()->route('teachers.lectures.contents.create', [
+            'module' => $module->slug,
+            'lecture' => $lecture->slug,
+        ]);
+    }
+
+    /**
+     * Update an existing content block under a lecture.
+     */
+    public function updateContent(
+        StoreLectureContentRequest $request,
+        Module $module,
+        Lecture $lecture,
+        LectureContent $content
+    ): RedirectResponse {
+        $user = $request->user();
+
+        if (
+            ! $user->isTeacher()
+            || $module->user_id !== $user->id
+            || $lecture->module_id !== $module->id
+            || $content->lecture_id !== $lecture->id
+        ) {
+            return redirect()->route('teachers.dashboard');
+        }
+
+        $validated = $request->validated();
+        $filePath = $content->file_path;
+        $fileDisk = $content->file_disk ?? 'public';
+        $mimeType = $content->mime_type;
+        $fileSize = $content->file_size;
+
+        if ($request->hasFile('media_file')) {
+            $file = $request->file('media_file');
+            $typeString = $validated['type'] instanceof LectureContentType
+                ? $validated['type']->value
+                : (string) $validated['type'];
+            $filePath = $file->store("lectures/{$typeString}", $fileDisk);
+            $mimeType = $file->getClientMimeType();
+            $fileSize = $file->getSize();
+        }
+
+        $narrationAudioPath = $content->narration_audio_path;
+        $narrationAudioName = $content->narration_audio_name;
+
+        if ($request->boolean('remove_narration_audio')) {
+            $narrationAudioPath = null;
+            $narrationAudioName = null;
+        }
+
+        if ($request->hasFile('narration_audio_file')) {
+            $narrationFile = $request->file('narration_audio_file');
+            $narrationAudioPath = $narrationFile->store('lectures/page-narration', $fileDisk);
+            $narrationAudioName = $narrationFile->getClientOriginalName();
+        }
+
+        $rawGlosses = $validated['vocabulary_glosses'] ?? null;
+        $vocabularyGlosses = is_string($rawGlosses)
+            ? (json_decode($rawGlosses, true) ?: [])
+            : (is_array($rawGlosses) ? $rawGlosses : ($content->vocabulary_glosses ?? []));
+
+        $content->update([
+            'type' => $validated['type'],
+            'layout_style' => $validated['layout_style'] ?? ($content->layout_style ?? 'standard'),
+            'title' => $validated['title'] ?? null,
+            'content' => $validated['content'] ?? null,
+            'file_disk' => $fileDisk,
+            'file_path' => $filePath,
+            'narration_audio_disk' => $fileDisk,
+            'narration_audio_path' => $narrationAudioPath,
+            'narration_audio_name' => $narrationAudioName,
+            'vocabulary_glosses' => $vocabularyGlosses,
+            'external_url' => $validated['external_url'] ?? null,
+            'mime_type' => $mimeType,
+            'file_size' => $fileSize,
+            'duration_seconds' => $validated['duration_seconds'] ?? null,
+            'alt_text' => $validated['alt_text'] ?? null,
+            'caption' => $validated['caption'] ?? null,
+        ]);
+
+        return redirect()->route('teachers.lectures.contents.create', [
+            'module' => $module->slug,
+            'lecture' => $lecture->slug,
+        ]);
+    }
+
+    /**
+     * Delete an existing content block from a lecture.
+     */
+    public function destroyContent(
+        Request $request,
+        Module $module,
+        Lecture $lecture,
+        LectureContent $content
+    ): RedirectResponse {
+        $user = $request->user();
+
+        if (
+            ! $user->isTeacher()
+            || $module->user_id !== $user->id
+            || $lecture->module_id !== $module->id
+            || $content->lecture_id !== $lecture->id
+        ) {
+            return redirect()->route('teachers.dashboard');
+        }
+
+        $content->delete();
 
         return redirect()->route('teachers.lectures.contents.create', [
             'module' => $module->slug,

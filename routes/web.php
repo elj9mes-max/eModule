@@ -38,6 +38,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/teachers/modules/{module:slug}/lectures', [TeacherLectureController::class, 'store'])->name('teachers.lectures.store');
     Route::get('/teachers/modules/{module:slug}/lectures/{lecture:slug}/contents/create', [TeacherLectureController::class, 'createContent'])->name('teachers.lectures.contents.create');
     Route::post('/teachers/modules/{module:slug}/lectures/{lecture:slug}/contents', [TeacherLectureController::class, 'storeContent'])->name('teachers.lectures.contents.store');
+    Route::post('/teachers/modules/{module:slug}/lectures/{lecture:slug}/contents/{content}', [TeacherLectureController::class, 'updateContent'])->name('teachers.lectures.contents.update');
+    Route::delete('/teachers/modules/{module:slug}/lectures/{lecture:slug}/contents/{content}', [TeacherLectureController::class, 'destroyContent'])->name('teachers.lectures.contents.destroy');
+
+    Route::get('/teachers/modules/{module:slug}/quizzes/studio', [TeacherModuleController::class, 'quizStudio'])->name('teachers.quizzes.studio');
+    Route::delete('/teachers/modules/{module:slug}/quizzes/{quiz}', [TeacherModuleController::class, 'destroyQuiz'])->name('teachers.quizzes.destroy');
 
     Route::get('/teachers/modules/{module:slug}/quizzes/multiple-choice/create', [TeacherMultipleChoiceQuizController::class, 'create'])->name('teachers.quizzes.multiple-choice.create');
     Route::post('/teachers/modules/{module:slug}/quizzes/multiple-choice', [TeacherMultipleChoiceQuizController::class, 'store'])->name('teachers.quizzes.multiple-choice.store');
@@ -61,4 +66,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/students/welcome', [StudentDashboardController::class, 'welcome'])->name('students.welcome');
     Route::get('/students/dashboard', [StudentDashboardController::class, 'index'])->name('students.dashboard');
     Route::get('/students/Dashboard', fn () => redirect()->route('students.dashboard'));
+    Route::get('/students/progress', [StudentDashboardController::class, 'progress'])->name('students.progress');
+    Route::get('/students/Progress', fn () => redirect()->route('students.progress'));
+    Route::get('/students/modules/{module:slug}', [StudentDashboardController::class, 'progress'])->name('students.modules.show');
+    Route::get('/students/modules/{module:slug}/lectures/{lecture:slug}', [StudentDashboardController::class, 'showLecture'])->name('students.lectures.show');
+    Route::get('/students/lecture-reader', [StudentDashboardController::class, 'showLecture'])->name('students.lectures.reader');
+    Route::get('/students/modules/{module:slug}/quizzes/{quiz:slug}', [StudentDashboardController::class, 'showQuiz'])->name('students.quizzes.show');
+    Route::get('/students/quiz-arena', [StudentDashboardController::class, 'showQuiz'])->name('students.quizzes.arena');
 });
