@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\ModuleStatus;
 use App\Models\Module;
+use App\Models\QuizAttempt;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -51,6 +52,11 @@ class TeacherDashboardController extends Controller
                 'created_at' => $module->created_at?->toIso8601String(),
             ]);
 
+        $pendingGradingCount = QuizAttempt::query()
+            ->whereHas('quiz', fn ($q) => $q->whereIn('module_id', $user->modules()->pluck('id')))
+            ->where('status', 'pending_review')
+            ->count();
+
         return Inertia::render('teachers/Dashboard', [
             'user' => [
                 'id' => $user->id,
@@ -59,6 +65,7 @@ class TeacherDashboardController extends Controller
                 'role' => $user->role->value,
             ],
             'modules' => $modules,
+            'pending_grading_count' => $pendingGradingCount,
         ]);
     }
 

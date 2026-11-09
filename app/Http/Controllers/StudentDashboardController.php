@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\ModuleStatus;
+use App\Enums\UserRole;
 use App\Models\ColorConflictCard;
 use App\Models\ConflictMapEvent;
 use App\Models\ConflictMapZone;
@@ -15,10 +16,14 @@ use App\Models\MatchingChoice;
 use App\Models\MatchingItem;
 use App\Models\Module;
 use App\Models\Quiz;
+use App\Models\QuizAttempt;
 use App\Models\QuizContext;
 use App\Models\QuizQuestion;
 use App\Models\QuizQuestionOption;
 use App\Models\ReflectionPrompt;
+use App\Models\StudentLectureCompletion;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -98,6 +103,59 @@ class StudentDashboardController extends Controller
     }
 
     /**
+     * Display the student leaderboard and ranking page.
+     */
+    public function ranking(Request $request): Response|RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $user->isStudent()) {
+            return redirect()->route('teachers.dashboard');
+        }
+
+        $students = User::query()
+            ->where('role', UserRole::Student)
+            ->orderBy('name')
+            ->get();
+
+        return Inertia::render('students/Ranking', [
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role->value,
+            ],
+            'classmates' => $students->map(fn (User $student): array => [
+                'id' => $student->id,
+                'name' => $student->name,
+                'email' => $student->email,
+                'is_current_user' => $student->id === $user->id,
+            ])->values()->all(),
+        ]);
+    }
+
+    /**
+     * Display the student audio and preferences settings page.
+     */
+    public function settings(Request $request): Response|RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $user->isStudent()) {
+            return redirect()->route('teachers.dashboard');
+        }
+
+        return Inertia::render('students/Settings', [
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role->value,
+            ],
+        ]);
+    }
+
+    /**
      * Display the interactive 3D module expedition progress map for a student.
      */
     public function progress(Request $request, ?Module $module = null): Response|RedirectResponse
@@ -137,6 +195,33 @@ class StudentDashboardController extends Controller
             ])->orderBy('sort_order'),
         ]);
 
+        $completedAttempts = QuizAttempt::query()
+            ->where('user_id', $user->id)
+            ->whereIn('quiz_id', $resolvedModule->quizzes->pluck('id'))
+            ->whereIn('status', ['completed', 'pending_review'])
+            ->get();
+
+        $completedQuizIds = $completedAttempts
+            ->pluck('quiz_id')
+            ->unique()
+            ->values()
+            ->all();
+
+        $pendingQuizIds = $completedAttempts
+            ->where('status', 'pending_review')
+            ->pluck('quiz_id')
+            ->unique()
+            ->values()
+            ->all();
+
+        $completedLectureIds = StudentLectureCompletion::query()
+            ->where('user_id', $user->id)
+            ->whereIn('lecture_id', $resolvedModule->lectures->pluck('id'))
+            ->pluck('lecture_id')
+            ->unique()
+            ->values()
+            ->all();
+
         return Inertia::render('students/Progress', [
             'user' => [
                 'id' => $user->id,
@@ -144,6 +229,9 @@ class StudentDashboardController extends Controller
                 'email' => $user->email,
                 'role' => $user->role->value,
             ],
+            'completedQuizIds' => $completedQuizIds,
+            'pendingQuizIds' => $pendingQuizIds,
+            'completedLectureIds' => $completedLectureIds,
             'module' => [
                 'id' => $resolvedModule->id,
                 'title' => $resolvedModule->title,
@@ -229,6 +317,36 @@ class StudentDashboardController extends Controller
             ? $resolvedModule->quizzes->firstWhere('id', $quiz->id)
             : $resolvedModule->quizzes->first();
 
+        $existingAttempt = null;
+        if ($resolvedQuiz) {
+            $latestAttempt = QuizAttempt::query()
+                ->where('user_id', $user->id)
+                ->where('quiz_id', $resolvedQuiz->id)
+                ->whereIn('status', ['completed', 'pending_review'])
+                ->latest('id')
+                ->first();
+
+            if ($latestAttempt) {
+                $isPending = $latestAttempt->status === 'pending_review';
+
+                $existingAttempt = [
+                    'id' => $latestAttempt->id,
+                    'attempt_number' => $latestAttempt->attempt_number,
+                    'status' => $latestAttempt->status,
+                    'is_pending_review' => $isPending,
+                    'score' => $latestAttempt->score,
+                    'max_score' => $latestAttempt->max_score,
+                    'percentage' => (float) $latestAttempt->percentage,
+                    'stars' => $latestAttempt->stars,
+                    'is_passed' => $latestAttempt->is_passed,
+                    'xp_earned' => $latestAttempt->xp_earned,
+                    'time_spent_seconds' => $latestAttempt->time_spent_seconds,
+                    'completed_at' => $latestAttempt->completed_at?->format('M d, Y h:i A'),
+                    'teacher_feedback' => $latestAttempt->teacher_feedback,
+                ];
+            }
+        }
+
         return Inertia::render('students/views/quiz/Quiz', [
             'user' => [
                 'id' => $user->id,
@@ -248,6 +366,7 @@ class StudentDashboardController extends Controller
                 'boss_name' => $resolvedModule->boss_name ?? 'Chapter Guardian',
             ],
             'quiz' => $resolvedQuiz ? $this->transformQuizForStudent($resolvedQuiz) : null,
+            'existingAttempt' => $existingAttempt,
             'siblingQuizzes' => $resolvedModule->quizzes->map(fn (Quiz $item): array => [
                 'id' => $item->id,
                 'title' => $item->title,
@@ -298,13 +417,11 @@ class StudentDashboardController extends Controller
                 'selection_type' => $question->selection_type->value,
                 'passage_context' => $question->passage_context,
                 'hint' => $question->hint,
-                'explanation' => $question->explanation,
                 'points' => $question->points,
                 'sort_order' => $question->sort_order,
                 'options' => $question->options->map(fn (QuizQuestionOption $option): array => [
                     'id' => $option->id,
                     'option_text' => $option->option_text,
-                    'is_correct' => $option->is_correct,
                     'feedback' => $option->feedback,
                     'sort_order' => $option->sort_order,
                 ])->values()->all(),
@@ -312,10 +429,7 @@ class StudentDashboardController extends Controller
             'cards' => $quiz->conflictCards->map(fn (ColorConflictCard $card): array => [
                 'id' => $card->id,
                 'excerpt' => $card->excerpt,
-                'conflict_type' => $card->conflict_type->value,
                 'hint' => $card->hint,
-                'explanation' => $card->explanation,
-                'feedback_incorrect' => $card->feedback_incorrect,
                 'points' => $card->points,
                 'sort_order' => $card->sort_order,
             ])->values()->all(),
@@ -331,9 +445,7 @@ class StudentDashboardController extends Controller
                 'id' => $event->id,
                 'card_letter' => $event->card_letter,
                 'event_text' => $event->event_text,
-                'target_conflict_type' => $event->target_conflict_type->value,
                 'hint' => $event->hint,
-                'explanation' => $event->explanation,
                 'points' => $event->points,
                 'sort_order' => $event->sort_order,
             ])->values()->all(),
@@ -346,9 +458,7 @@ class StudentDashboardController extends Controller
                 'id' => $item->id,
                 'item_number' => $item->item_number,
                 'description' => $item->description,
-                'correct_choice_letter' => $item->correctChoice?->choice_letter ?? 'A',
                 'hint' => $item->hint,
-                'explanation' => $item->explanation,
                 'points' => $item->points,
                 'sort_order' => $item->sort_order,
             ])->values()->all(),
@@ -367,7 +477,6 @@ class StudentDashboardController extends Controller
                     'id' => $opt->id,
                     'option_text' => $opt->option_text,
                     'stance_value' => $opt->stance_value,
-                    'is_correct' => $opt->is_correct,
                 ])->values()->all(),
             ])->values()->all(),
             'prompts' => $quiz->reflectionPrompts->map(fn (ReflectionPrompt $prompt): array => [
@@ -489,5 +598,34 @@ class StudentDashboardController extends Controller
                 'sort_order' => $item->sort_order,
             ])->values()->all(),
         ]);
+    }
+
+    /**
+     * Mark a lecture as completed by the student.
+     */
+    public function completeLecture(Request $request, Module $module, Lecture $lecture): JsonResponse|RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $user->isStudent()) {
+            return response()->json(['message' => 'Only students can mark lectures complete.'], 403);
+        }
+
+        $completion = StudentLectureCompletion::firstOrCreate([
+            'user_id' => $user->id,
+            'lecture_id' => $lecture->id,
+        ], [
+            'xp_earned' => (int) ($lecture->xp_reward ?? 100),
+            'completed_at' => now(),
+        ]);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'completion' => $completion,
+            ]);
+        }
+
+        return back();
     }
 }

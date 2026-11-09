@@ -189,4 +189,14 @@ class Quiz extends Model
     {
         return $this->hasMany(ReflectionPrompt::class)->orderBy('sort_order');
     }
+
+    /**
+     * Get the student attempts for this quiz.
+     *
+     * @return HasMany<QuizAttempt, $this>
+     */
+    public function attempts(): HasMany
+    {
+        return $this->hasMany(QuizAttempt::class)->latest('id');
+    }
 }

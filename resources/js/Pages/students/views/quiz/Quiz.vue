@@ -1,6 +1,17 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
+import { useSound } from '@/Services/soundManager';
+
+const {
+    playPop,
+    playSparkle,
+    playSuccess,
+    playCorrect,
+    playIncorrect,
+    playClick,
+    playBonus,
+} = useSound();
 
 const props = defineProps({
     user: {
@@ -18,6 +29,10 @@ const props = defineProps({
     siblingQuizzes: {
         type: Array,
         default: () => [],
+    },
+    existingAttempt: {
+        type: Object,
+        default: null,
     },
 });
 
@@ -379,7 +394,7 @@ const demoQuizzesByFormat = {
                 conflict_type: 'character_vs_nature',
                 question_prompt: 'Did Leo make the right decision by slowing down to share his lantern during the storm?',
                 step1_prompt: 'Step 1: Choose your judgment:',
-                sentence_template: 'I think Leo made a ___ decision because his ___ kept the younger travelers safe.',
+                sentence_template: 'I think Leo made a [stance] decision because his [blank] kept the younger travelers safe.',
                 hint: 'Pick the positive stance in Step 1, then fill both blanks in Step 2 (tap a Word Helper chip to insert it!).',
                 points: 20,
                 options: [
@@ -506,6 +521,19 @@ const activeItemsList = computed(() => {
 
 const totalItemsCount = computed(() => Math.max(1, activeItemsList.value.length));
 
+const isAttemptPendingReview = computed(() => {
+    return Boolean(
+        serverAttemptResult.value?.status === 'pending_review' ||
+        serverAttemptResult.value?.is_pending_review ||
+        props.existingAttempt?.status === 'pending_review' ||
+        props.existingAttempt?.is_pending_review
+    );
+});
+
+const latestTeacherFeedback = computed(() => {
+    return serverAttemptResult.value?.teacher_feedback || props.existingAttempt?.teacher_feedback || null;
+});
+
 const currentItem = computed(() => {
     return activeItemsList.value[currentItemIndex.value] || activeItemsList.value[0] || null;
 });
@@ -541,6 +569,10 @@ const focusedBlankInfo = ref({ itemId: null, blankIdx: 0 });
 const reflectionText = ref({});
 const reflectionChecked = ref({});
 
+// Server evaluation attempt result & submit loading state
+const isSubmittingQuiz = ref(false);
+const serverAttemptResult = ref(props.existingAttempt || null);
+
 // Timer (if time_limit_seconds exists)
 const remainingSeconds = ref(null);
 let timerInterval = null;
@@ -568,6 +600,13 @@ const resetQuizSession = () => {
         clearInterval(timerInterval);
         timerInterval = null;
     }
+
+    if (props.existingAttempt) {
+        serverAttemptResult.value = props.existingAttempt;
+        return;
+    }
+
+    serverAttemptResult.value = null;
 
     if (activeQuiz.value?.time_limit_seconds) {
         remainingSeconds.value = Number(activeQuiz.value.time_limit_seconds);
@@ -616,6 +655,7 @@ const isMcqOptionSelected = (question, optionId) => {
 };
 
 const toggleMcqOption = (question, optionId) => {
+    playPop(1.15);
     const current = mcqSelected.value[question.id] || [];
     if (question.selection_type === 'multiple') {
         const exists = current.includes(optionId);
@@ -645,6 +685,12 @@ const checkMcqQuestion = (question) => {
     const isExactMatch =
         picked.length === correctIds.length && correctIds.every((id) => picked.includes(id));
 
+    if (isExactMatch) {
+        playCorrect();
+    } else {
+        playIncorrect();
+    }
+
     mcqChecked.value = {
         ...mcqChecked.value,
         [question.id]: isExactMatch ? 'correct' : 'incorrect',
@@ -655,6 +701,7 @@ const checkMcqQuestion = (question) => {
    2. COLOR THE CONFLICT HANDLERS
    ========================================================================== */
 const selectConflictColor = (card, conflictTypeValue) => {
+    playPop(1.1);
     colorSelected.value = {
         ...colorSelected.value,
         [card.id]: conflictTypeValue,
@@ -671,9 +718,16 @@ const checkConflictCard = (card) => {
         return;
     }
 
+    const isMatch = picked === card.conflict_type;
+    if (isMatch) {
+        playCorrect();
+    } else {
+        playIncorrect();
+    }
+
     colorChecked.value = {
         ...colorChecked.value,
-        [card.id]: picked === card.conflict_type ? 'correct' : 'incorrect',
+        [card.id]: isMatch ? 'correct' : 'incorrect',
     };
 };
 
@@ -681,6 +735,7 @@ const checkConflictCard = (card) => {
    3. THE CONFLICT MAP HANDLERS (DRAG-AND-DROP + TAP-TO-ASSIGN)
    ========================================================================== */
 const assignEventToZone = (eventId, zoneConflictType) => {
+    playPop(1.2);
     mapAssignments.value = {
         ...mapAssignments.value,
         [eventId]: zoneConflictType,
@@ -762,10 +817,62 @@ const checkMatchingQuiz = () => {
 /* ==========================================================================
    5. EVALUATION HANDLERS (2-STEP STANCE + SENTENCE TEMPLATE BLANKS)
    ========================================================================== */
+const parseSentenceTemplate = (item) => {
+    const raw = item?.sentence_template || 'I believe that [stance] because [blank].';
+    const regex = /(\[stance\]|\[blank\]|\[___\]|___)/gi;
+    const segments = [];
+    let lastIndex = 0;
+    let blankIndex = 0;
+    let match;
+
+    while ((match = regex.exec(raw)) !== null) {
+        if (match.index > lastIndex) {
+            segments.push({
+                type: 'text',
+                content: raw.slice(lastIndex, match.index),
+            });
+        }
+
+        const tokenLower = match[0].toLowerCase();
+        if (tokenLower === '[stance]') {
+            segments.push({
+                type: 'stance',
+            });
+        } else {
+            segments.push({
+                type: 'blank',
+                blankIdx: blankIndex++,
+            });
+        }
+
+        lastIndex = regex.lastIndex;
+    }
+
+    if (lastIndex < raw.length) {
+        segments.push({
+            type: 'text',
+            content: raw.slice(lastIndex),
+        });
+    }
+
+    // Safety fallback: if no blank token was present, provide at least one blank
+    if (blankIndex === 0) {
+        segments.push({
+            type: 'blank',
+            blankIdx: 0,
+        });
+    }
+
+    return segments;
+};
+
 const ensureEvaluationState = (item) => {
+    if (!item?.id) {
+        return { optionId: null, blanks: [''] };
+    }
     if (!evaluationState.value[item.id]) {
-        const parts = (item.sentence_template || 'I think ___ because ___.').split('___');
-        const blanksCount = Math.max(1, parts.length - 1);
+        const segments = parseSentenceTemplate(item);
+        const blanksCount = Math.max(1, segments.filter((s) => s.type === 'blank').length);
         evaluationState.value[item.id] = {
             optionId: null,
             blanks: Array.from({ length: blanksCount }, () => ''),
@@ -774,12 +881,16 @@ const ensureEvaluationState = (item) => {
     return evaluationState.value[item.id];
 };
 
-const getSentenceTemplateParts = (item) => {
-    const raw = item.sentence_template || 'I think ___';
-    if (!raw.includes('___')) {
-        return [raw, ''];
+const getSelectedStanceOption = (item) => {
+    const state = ensureEvaluationState(item);
+    if (!state.optionId || !item?.options) {
+        return null;
     }
-    return raw.split('___');
+    return item.options.find((o) => o.id === state.optionId) || null;
+};
+
+const getSentenceTemplateParts = (item) => {
+    return parseSentenceTemplate(item);
 };
 
 const selectEvaluationOption = (item, optionId) => {
@@ -1034,24 +1145,93 @@ const scoreSummary = computed(() => {
     };
 });
 
+const packageAnswersPayload = () => {
+    switch (quizType.value) {
+        case 'multiple_choice':
+            return mcqSelected.value;
+        case 'color_the_conflict':
+            return colorSelected.value;
+        case 'the_conflict_map':
+            return mapAssignments.value;
+        case 'matching_type':
+            return matchingSelected.value;
+        case 'evaluation': {
+            const out = {};
+            const items = activeQuiz.value?.evaluation_items || [];
+            if (items.length > 0) {
+                for (const item of items) {
+                    const st = ensureEvaluationState(item);
+                    const chosenOption = (item.options || []).find((o) => o.id === st.optionId);
+                    out[item.id] = {
+                        option_id: st.optionId,
+                        stance: chosenOption?.stance_value || chosenOption?.option_text || null,
+                        blanks: st.blanks || [],
+                    };
+                }
+            } else {
+                for (const [itemId, st] of Object.entries(evaluationState.value)) {
+                    out[itemId] = {
+                        option_id: st.optionId,
+                        stance: null,
+                        blanks: st.blanks || [],
+                    };
+                }
+            }
+            return out;
+        }
+        case 'reflection':
+            return reflectionText.value;
+        default:
+            return {};
+    }
+};
+
 const finishQuizAndShowSummary = () => {
-    // Trigger check states on all items before opening summary modal
     const q = activeQuiz.value;
-    if (quizType.value === 'multiple_choice') {
-        (q.questions || []).forEach((item) => checkMcqQuestion(item));
-    } else if (quizType.value === 'color_the_conflict') {
-        (q.cards || []).forEach((card) => checkConflictCard(card));
-    } else if (quizType.value === 'the_conflict_map') {
-        checkConflictMap();
-    } else if (quizType.value === 'matching_type') {
-        checkMatchingQuiz();
-    } else if (quizType.value === 'evaluation') {
-        (q.evaluation_items || []).forEach((item) => checkEvaluationItem(item));
-    } else if (quizType.value === 'reflection') {
-        (q.prompts || []).forEach((prompt) => checkReflectionPrompt(prompt));
+
+    // In demo format fallback mode, do local presentation
+    if (!props.module?.slug || !props.quiz?.slug) {
+        showCompletionModal.value = true;
+        playSuccess();
+        return;
     }
 
-    showCompletionModal.value = true;
+    // Submit answers to server for persistent storage and server-side evaluation
+    isSubmittingQuiz.value = true;
+    const timeSpent = q.time_limit_seconds && remainingSeconds.value !== null
+        ? Math.max(1, Number(q.time_limit_seconds) - remainingSeconds.value)
+        : 60;
+
+    const payload = {
+        time_spent_seconds: timeSpent,
+        answers: packageAnswersPayload(),
+    };
+
+    fetch(`/students/modules/${props.module.slug}/quizzes/${props.quiz.slug}/submit`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+        body: JSON.stringify(payload),
+    })
+        .then((res) => res.json())
+        .then((data) => {
+            if (data.attempt) {
+                serverAttemptResult.value = data.attempt;
+            }
+            showCompletionModal.value = true;
+            playSuccess();
+        })
+        .catch((err) => {
+            console.error('Quiz submission error:', err);
+            showCompletionModal.value = true;
+            playSuccess();
+        })
+        .finally(() => {
+            isSubmittingQuiz.value = false;
+        });
 };
 
 /* ==========================================================================
@@ -1141,8 +1321,8 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
 
-                <!-- Center: Interactive Progress Bar & Step Counter -->
-                <div class="quiz-hud-progress-pod">
+                <!-- Center: Interactive Progress Bar & Step Counter (Only when taking active quiz) -->
+                <div v-if="!existingAttempt" class="quiz-hud-progress-pod">
                     <div class="progress-pod-labels">
                         <span class="progress-step-label">
                             Answered {{ answeredItemsCount }} of {{ totalItemsCount }}
@@ -1165,7 +1345,7 @@ onBeforeUnmount(() => {
 
                 <!-- Right: Timer, Hint Toggle & XP Bounty -->
                 <div class="quiz-hud-actions">
-                    <div v-if="formattedTimer" class="clay-timer-pill" title="Time Remaining">
+                    <div v-if="!existingAttempt && formattedTimer" class="clay-timer-pill" title="Time Remaining">
                         <svg viewBox="0 0 20 20" class="hud-icon-svg" aria-hidden="true">
                             <circle cx="10" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2" />
                             <path d="M10 8v3.5l2.2 1.5M8 2.5h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
@@ -1174,6 +1354,7 @@ onBeforeUnmount(() => {
                     </div>
 
                     <button
+                        v-if="!existingAttempt"
                         type="button"
                         class="clay-hint-toggle-btn"
                         :class="{ 'is-active': showHintBanner }"
@@ -1199,50 +1380,82 @@ onBeforeUnmount(() => {
                     </div>
 
                     <button
+                        v-if="!existingAttempt"
                         type="button"
                         class="clay-finish-quiz-btn"
                         @click="finishQuizAndShowSummary"
                     >
                         <span>Submit Quiz ✓</span>
                     </button>
+                    <button
+                        v-else
+                        type="button"
+                        class="clay-finish-quiz-btn is-completed-btn"
+                        @click="showCompletionModal = true"
+                    >
+                        <span>Completed ★ ({{ existingAttempt.percentage }}%)</span>
+                    </button>
                 </div>
             </div>
 
             <!-- Format Switcher Strip (Allows switching between all 6 interactive quiz formats) -->
-            <div class="quiz-hud-format-strip" role="tablist" aria-label="Switch Quiz Format">
-                <span class="format-strip-label">Quiz Format:</span>
-                <div class="format-pills-scroll">
-                    <button
-                        v-for="fmt in formatCatalog"
-                        :key="fmt.key"
-                        type="button"
-                        role="tab"
-                        :aria-selected="quizType === fmt.key"
-                        class="clay-format-pill"
-                        :class="{ 'is-active': quizType === fmt.key }"
-                        @click="switchQuizFormat(fmt.key)"
-                    >
-                        <span>{{ fmt.label }}</span>
-                    </button>
-                </div>
 
-                <!-- View Mode Toggle for Multi-Item Formats -->
-                <button
-                    v-if="quizType !== 'the_conflict_map' && quizType !== 'matching_type' && totalItemsCount > 1"
-                    type="button"
-                    class="clay-view-mode-btn"
-                    @click="viewAllMode = !viewAllMode"
-                >
-                    {{ viewAllMode ? 'Single Card View' : `View All (${totalItemsCount})` }}
-                </button>
-            </div>
         </header>
 
         <!-- =========================================================================
              2. MAIN INTERACTIVE QUIZ ARENA STAGE
              ========================================================================= -->
         <main class="clay-quiz-main-stage">
-            <!-- OPTIONAL COLLAPSIBLE READING PASSAGE / STORY SCENARIO BANNER -->
+            <!-- ALREADY COMPLETED STATUS BANNER -->
+            <section v-if="existingAttempt" class="clay-already-taken-card" :class="{ 'card-pending-review': isAttemptPendingReview }" role="alert">
+                <div class="already-taken-content">
+                    <div v-if="isAttemptPendingReview" class="already-taken-badge pending-badge-box" aria-hidden="true">
+                        <span class="pending-badge-icon">📝</span>
+                        <span class="pending-badge-text">In Review</span>
+                    </div>
+                    <div v-else class="already-taken-badge" aria-hidden="true">
+                        <span v-for="s in 3" :key="s" class="star-pill" :class="{ 'star-filled': s <= existingAttempt.stars }">★</span>
+                    </div>
+                    <div class="already-taken-copy">
+                        <div class="already-taken-kicker-row">
+                            <span v-if="isAttemptPendingReview" class="already-taken-status-pill pill-pending-amber">PENDING TEACHER REVIEW 📝</span>
+                            <span v-else class="already-taken-status-pill">QUIZ ALREADY COMPLETED</span>
+                            <span class="already-taken-date">Submitted on {{ existingAttempt.completed_at }}</span>
+                        </div>
+                        <h2 class="already-taken-title">
+                            {{ isAttemptPendingReview ? 'Your response is awaiting teacher grading' : 'You have already completed this quest milestone!' }}
+                        </h2>
+                        <p class="already-taken-desc">
+                            <template v-if="isAttemptPendingReview">
+                                You have submitted this quest challenge! Because Evaluation and Reflection challenges contain opinion-based answers, your teacher will review your responses, give feedback, and set your score and stars. You can continue forward along your reading quest!
+                            </template>
+                            <template v-else>
+                                Your official score is <strong>{{ existingAttempt.score }} / {{ existingAttempt.max_score }} ({{ existingAttempt.percentage }}%)</strong>, earning you <strong>+{{ existingAttempt.xp_earned }} XP</strong>. You cannot retake this quiz, but you can review your score summary or head back to the adventure map.
+                            </template>
+                        </p>
+                        <!-- Teacher Feedback Note -->
+                        <div v-if="latestTeacherFeedback" class="clay-teacher-feedback-box">
+                            <div class="feedback-badge-row">
+                                <span class="feedback-emoji">👨‍🏫</span>
+                                <strong class="feedback-badge-lbl">Teacher Feedback:</strong>
+                            </div>
+                            <p class="feedback-text">"{{ latestTeacherFeedback }}"</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="already-taken-actions">
+                    <button type="button" class="clay-taken-review-btn" @click="showCompletionModal = true">
+                        <span>{{ isAttemptPendingReview ? 'View Submission 📝' : 'Review Score Summary 🏆' }}</span>
+                    </button>
+                    <button type="button" class="clay-taken-back-btn" @click="goBackToMap">
+                        <span>Back to Map →</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- ACTIVE QUIZ CONTENT (ONLY RENDERED WHEN QUIZ NOT ALREADY TAKEN) -->
+            <template v-else>
+                <!-- OPTIONAL COLLAPSIBLE READING PASSAGE / STORY SCENARIO BANNER -->
             <section
                 v-if="activeContexts.length > 0"
                 class="clay-passage-banner-card"
@@ -1363,14 +1576,14 @@ onBeforeUnmount(() => {
 
                         <!-- Action & Feedback Footer -->
                         <div class="card-check-row">
-                            <button
+                            <!-- <button
                                 type="button"
                                 class="clay-check-answer-btn"
                                 :disabled="!(mcqSelected[question.id]?.length > 0)"
                                 @click="checkMcqQuestion(question)"
                             >
                                 Check Answer ✓
-                            </button>
+                            </button> -->
 
                             <div
                                 v-if="mcqChecked[question.id]"
@@ -1842,27 +2055,68 @@ onBeforeUnmount(() => {
                             </div>
                         </div>
 
-                        <!-- Step 2: Interactive Sentence Template with Inline Blanks -->
+                        <!-- Step 2: Interactive Sentence Template with Auto-Filled Stance & Inline Blanks -->
                         <div class="eval-step-box eval-step-two">
-                            <span class="eval-step-kicker">
-                                Step 2: Complete the reasoning sentence (type or tap a Word Helper above):
-                            </span>
+                            <div class="eval-step-header-row">
+                                <span class="eval-step-kicker">
+                                    Step 2: Complete the reasoning sentence:
+                                </span>
+                                <span class="eval-step-guide-pill">
+                                    <span class="guide-dot" aria-hidden="true"></span>
+                                    <span>Stance auto-fills from Step 1 • Type answer in blanks</span>
+                                </span>
+                            </div>
 
                             <div class="sentence-template-builder">
                                 <template
-                                    v-for="(part, pIdx) in getSentenceTemplateParts(item)"
-                                    :key="pIdx"
+                                    v-for="(segment, sIdx) in parseSentenceTemplate(item)"
+                                    :key="sIdx"
                                 >
-                                    <span class="sentence-static-text">{{ part }}</span>
-                                    <input
-                                        v-if="pIdx < getSentenceTemplateParts(item).length - 1"
-                                        type="text"
-                                        class="clay-inline-blank-input"
-                                        :placeholder="`Blank #${pIdx + 1}...`"
-                                        :value="ensureEvaluationState(item).blanks[pIdx] || ''"
-                                        @focus="focusedBlankInfo = { itemId: item.id, blankIdx: pIdx }"
-                                        @input="updateEvaluationBlank(item, pIdx, $event.target.value)"
-                                    />
+                                    <!-- 1. Static Text Segment -->
+                                    <span v-if="segment.type === 'text'" class="sentence-static-text">{{ segment.content }}</span>
+
+                                    <!-- 2. Auto-Filled Stance Token (Filled from Step 1 Option Selection) -->
+                                    <span
+                                        v-else-if="segment.type === 'stance'"
+                                        class="clay-stance-token-slot"
+                                    >
+                                        <span
+                                            v-if="getSelectedStanceOption(item)"
+                                            class="clay-stance-filled-pill"
+                                            :title="`Selected Stance: ${getSelectedStanceOption(item).option_text}`"
+                                        >
+                                            <span class="stance-check-badge" aria-hidden="true">✓</span>
+                                            <strong class="stance-filled-text">{{ getSelectedStanceOption(item).option_text }}</strong>
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="clay-stance-empty-pill"
+                                            title="Pick your stance in Step 1 above to fill this part"
+                                        >
+                                            <span class="stance-empty-icon" aria-hidden="true">👆</span>
+                                            <span class="stance-empty-text">[Pick Stance in Step 1]</span>
+                                        </span>
+                                    </span>
+
+                                    <!-- 3. Interactive Blank Input (Where student writes their answer) -->
+                                    <span
+                                        v-else-if="segment.type === 'blank'"
+                                        class="clay-blank-input-slot"
+                                    >
+                                        <input
+                                            type="text"
+                                            class="clay-inline-blank-input"
+                                            :class="{
+                                                'is-active-focus': focusedBlankInfo.itemId === item.id && focusedBlankInfo.blankIdx === segment.blankIdx,
+                                                'is-blank-filled': (ensureEvaluationState(item).blanks[segment.blankIdx] || '').trim().length > 0,
+                                            }"
+                                            :placeholder="`Write your answer here...`"
+                                            :aria-label="`Answer blank ${segment.blankIdx + 1}`"
+                                            :value="ensureEvaluationState(item).blanks[segment.blankIdx] || ''"
+                                            @focus="focusedBlankInfo = { itemId: item.id, blankIdx: segment.blankIdx }"
+                                            @input="updateEvaluationBlank(item, segment.blankIdx, $event.target.value)"
+                                        />
+                                    </span>
                                 </template>
                             </div>
                         </div>
@@ -2042,15 +2296,24 @@ onBeforeUnmount(() => {
                     Next →
                 </button>
                 <button
-                    v-else
+                    v-else-if="!existingAttempt"
                     type="button"
                     class="clay-step-nav-btn nav-btn-finish"
                     @click="finishQuizAndShowSummary"
                 >
                     Finish Quiz ★
                 </button>
+                <button
+                    v-else
+                    type="button"
+                    class="clay-step-nav-btn nav-btn-finish is-completed-nav-btn"
+                    @click="showCompletionModal = true"
+                >
+                    View Result ★
+                </button>
             </nav>
-        </main>
+        </template>
+    </main>
 
         <!-- =========================================================================
              3. CELEBRATION & QUIZ RESULTS SUMMARY MODAL (TELEPORTED TO BODY)
@@ -2075,13 +2338,21 @@ onBeforeUnmount(() => {
                             ✕
                         </button>
 
-                        <!-- 3 Golden Stars Ribbon -->
-                        <div class="summary-stars-row" aria-hidden="true">
+                        <!-- 3 Golden Stars Ribbon / Pending Badge -->
+                        <div v-if="isAttemptPendingReview" class="summary-pending-row" aria-hidden="true">
+                            <div class="summary-pending-tag">
+                                <span class="summary-pending-icon">📝</span>
+                                <span class="summary-pending-tag-lbl">Score Pending Teacher Review</span>
+                            </div>
+                        </div>
+                        <div v-else class="summary-stars-row" aria-hidden="true">
                             <span
                                 v-for="starIdx in 3"
                                 :key="starIdx"
                                 class="summary-star-badge"
-                                :class="{ 'star-earned': starIdx <= scoreSummary.stars }"
+                                :class="{
+                                    'star-earned': starIdx <= (serverAttemptResult ? serverAttemptResult.stars : scoreSummary.stars),
+                                }"
                             >
                                 ★
                             </span>
@@ -2089,12 +2360,14 @@ onBeforeUnmount(() => {
 
                         <span
                             class="summary-status-pill"
-                            :class="scoreSummary.passed ? 'status-pass' : 'status-retry'"
+                            :class="isAttemptPendingReview ? 'status-pending' : ((serverAttemptResult ? serverAttemptResult.is_passed : scoreSummary.passed) ? 'status-pass' : 'status-retry')"
                         >
                             {{
-                                scoreSummary.passed
-                                    ? 'QUEST MILESTONE MASTERED!'
-                                    : `KEEP PRACTICING • PASSING IS ${scoreSummary.passThreshold}%`
+                                isAttemptPendingReview
+                                    ? 'SUBMITTED FOR TEACHER GRADING 📝'
+                                    : ((serverAttemptResult ? serverAttemptResult.is_passed : scoreSummary.passed)
+                                        ? 'QUEST MILESTONE MASTERED!'
+                                        : `KEEP PRACTICING • PASSING IS ${scoreSummary.passThreshold}%`)
                             }}
                         </span>
 
@@ -2102,27 +2375,53 @@ onBeforeUnmount(() => {
                             {{ activeQuiz.title }}
                         </h2>
 
+                        <p v-if="isAttemptPendingReview" class="summary-pending-explainer">
+                            Great job expressing your thoughts! Because this challenge asks for your perspective and reasoning, your teacher will evaluate your answers and assign your score and stars shortly.
+                        </p>
+
                         <div class="summary-metrics-grid">
                             <div class="summary-metric-box">
                                 <span class="metric-lbl">SCORE</span>
-                                <strong class="metric-val">{{ scoreSummary.pct }}%</strong>
+                                <strong class="metric-val" :class="{ 'text-amber': isAttemptPendingReview }">
+                                    {{ isAttemptPendingReview ? 'Pending' : `${serverAttemptResult ? serverAttemptResult.percentage : scoreSummary.pct}%` }}
+                                </strong>
                             </div>
                             <div class="summary-metric-box">
                                 <span class="metric-lbl">POINTS</span>
                                 <strong class="metric-val">
-                                    {{ scoreSummary.earned }} / {{ scoreSummary.total }}
+                                    {{
+                                        isAttemptPendingReview
+                                            ? `Teacher Graded`
+                                            : (serverAttemptResult
+                                                ? `${serverAttemptResult.score} / ${serverAttemptResult.max_score}`
+                                                : `${scoreSummary.earned} / ${scoreSummary.total}`)
+                                    }}
                                 </strong>
                             </div>
                             <div class="summary-metric-box">
                                 <span class="metric-lbl">REWARD</span>
                                 <strong class="metric-val text-amber">
-                                    +{{ scoreSummary.passed ? activeQuiz.xp_reward || 150 : 50 }} XP
+                                    {{
+                                        isAttemptPendingReview
+                                            ? 'XP on Grade ⭐'
+                                            : `+${serverAttemptResult ? serverAttemptResult.xp_earned : (scoreSummary.passed ? activeQuiz.xp_reward || 150 : 50)} XP`
+                                    }}
                                 </strong>
                             </div>
                         </div>
 
+                        <!-- Teacher Feedback Note -->
+                        <div v-if="latestTeacherFeedback" class="summary-feedback-box">
+                            <div class="feedback-badge-row">
+                                <span class="feedback-emoji">👨‍🏫</span>
+                                <strong class="feedback-badge-lbl">Teacher Feedback:</strong>
+                            </div>
+                            <p class="feedback-text">"{{ latestTeacherFeedback }}"</p>
+                        </div>
+
                         <div class="summary-modal-actions">
                             <button
+                                v-if="!existingAttempt && !isAttemptPendingReview"
                                 type="button"
                                 class="clay-summary-secondary-btn"
                                 @click="resetQuizSession"
@@ -2156,6 +2455,146 @@ onBeforeUnmount(() => {
     font-family: 'Nunito', sans-serif;
     color: #0f172a;
     padding-bottom: 4rem;
+}
+
+/* ==========================================================================
+   ALREADY COMPLETED STATE BANNER
+   ========================================================================== */
+.clay-already-taken-card {
+    background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+    border: 3.5px solid #10B981;
+    border-radius: 28px;
+    padding: 2rem 2.25rem;
+    box-shadow:
+        0 10px 0 #059669,
+        0 20px 38px rgba(5, 150, 105, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin: 1.5rem auto 2rem;
+    width: 100%;
+}
+
+.already-taken-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.25rem;
+    max-width: 720px;
+}
+
+.already-taken-badge {
+    background: #059669;
+    border: 3px solid #FFFFFF;
+    border-radius: 20px;
+    padding: 0.5rem 0.65rem;
+    box-shadow: 0 4px 10px rgba(5, 150, 105, 0.35);
+    display: flex;
+    gap: 0.2rem;
+    font-size: 1.25rem;
+    color: #CBD5E1;
+}
+
+.already-taken-badge .star-filled {
+    color: #FDE047;
+    filter: drop-shadow(0 2px 4px rgba(234, 179, 8, 0.4));
+}
+
+.already-taken-kicker-row {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.already-taken-status-pill {
+    background: #059669;
+    color: #FFFFFF;
+    padding: 0.22rem 0.65rem;
+    border-radius: 9999px;
+    font-family: 'Fredoka', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+
+.already-taken-date {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #047857;
+}
+
+.already-taken-title {
+    margin: 0 0 0.4rem;
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #064E3B;
+    line-height: 1.25;
+}
+
+.already-taken-desc {
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    color: #065F46;
+    font-weight: 700;
+}
+
+.already-taken-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.clay-taken-review-btn {
+    background: linear-gradient(180deg, #F59E0B 0%, #D97706 100%);
+    border: 2.5px solid #FFFFFF;
+    border-radius: 16px;
+    color: #FFFFFF;
+    font-family: 'Fredoka', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 800;
+    padding: 0.75rem 1.25rem;
+    box-shadow: 0 5px 0 #B45309, 0 10px 18px rgba(180, 83, 9, 0.25);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.clay-taken-review-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 7px 0 #B45309, 0 12px 22px rgba(180, 83, 9, 0.3);
+}
+
+.clay-taken-back-btn {
+    background: #FFFFFF;
+    border: 2.5px solid #059669;
+    border-radius: 16px;
+    color: #047857;
+    font-family: 'Fredoka', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 800;
+    padding: 0.75rem 1.15rem;
+    box-shadow: 0 4px 0 #059669;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+
+.clay-taken-back-btn:hover {
+    transform: translateY(-2px);
+}
+
+.is-completed-btn {
+    background: linear-gradient(180deg, #10B981 0%, #059669 100%) !important;
+    box-shadow: 0 5px 0 #047857 !important;
+}
+
+.is-completed-nav-btn {
+    background: linear-gradient(180deg, #10B981 0%, #059669 100%) !important;
+    box-shadow: 0 5px 0 #047857 !important;
 }
 
 /* ==========================================================================
@@ -3148,6 +3587,15 @@ onBeforeUnmount(() => {
     margin-bottom: 1rem;
 }
 
+.eval-step-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
 .eval-step-kicker {
     display: block;
     font-size: 0.8rem;
@@ -3155,28 +3603,144 @@ onBeforeUnmount(() => {
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: #475569;
-    margin-bottom: 0.65rem;
+    margin: 0;
+}
+
+.eval-step-guide-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: #eff6ff;
+    color: #1e40af;
+    border: 1.5px solid #bfdbfe;
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.74rem;
+    font-weight: 800;
+}
+
+.guide-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #3b82f6;
 }
 
 .sentence-template-builder {
-    font-size: 1.05rem;
+    font-size: 1.08rem;
     font-weight: 800;
-    line-height: 2.2;
+    line-height: 2.3;
     color: #0f172a;
 }
 
-.clay-inline-blank-input {
-    display: inline-block;
-    min-width: 150px;
-    margin: 0 0.35rem;
-    padding: 0.28rem 0.65rem;
-    border: 2.5px solid #3b82f6;
-    border-radius: 10px;
-    background: #eff6ff;
-    font-family: 'Nunito', sans-serif;
+/* Dynamic Stance Token Slot */
+.clay-stance-token-slot {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    margin: 0.15rem 0.35rem;
+}
+
+.clay-stance-filled-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+    color: #166534;
+    border: 2px solid #22c55e;
+    border-bottom-width: 4.5px;
+    border-radius: 12px;
+    padding: 0.25rem 0.75rem;
+    font-family: 'Fredoka', sans-serif;
     font-size: 0.98rem;
+    font-weight: 700;
+    box-shadow: 0 3px 6px rgba(34, 197, 94, 0.25);
+    animation: stancePopIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes stancePopIn {
+    0% { transform: scale(0.85); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.stance-check-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #16a34a;
+    color: #ffffff;
+    font-size: 0.72rem;
     font-weight: 900;
+}
+
+.stance-filled-text {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.clay-stance-empty-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: #fef3c7;
+    color: #92400e;
+    border: 2px dashed #f59e0b;
+    border-radius: 12px;
+    padding: 0.25rem 0.65rem;
+    font-family: 'Fredoka', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: default;
+}
+
+.stance-empty-icon {
+    font-size: 0.95rem;
+    animation: bounceFinger 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes bounceFinger {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-3px); }
+}
+
+/* Blank Input Slot */
+.clay-blank-input-slot {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    margin: 0.15rem 0.35rem;
+}
+
+.clay-inline-blank-input {
+    min-width: 190px;
+    max-width: 360px;
+    padding: 0.32rem 0.75rem;
+    border: 2.5px solid #3b82f6;
+    border-bottom-width: 4.5px;
+    border-radius: 12px;
+    background: #ffffff;
+    font-family: 'Nunito', sans-serif;
+    font-size: 1rem;
+    font-weight: 800;
     color: #1e3a8a;
+    outline: none;
+    transition: all 0.18s ease;
+    box-shadow: inset 0 2px 4px rgba(30, 58, 138, 0.06);
+}
+
+.clay-inline-blank-input:focus,
+.clay-inline-blank-input.is-active-focus {
+    border-color: #1d4ed8;
+    background: #eff6ff;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.32), inset 0 2px 4px rgba(30, 58, 138, 0.08);
+}
+
+.clay-inline-blank-input.is-blank-filled {
+    border-color: #60a5fa;
+    background: #f8fafc;
 }
 
 .reflection-guiding-note {
@@ -3473,6 +4037,132 @@ onBeforeUnmount(() => {
     color: #b45309;
 }
 
+.summary-status-pill.status-pending {
+    background: #FEF3C7;
+    color: #B45309;
+    border: 1px solid #F59E0B;
+}
+
+.summary-pending-row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 0.85rem;
+}
+
+.summary-pending-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #FEF3C7;
+    border: 2px solid #F59E0B;
+    border-radius: 9999px;
+    padding: 0.4rem 1.15rem;
+}
+
+.summary-pending-icon {
+    font-size: 1.3rem;
+}
+
+.summary-pending-tag-lbl {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 800;
+    font-size: 0.85rem;
+    color: #92400E;
+}
+
+.summary-pending-explainer {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #475569;
+    line-height: 1.45;
+    margin: -0.5rem 0 1rem;
+}
+
+.summary-feedback-box {
+    background: #FFFBEB;
+    border: 2px dashed #F59E0B;
+    border-radius: 16px;
+    padding: 0.85rem 1rem;
+    margin: 1rem 0;
+    text-align: left;
+}
+
+.clay-already-taken-card.card-pending-review {
+    background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
+    border-color: #F59E0B;
+    box-shadow: 0 10px 0 #D97706, 0 20px 38px rgba(217, 119, 6, 0.2);
+}
+
+.pending-badge-box {
+    background: #D97706 !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 68px;
+    padding: 0.5rem 0.65rem;
+}
+
+.pending-badge-icon {
+    font-size: 1.5rem;
+}
+
+.pending-badge-text {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #FFFFFF;
+}
+
+.pill-pending-amber {
+    background: #D97706 !important;
+}
+
+.card-pending-review .already-taken-title {
+    color: #78350F;
+}
+
+.card-pending-review .already-taken-desc {
+    color: #92400E;
+}
+
+.card-pending-review .already-taken-date {
+    color: #B45309;
+}
+
+.clay-teacher-feedback-box {
+    margin-top: 0.85rem;
+    background: rgba(255, 255, 255, 0.9);
+    border: 2px dashed #F59E0B;
+    border-radius: 14px;
+    padding: 0.75rem 1rem;
+}
+
+.feedback-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.25rem;
+}
+
+.feedback-emoji {
+    font-size: 1.1rem;
+}
+
+.feedback-badge-lbl {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 0.82rem;
+    color: #92400E;
+}
+
+.feedback-text {
+    margin: 0;
+    font-style: italic;
+    font-weight: 600;
+    color: #334155;
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+
 .summary-modal-title {
     font-family: 'Fredoka', sans-serif;
     font-size: 1.55rem;
@@ -3537,6 +4227,480 @@ onBeforeUnmount(() => {
     color: #ffffff;
     border: 2.5px solid #1e40af;
     border-bottom-width: 5px;
+}
+
+/* ==========================================================================
+   MOBILE VIEW DESIGN & TOUCH OPTIMIZATIONS (<= 640px)
+   ========================================================================== */
+@media (max-width: 640px) {
+    /* 1. COMPACT STICKY HUD */
+    .clay-quiz-sticky-hud {
+        padding: 0.5rem 0.75rem 0.45rem;
+    }
+
+    .quiz-hud-top-row {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        grid-template-areas:
+            "brand brand actions"
+            "progress progress progress";
+        align-items: center;
+        gap: 0.45rem 0.5rem;
+    }
+
+    .quiz-hud-brand {
+        grid-area: brand;
+        gap: 0.5rem;
+        min-width: 0;
+    }
+
+    .clay-hud-back-btn {
+        padding: 0.35rem 0.6rem;
+        font-size: 0.78rem;
+        border-radius: 11px;
+        min-height: 38px;
+    }
+
+    .quiz-hud-kicker-row {
+        gap: 0.3rem;
+    }
+
+    .quiz-format-badge {
+        font-size: 0.62rem;
+        padding: 0.1rem 0.45rem;
+    }
+
+    .quiz-module-kicker {
+        display: none;
+    }
+
+    .quiz-hud-main-title {
+        font-size: 0.95rem;
+        max-width: 175px;
+    }
+
+    .quiz-hud-actions {
+        grid-area: actions;
+        gap: 0.35rem;
+        justify-content: flex-end;
+    }
+
+    .clay-timer-pill {
+        padding: 0.28rem 0.55rem;
+        font-size: 0.78rem;
+        min-height: 36px;
+    }
+
+    .clay-xp-reward-pill {
+        display: none;
+    }
+
+    .clay-hint-toggle-btn {
+        padding: 0.28rem 0.55rem;
+        font-size: 0.76rem;
+        min-height: 36px;
+    }
+
+    .clay-finish-quiz-btn {
+        padding: 0.4rem 0.75rem;
+        font-size: 0.78rem;
+        border-radius: 12px;
+        min-height: 36px;
+    }
+
+    .quiz-hud-progress-pod {
+        grid-area: progress;
+        max-width: 100%;
+        min-width: 100%;
+        margin-top: 0.15rem;
+    }
+
+    .progress-pod-labels {
+        font-size: 0.7rem;
+        margin-bottom: 0.2rem;
+    }
+
+    .clay-quiz-progress-track {
+        height: 8px;
+    }
+
+    /* 2. MAIN STAGE & TOUCH PADDING */
+    .clay-student-quiz-shell {
+        padding-bottom: 5.5rem;
+    }
+
+    .clay-quiz-main-stage {
+        margin-top: 0.65rem;
+        padding: 0 0.65rem;
+        gap: 0.85rem;
+    }
+
+    .clay-already-taken-card {
+        padding: 1rem;
+        gap: 1rem;
+        border-radius: 20px;
+    }
+
+    .already-taken-content {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .already-taken-badge {
+        font-size: 1.1rem;
+        padding: 0.35rem 0.55rem;
+    }
+
+    .already-taken-title {
+        font-size: 1.15rem;
+    }
+
+    .already-taken-desc {
+        font-size: 0.86rem;
+    }
+
+    .already-taken-actions {
+        width: 100%;
+        flex-direction: column;
+        gap: 0.6rem;
+    }
+
+    .clay-taken-review-btn,
+    .clay-taken-back-btn {
+        width: 100%;
+        justify-content: center;
+        padding: 0.75rem 1rem;
+    }
+
+    .clay-passage-banner-card {
+        padding: 0.85rem 1rem;
+        border-radius: 18px;
+    }
+
+    .passage-body-text {
+        font-size: 0.92rem;
+        line-height: 1.6;
+    }
+
+    .clay-interactive-card {
+        padding: 1.1rem 1rem;
+        border-radius: 22px;
+        border-width: 2.5px;
+        border-bottom-width: 5px;
+    }
+
+    .question-main-prompt {
+        font-size: 1.15rem;
+        line-height: 1.45;
+        margin-bottom: 0.95rem;
+    }
+
+    .question-excerpt-quote {
+        padding: 0.6rem 0.75rem;
+        font-size: 0.88rem;
+        line-height: 1.45;
+        margin-bottom: 0.75rem;
+    }
+
+    .card-top-meta {
+        margin-bottom: 0.75rem;
+    }
+
+    .item-step-pill {
+        font-size: 0.7rem;
+        padding: 0.22rem 0.6rem;
+    }
+
+    .item-points-tag {
+        font-size: 0.7rem;
+        padding: 0.18rem 0.5rem;
+    }
+
+    /* 3. MULTIPLE CHOICE */
+    .mcq-options-grid {
+        gap: 0.6rem;
+    }
+
+    .clay-mcq-option-btn {
+        padding: 0.75rem 0.85rem;
+        gap: 0.65rem;
+        min-height: 52px;
+        border-radius: 16px;
+        border-width: 2px;
+        border-bottom-width: 4px;
+    }
+
+    .clay-mcq-option-btn:active {
+        transform: translateY(2px);
+        border-bottom-width: 2px;
+    }
+
+    .mcq-letter-badge {
+        width: 32px;
+        height: 32px;
+        font-size: 0.88rem;
+        border-radius: 9px;
+    }
+
+    .mcq-option-text {
+        font-size: 0.94rem;
+        line-height: 1.35;
+    }
+
+    .clay-check-answer-btn {
+        width: 100%;
+        padding: 0.85rem 1rem;
+        font-size: 0.92rem;
+        justify-content: center;
+        min-height: 48px;
+    }
+
+    /* 4. COLOR THE CONFLICT */
+    .conflict-excerpt-canvas {
+        padding: 1rem 1.1rem;
+        border-radius: 18px;
+    }
+
+    .excerpt-quote-body {
+        font-size: 1rem;
+        line-height: 1.6;
+    }
+
+    .conflict-swatch-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.55rem;
+    }
+
+    .clay-swatch-btn {
+        padding: 0.65rem 0.75rem;
+        font-size: 0.8rem;
+        gap: 0.45rem;
+        border-radius: 14px;
+        min-height: 48px;
+    }
+
+    .swatch-paint-dot {
+        width: 18px;
+        height: 18px;
+    }
+
+    /* 5. CONFLICT MAP & MATCHING ARENA */
+    .clay-map-event-card,
+    .clay-matching-item-card {
+        padding: 0.8rem 0.85rem;
+        border-radius: 16px;
+    }
+
+    .event-card-body,
+    .matching-item-desc {
+        font-size: 0.9rem;
+        line-height: 1.45;
+    }
+
+    .event-quick-zone-row,
+    .matching-letter-pills {
+        gap: 0.45rem;
+    }
+
+    .quick-zone-chip {
+        min-height: 38px;
+        padding: 0.38rem 0.75rem;
+        font-size: 0.8rem;
+        border-radius: 12px;
+    }
+
+    .clay-letter-pill {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0.4rem;
+        font-size: 0.95rem;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .clay-matching-choice-card {
+        padding: 0.75rem 0.85rem;
+        gap: 0.65rem;
+        border-radius: 14px;
+    }
+
+    .choice-letter-circle {
+        width: 28px;
+        height: 28px;
+        font-size: 0.85rem;
+    }
+
+    .choice-card-text {
+        font-size: 0.88rem;
+    }
+
+    .clay-map-zone-bucket {
+        padding: 0.85rem;
+        min-height: 100px;
+    }
+
+    /* 6. EVALUATION ARENA */
+    .clay-word-helpers-bar {
+        padding: 0.85rem 1rem;
+        border-radius: 18px;
+    }
+
+    .clay-word-helper-chip {
+        min-height: 38px;
+        padding: 0.4rem 0.85rem;
+        font-size: 0.84rem;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .sentence-template-builder {
+        font-size: 0.98rem;
+        line-height: 2.3;
+    }
+
+    .clay-stance-filled-pill {
+        font-size: 0.88rem;
+        padding: 0.2rem 0.55rem;
+    }
+
+    .clay-stance-empty-pill {
+        font-size: 0.8rem;
+        padding: 0.2rem 0.5rem;
+    }
+
+    .clay-inline-blank-input {
+        min-width: 140px;
+        max-width: 100%;
+        font-size: 1rem; /* 16px prevents iOS Safari auto-zoom */
+        padding: 0.35rem 0.6rem;
+    }
+
+    /* 7. REFLECTION ARENA */
+    .clay-reflection-textarea {
+        font-size: 1rem; /* 16px prevents iOS Safari auto-zoom */
+        padding: 0.75rem 0.85rem;
+        border-radius: 16px;
+    }
+
+    .reflection-word-meter {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.4rem;
+    }
+
+    /* 8. FLOATING STICKY THUMB STEPPER NAV */
+    .clay-quiz-bottom-nav {
+        position: sticky;
+        bottom: 0.65rem;
+        z-index: 35;
+        padding: 0.6rem 0.75rem;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(12px);
+        box-shadow:
+            0 8px 24px rgba(15, 23, 42, 0.16),
+            0 2px 6px rgba(15, 23, 42, 0.08);
+        gap: 0.45rem;
+        border-width: 2.5px;
+        border-bottom-width: 5px;
+    }
+
+    .clay-step-nav-btn {
+        padding: 0.55rem 0.85rem;
+        font-size: 0.82rem;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 13px;
+    }
+
+    .step-dots-row {
+        gap: 0.3rem;
+        overflow-x: auto;
+        max-width: 135px;
+        flex-wrap: nowrap;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .clay-step-dot {
+        width: 30px;
+        height: 30px;
+        font-size: 0.76rem;
+        flex-shrink: 0;
+        border-radius: 8px;
+    }
+
+    /* 9. COMPLETION MODAL */
+    .clay-summary-modal-card {
+        padding: 1.5rem 1.15rem;
+        border-radius: 24px;
+        max-height: 88vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .summary-star-badge {
+        font-size: 2.1rem;
+    }
+
+    .summary-modal-title {
+        font-size: 1.25rem;
+        margin-bottom: 0.85rem;
+    }
+
+    .summary-metrics-grid {
+        gap: 0.45rem;
+        margin-bottom: 1.2rem;
+    }
+
+    .summary-metric-box {
+        padding: 0.65rem 0.4rem;
+        border-radius: 13px;
+    }
+
+    .metric-val {
+        font-size: 1rem;
+    }
+
+    .summary-modal-actions {
+        flex-direction: column;
+        gap: 0.6rem;
+    }
+
+    .clay-summary-primary-btn,
+    .clay-summary-secondary-btn {
+        width: 100%;
+        padding: 0.8rem 1rem;
+        font-size: 0.92rem;
+        min-height: 46px;
+    }
+}
+
+/* ==========================================================================
+   EXTRA COMPACT SCREENS (<= 380px, e.g. iPhone SE / Mini)
+   ========================================================================== */
+@media (max-width: 380px) {
+    .quiz-hud-main-title {
+        max-width: 120px;
+    }
+
+    .clay-step-nav-btn {
+        padding: 0.5rem 0.65rem;
+        font-size: 0.78rem;
+    }
+
+    .step-dots-row {
+        max-width: 90px;
+    }
+
+    .conflict-swatch-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {

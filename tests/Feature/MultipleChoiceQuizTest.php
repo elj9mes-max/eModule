@@ -344,7 +344,7 @@ test('a teacher can view the multiple choice quiz detail inspector', function ()
         ->get(route('teachers.quizzes.multiple-choice.show', ['module' => $module->slug, 'quiz' => $quiz->slug]))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('teachers/view/quizes/MultipleChoice')
+            ->component('teachers/view/quizes/QuizResult')
             ->where('quiz.title', 'Inspector Quiz Test')
             ->where('quiz.sort_order', 2)
             ->has('quiz.questions', 1)
@@ -400,7 +400,7 @@ test('a teacher can create a multiple choice quiz with multiple context scenario
         ->get(route('teachers.quizzes.multiple-choice.show', ['module' => $module->slug, 'quiz' => $quiz->slug]))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('teachers/view/quizes/MultipleChoice')
+            ->component('teachers/view/quizes/QuizResult')
             ->has('quiz.contexts', 2)
             ->where('quiz.contexts.0.scenario', 'Scenario 1: The village elders gathered by the riverbank to discuss the upcoming monsoon.')
             ->where('quiz.contexts.1.scenario', 'Scenario 2: The young volunteers gathered bamboo poles and vines to reinforce the community bridge.')

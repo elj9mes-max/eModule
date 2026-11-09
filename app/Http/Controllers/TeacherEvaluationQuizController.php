@@ -128,7 +128,7 @@ class TeacherEvaluationQuizController extends Controller
                     foreach ($itemData['options'] as $oIdx => $optData) {
                         $item->options()->create([
                             'option_text' => trim($optData['option_text']),
-                            'stance_value' => ! empty($optData['stance_value']) ? trim($optData['stance_value']) : null,
+                            'stance_value' => ! empty($optData['stance_value']) ? trim($optData['stance_value']) : trim($optData['option_text']),
                             'is_correct' => (bool) ($optData['is_correct'] ?? true),
                             'sort_order' => $oIdx + 1,
                         ]);

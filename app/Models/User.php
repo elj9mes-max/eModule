@@ -67,4 +67,24 @@ class User extends Authenticatable
     {
         return $this->role === UserRole::Student;
     }
+
+    /**
+     * Get all quiz attempts submitted by this user.
+     *
+     * @return HasMany<QuizAttempt, $this>
+     */
+    public function quizAttempts(): HasMany
+    {
+        return $this->hasMany(QuizAttempt::class)->latest('id');
+    }
+
+    /**
+     * Get all lecture completions by this student.
+     *
+     * @return HasMany<StudentLectureCompletion, $this>
+     */
+    public function lectureCompletions(): HasMany
+    {
+        return $this->hasMany(StudentLectureCompletion::class)->latest('id');
+    }
 }

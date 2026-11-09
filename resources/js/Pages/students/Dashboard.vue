@@ -240,57 +240,7 @@ const launchModuleQuest = (mod) => {
                 </div>
             </div>
 
-            <!-- 2. LEVEL 2 HIERARCHY: WORLD MAP HEADER & INTERACTIVE 3D CLAY FILTER PILLS -->
-            <div class="clay-controls-section">
-                <div class="controls-header-row">
-                    <div class="controls-title-group">
-                        <span class="clay-map-badge" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" class="map-badge-svg">
-                                <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" />
-                                <line x1="9" y1="3" x2="9" y2="18" stroke="currentColor" stroke-width="2.4" />
-                                <line x1="15" y1="6" x2="15" y2="21" stroke="currentColor" stroke-width="2.4" />
-                            </svg>
-                        </span>
-                        <div>
-                            <h2 class="controls-title">Story Worlds</h2>
-                            <p class="controls-subtitle">Tap a 3D island card to begin your quest</p>
-                        </div>
-                    </div>
 
-                    <span class="clay-world-counter">
-                        {{ filteredModules.length }} {{ filteredModules.length === 1 ? 'REALM' : 'REALMS' }}
-                    </span>
-                </div>
-
-                <!-- Scrollable 3D Candy Clay Biome Filter Pills -->
-                <div class="clay-filter-strip" role="tablist" aria-label="Filter story worlds by biome">
-                    <button
-                        v-for="biome in biomeFilters"
-                        :key="biome.id"
-                        type="button"
-                        role="tab"
-                        :aria-selected="selectedBiome === biome.id"
-                        class="clay-filter-pill"
-                        :class="{ 'is-active': selectedBiome === biome.id }"
-                        :style="
-                            selectedBiome === biome.id
-                                ? {
-                                      background: biome.activeBg,
-                                      '--pill-ledge': biome.activeLedge,
-                                  }
-                                : {}
-                        "
-                        @click="selectedBiome = biome.id"
-                    >
-                        <span
-                            class="filter-biome-dot"
-                            :style="{ backgroundColor: selectedBiome === biome.id ? '#FFFFFF' : biome.dot }"
-                            aria-hidden="true"
-                        ></span>
-                        <span>{{ biome.label }}</span>
-                    </button>
-                </div>
-            </div>
 
             <!-- 3. LEVEL 3 HIERARCHY: 2-COLUMN 3D CARTOON CLAY REALM CARDS GRID -->
             <div v-if="filteredModules.length > 0" class="clay-realms-grid">

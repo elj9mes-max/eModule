@@ -15,6 +15,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    pending_grading_count: {
+        type: Number,
+        default: 0,
+    },
 });
 
 const handleLogout = () => {
@@ -23,6 +27,10 @@ const handleLogout = () => {
 
 const goToStudents = () => {
     router.visit('/teachers/students');
+};
+
+const goToGrading = () => {
+    router.visit('/teachers/grading');
 };
 
 const goToCreateModule = () => {
@@ -116,6 +124,14 @@ const openModule = (mod) => {
                         <span class="pill-lbl">STUDENTS</span>
                     </div>
                 </div>
+
+                <div class="inventory-pill grading-pill" :class="{ 'has-pending': pending_grading_count > 0 }" title="Grade Student Submissions" @click="goToGrading" style="cursor: pointer;">
+                    <span class="pill-icon grading-icon">📝</span>
+                    <div class="pill-data">
+                        <span class="pill-num">{{ pending_grading_count }}</span>
+                        <span class="pill-lbl">GRADING</span>
+                    </div>
+                </div>
             </div>
         </header>
 
@@ -129,9 +145,9 @@ const openModule = (mod) => {
                         <p class="panel-sub">Select a module to manage lectures, multimedia lessons, reading quests, and milestones.</p>
                     </div>
                     <div class="header-buttons">
-                        <!-- <button type="button" class="btn-3d btn-ranking-action" @click="goToStudents">
-                            <span>🏆 VIEW STUDENT RANKINGS</span>
-                        </button> -->
+                        <button type="button" class="btn-3d btn-grade-action" @click="goToGrading">
+                            <span>📝 GRADE SUBMISSIONS <strong v-if="pending_grading_count > 0" class="btn-pending-tag">({{ pending_grading_count }})</strong></span>
+                        </button>
                         <button type="button" class="btn-3d btn-primary-action" @click="goToCreateModule">
                             <span>✨ + ADD NEW MODULE</span>
                         </button>
@@ -894,6 +910,43 @@ const openModule = (mod) => {
         0 10px 18px rgba(35, 149, 235, 0.4),
         inset 2px 2px 4px rgba(255, 255, 255, 0.65),
         inset -2px -2px 5px rgba(14, 82, 135, 0.45);
+}
+
+.btn-grade-action {
+    background: linear-gradient(145deg, #F59E0B 0%, #D97706 100%);
+    color: #FFFFFF;
+    padding: 0.6rem 1.15rem;
+    font-size: 0.82rem;
+    border-color: #B45309;
+    box-shadow:
+        0 4px 0 #92400E,
+        0 6px 14px rgba(245, 158, 11, 0.35),
+        inset 2px 2px 4px rgba(255, 255, 255, 0.65),
+        inset -2px -2px 5px rgba(146, 64, 14, 0.4);
+}
+
+.btn-grade-action:hover {
+    transform: translateY(-2px);
+    box-shadow:
+        0 6px 0 #92400E,
+        0 10px 18px rgba(245, 158, 11, 0.45),
+        inset 2px 2px 4px rgba(255, 255, 255, 0.75),
+        inset -2px -2px 5px rgba(146, 64, 14, 0.4);
+}
+
+.btn-pending-tag {
+    background: #DC2626;
+    color: #FFF;
+    border-radius: 9999px;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.75rem;
+    margin-left: 0.25rem;
+}
+
+.grading-pill.has-pending {
+    border-color: #F59E0B;
+    background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+    box-shadow: 0 4px 0 #D97706, 0 6px 12px rgba(245, 158, 11, 0.3);
 }
 
 /* Kingdoms Grid: Fixed 2 Modules Per Row with Generous Spacing for 3D Overlaps */

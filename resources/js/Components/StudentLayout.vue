@@ -1,6 +1,9 @@
 <script setup>
 import { router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import { useSound } from '@/Services/soundManager';
+
+const { playPop, playBoing, playSparkle, playClick, playBonus } = useSound();
 
 const props = defineProps({
     user: {
@@ -92,6 +95,7 @@ const currentAvatar = computed(() => avatarProfiles[selectedAvatarIndex.value]);
 const cycleAvatar = () => {
     selectedAvatarIndex.value = (selectedAvatarIndex.value + 1) % avatarProfiles.length;
     isAvatarBouncing.value = true;
+    playBoing();
     window.setTimeout(() => {
         isAvatarBouncing.value = false;
     }, 320);
@@ -116,14 +120,27 @@ const formattedXp = computed(() => Number(props.xp || 0).toLocaleString());
 const formattedMaxXp = computed(() => Number(props.maxXp || 1000).toLocaleString());
 
 const goToModules = () => {
+    playClick();
     router.visit('/students/dashboard');
 };
 
+const goToRanking = () => {
+    playClick();
+    router.visit('/students/ranking');
+};
+
+const goToSettings = () => {
+    playClick();
+    router.visit('/students/settings');
+};
+
 const goToWelcome = () => {
+    playClick();
     router.visit('/students/welcome');
 };
 
 const handleLogout = () => {
+    playClick();
     router.post('/logout');
 };
 </script>
@@ -296,10 +313,15 @@ const handleLogout = () => {
                         </div>
                     </div>
 
-                    <!-- Right: 3D Candy Clay Currency Capsules (Points & Stars) -->
-                    <div class="hud-currency-group" role="group" aria-label="Student Points and Stars Earned">
+                    <!-- Right: 3D Candy Clay Currency Capsules (Points & Stars) + Audio Controller -->
+                    <div class="hud-currency-group" role="group" aria-label="Student Points, Stars and Sound Settings">
                         <!-- Emerald Gem Points Capsule -->
-                        <div class="clay-currency-pill clay-points-pill" title="Total Points Earned">
+                        <div
+                            class="clay-currency-pill clay-points-pill"
+                            title="Total Points Earned"
+                            @mouseenter="playBonus"
+                            @click="playBonus"
+                        >
                             <span class="currency-icon-badge points-badge" aria-hidden="true">
                                 <svg viewBox="0 0 28 28" class="currency-svg">
                                     <defs>
@@ -320,7 +342,12 @@ const handleLogout = () => {
                         </div>
 
                         <!-- Golden Star Power Capsule -->
-                        <div class="clay-currency-pill clay-stars-pill" title="Total Stars Earned">
+                        <div
+                            class="clay-currency-pill clay-stars-pill"
+                            title="Total Stars Earned"
+                            @mouseenter="playSparkle"
+                            @click="playSparkle"
+                        >
                             <span class="currency-icon-badge stars-badge" aria-hidden="true">
                                 <svg viewBox="0 0 28 28" class="currency-svg">
                                     <defs>
@@ -387,6 +414,7 @@ const handleLogout = () => {
                 class="clay-dock-btn"
                 :class="{ 'is-active': activeNav === 'modules' }"
                 :aria-current="activeNav === 'modules' ? 'page' : undefined"
+                @mouseenter="playPop(1.1)"
                 @click="goToModules"
             >
                 <span class="clay-dock-pill pill-realms" aria-hidden="true">
@@ -402,33 +430,45 @@ const handleLogout = () => {
             <button
                 type="button"
                 class="clay-dock-btn"
-                :class="{ 'is-active': activeNav === 'welcome' }"
-                :aria-current="activeNav === 'welcome' ? 'page' : undefined"
-                @click="goToWelcome"
+                :class="{ 'is-active': activeNav === 'ranking' }"
+                :aria-current="activeNav === 'ranking' ? 'page' : undefined"
+                aria-label="View Leaderboard and Explorer Rankings"
+                @mouseenter="playPop(1.1)"
+                @click="goToRanking"
             >
-                <span class="clay-dock-pill pill-portal" aria-hidden="true">
+                <span class="clay-dock-pill pill-ranking" aria-hidden="true">
                     <svg viewBox="0 0 28 28" class="dock-svg-icon">
-                        <circle cx="14" cy="14" r="10" fill="none" stroke="currentColor" stroke-width="2.5" />
-                        <polygon points="17.5,10.5 15.2,15.2 10.5,17.5 12.8,12.8" fill="currentColor" />
-                        <circle cx="14" cy="14" r="1.6" fill="#FFFFFF" />
+                        <path d="M7 6h14v7a7 7 0 0 1-14 0V6z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" />
+                        <path d="M7 9H4a2 2 0 0 0-2 2v1a4 4 0 0 0 4 4h1M21 9h3a2 2 0 0 1 2 2v1a4 4 0 0 1-4 4h-1" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
+                        <path d="M14 20v4M9 24h10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
+                        <circle cx="14" cy="11" r="2.2" fill="currentColor" />
                     </svg>
                 </span>
-                <span class="clay-dock-label">Portal</span>
+                <span class="clay-dock-label">Ranking</span>
             </button>
 
             <button
                 type="button"
                 class="clay-dock-btn"
-                aria-label="Switch Companion Avatar"
-                @click="cycleAvatar"
+                :class="{ 'is-active': activeNav === 'settings' }"
+                :aria-current="activeNav === 'settings' ? 'page' : undefined"
+                aria-label="View Student Audio and Account Settings"
+                @mouseenter="playPop(1.1)"
+                @click="goToSettings"
             >
-                <span class="clay-dock-pill pill-hero" aria-hidden="true">
+                <span class="clay-dock-pill pill-settings" aria-hidden="true">
                     <svg viewBox="0 0 28 28" class="dock-svg-icon">
-                        <path d="M14 3L22 6.5V13.5C22 18.8 18.6 23.3 14 25C9.4 23.3 6 18.8 6 13.5V6.5L14 3Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" />
-                        <path d="M14 8.5L15.4 12.1L19 13.5L15.4 14.9L14 18.5L12.6 14.9L9 13.5L12.6 12.1L14 8.5Z" fill="currentColor" />
+                        <circle cx="14" cy="14" r="4.5" fill="none" stroke="currentColor" stroke-width="2.4" />
+                        <path
+                            d="M14 3.5v2.2M14 22.3v2.2M3.5 14h2.2M22.3 14h2.2M6.6 6.6l1.6 1.6M19.8 19.8l1.6 1.6M6.6 21.4l1.6-1.6M19.8 8.2l1.6-1.6"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2.5"
+                            stroke-linecap="round"
+                        />
                     </svg>
                 </span>
-                <span class="clay-dock-label">Hero</span>
+                <span class="clay-dock-label">Settings</span>
             </button>
 
             <span class="clay-dock-divider" aria-hidden="true"></span>
@@ -437,6 +477,7 @@ const handleLogout = () => {
                 type="button"
                 class="clay-dock-btn dock-exit-btn"
                 aria-label="Log out of student portal"
+                @mouseenter="playPop(1.1)"
                 @click="handleLogout"
             >
                 <span class="clay-dock-pill pill-exit" aria-hidden="true">
@@ -794,6 +835,12 @@ const handleLogout = () => {
     padding: 0.25rem 0.55rem 0.25rem 0.28rem;
     border-radius: 18px;
     border: 2px solid #FFFFFF;
+    cursor: pointer;
+    transition: transform 0.18s var(--spring-bounce), box-shadow 0.18s ease;
+}
+
+.clay-currency-pill:hover {
+    transform: translateY(-2px) scale(1.04);
 }
 
 .clay-points-pill {
@@ -1009,12 +1056,20 @@ const handleLogout = () => {
     color: #2563EB;
 }
 
-.pill-portal {
-    color: #0D9488;
+.pill-ranking {
+    color: #D97706;
 }
 
-.pill-hero {
+.pill-settings {
     color: #7C3AED;
+}
+
+.clay-dock-btn:hover .pill-ranking {
+    color: #B45309;
+}
+
+.clay-dock-btn:hover .pill-settings {
+    color: #6D28D9;
 }
 
 .pill-exit {

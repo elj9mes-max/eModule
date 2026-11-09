@@ -1,6 +1,9 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { useSound } from '@/Services/soundManager';
+
+const { duckBgm } = useSound();
 
 const props = defineProps({
     user: {
@@ -277,6 +280,10 @@ const isAnyNarrationActive = computed(() => {
     return isNarrationPlaying.value || isSpeechFallbackPlaying.value;
 });
 
+watch(isAnyNarrationActive, (active) => {
+    duckBgm(active);
+});
+
 const cycleNarrationSpeed = () => {
     const idx = speedOptions.indexOf(narrationSpeed.value);
     const nextRate = speedOptions[(idx + 1) % speedOptions.length];
@@ -491,6 +498,17 @@ const returnToExpeditionMap = () => {
 const completeStoryLecture = () => {
     resetAudioPlayer();
     showCompletionCelebration.value = true;
+
+    if (props.module?.slug && activeLecture.value?.slug) {
+        fetch(`/students/modules/${props.module.slug}/lectures/${activeLecture.value.slug}/complete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            },
+        }).catch((err) => console.error('Lecture completion error:', err));
+    }
 };
 
 const handleKeydown = (event) => {
@@ -594,12 +612,7 @@ onBeforeUnmount(() => {
                             </div>
                             <span class="hud-progress-pct">{{ readingProgressPercent }}%</span>
                         </div>
-                    </div>
-
-                    <!-- ZONE 3 (RIGHT): EMBEDDED AUDIO NARRATION PLAY BUTTON + TEXT ZOOM + XP -->
-                    <div class="hud-zone-right">
-                        <!-- Audio Narration Control Pod inside Sticky HUD -->
-                        <div
+                                                <div
                             class="clay-hud-narration-pod"
                             :class="{ 'is-playing': isAnyNarrationActive }"
                         >
@@ -634,7 +647,7 @@ onBeforeUnmount(() => {
                                 </svg>
 
                                 <span class="narration-btn-label">
-                                    {{ isAnyNarrationActive ? 'Pause Reading' : 'Read Page Aloud' }}
+                                    {{ isAnyNarrationActive ? 'Pause Reading' : 'Play Reading' }}
                                 </span>
 
                                 <span v-if="isAnyNarrationActive" class="hud-soundwave" aria-hidden="true">
@@ -651,6 +664,12 @@ onBeforeUnmount(() => {
                                 {{ narrationSpeed }}x
                             </button>
                         </div>
+                    </div>
+
+                    <!-- ZONE 3 (RIGHT): EMBEDDED AUDIO NARRATION PLAY BUTTON + TEXT ZOOM + XP -->
+                    <div class="hud-zone-right">
+                        <!-- Audio Narration Control Pod inside Sticky HUD -->
+
 
                         <!-- Text Zoom Pill -->
                         <button

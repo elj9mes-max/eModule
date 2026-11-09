@@ -20,9 +20,12 @@ class EvaluationItemOptionFactory extends Factory
      */
     public function definition(): array
     {
+        $text = fake()->words(3, true);
+
         return [
             'item_id' => EvaluationItem::factory(),
-            'option_text' => fake()->words(3, true),
+            'option_text' => $text,
+            'stance_value' => $text,
             'is_correct' => true,
             'sort_order' => 1,
         ];

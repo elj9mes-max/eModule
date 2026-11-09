@@ -1,6 +1,16 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { router } from '@inertiajs/vue3';
+import { useSound } from '@/Services/soundManager';
+
+const {
+    playPop,
+    playSparkle,
+    playSuccess,
+    playBonus,
+    playIncorrect,
+    playClick,
+} = useSound();
 
 const props = defineProps({
     initialStep: {
@@ -264,12 +274,14 @@ const handleSelectStep = (step) => {
         triggerLockShake(step.id);
         return;
     }
+    playPop(1.15);
     selectedStep.value = step;
     showModal.value = true;
     emit('step-selected', step);
 };
 
 const triggerLockShake = (stepId) => {
+    playIncorrect();
     const el = document.getElementById(`node-button-${stepId}`);
     if (el) {
         el.classList.add('shake-locked');
@@ -285,6 +297,7 @@ const advanceToNextStep = () => {
         }
         currentStep.value += 1;
         if (currentStep.value <= totalLecturesCount.value) {
+            playSparkle();
             selectedStep.value = steps.value[currentStep.value - 1];
         } else {
             triggerFinaleCelebration();
@@ -294,6 +307,7 @@ const advanceToNextStep = () => {
 
 const previousStep = () => {
     if (currentStep.value > 1) {
+        playClick();
         currentStep.value -= 1;
         selectedStep.value = steps.value[currentStep.value - 1];
         chestOpened.value = false;
@@ -302,6 +316,7 @@ const previousStep = () => {
 };
 
 const resetJourney = () => {
+    playClick();
     currentStep.value = 1;
     selectedStep.value = steps.value[0] || null;
     chestOpened.value = false;
@@ -313,6 +328,8 @@ const triggerFinaleCelebration = () => {
     chestOpened.value = true;
     showConfetti.value = true;
     isCelebrationVisible.value = true;
+    playSuccess();
+    playSparkle();
     emit('journey-completed');
     setTimeout(() => {
         showConfetti.value = false;
@@ -324,12 +341,16 @@ const toggleChest = () => {
     if (currentStep.value > totalLecturesCount.value) {
         chestOpened.value = !chestOpened.value;
         if (chestOpened.value) {
+            playBonus();
             showConfetti.value = true;
             setTimeout(() => {
                 showConfetti.value = false;
             }, 5000);
+        } else {
+            playPop(0.9);
         }
     } else {
+        playIncorrect();
         lockedRemainingMilestones.value = Math.max(1, (totalLecturesCount.value + 1) - currentStep.value);
         showLockedChestModal.value = true;
     }
@@ -350,7 +371,7 @@ const goToManageContent = (step) => {
 
 const goToViewQuiz = (step) => {
     if (props.module?.slug && step?.slug) {
-        router.visit(`/teachers/modules/${props.module.slug}/quizzes/multiple-choice/${step.slug}`);
+        router.visit(`/teachers/modules/${props.module.slug}/quizzes/${step.slug}/results`);
     }
 };
 
@@ -766,7 +787,7 @@ onMounted(() => {
                                     class="btn-bubble-manage-content btn-bubble-quiz"
                                     @click.stop="goToViewQuiz(step)"
                                 >
-                                    <span>🎯 View Quiz ➔</span>
+                                    <span>🎯 View Quiz Result ➔</span>
                                 </button>
                                 <button
                                     v-else
@@ -927,7 +948,7 @@ onMounted(() => {
                             class="modal-view-quiz-btn"
                             @click="() => { showModal = false; goToViewQuiz(selectedStep); }"
                         >
-                            <span>🎯 Open Quiz ➔</span>
+                            <span>🎯 View Quiz Result ➔</span>
                         </button>
 
                         <button

@@ -37,212 +37,23 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    completedQuizIds: {
+        type: Array,
+        default: () => [],
+    },
+    pendingQuizIds: {
+        type: Array,
+        default: () => [],
+    },
+    completedLectureIds: {
+        type: Array,
+        default: () => [],
+    },
     initialStep: {
         type: Number,
-        default: 2,
+        default: null,
     },
 });
-
-/* ==========================================================================
-   FALLBACK DEMO EXPEDITION DATA (WHEN MODULE HAS NO DB ITEMS YET)
-   ========================================================================== */
-const fallbackLectures = [
-    {
-        id: 101,
-        title: 'The Lantern of Whispering Pines',
-        slug: 'lantern-of-whispering-pines',
-        description: 'Discover how Mira decodes the glowing runes carved into the ancient cedar trees.',
-        body: 'Deep within the Emerald Woods, the tallest pine trees hummed with forgotten stories. Young explorer Mira held up her brass lantern, watching its warm amber beam awaken silver letters along the bark.\n\n"Every story has a heartbeat," whispered the wind through the canopy. By reading carefully for context clues, Mira pieced together the map to the Timber Crossing before twilight fell.',
-        estimated_duration_minutes: 6,
-        xp_reward: 120,
-        sort_order: 1,
-        contents_count: 3,
-        contents: [
-            {
-                id: 1,
-                type: 'text',
-                layout_style: 'interactive_story',
-                title: 'Chapter 1: The Glowing Bark',
-                content:
-                    'Deep within the Emerald Woods, the <span class="vocab-gloss-token" tabindex="0" role="button" data-vocab-word="ancient" data-vocab-pronunciation="AYN-shunt" data-vocab-meaning="Belonging to the very distant past; hundreds of years old." style="background:linear-gradient(180deg, #FEF9C3 0%, #FDE047 100%);color:#78350F;font-weight:900;padding:0.08rem 0.42rem;border-radius:8px;border-bottom:3px solid #D97706;cursor:pointer;display:inline-block;">ancient</span> pine trees hummed with forgotten stories. Young explorer Mira held up her brass lantern, watching its <span class="vocab-gloss-token" tabindex="0" role="button" data-vocab-word="luminous" data-vocab-pronunciation="LOO-muh-nus" data-vocab-meaning="Radiating or reflecting bright, warm light in the dark." style="background:linear-gradient(180deg, #FEF9C3 0%, #FDE047 100%);color:#78350F;font-weight:900;padding:0.08rem 0.42rem;border-radius:8px;border-bottom:3px solid #D97706;cursor:pointer;display:inline-block;">luminous</span> amber beam awaken silver letters along the bark.',
-                vocabulary_glosses: [
-                    {
-                        word: 'ancient',
-                        pronunciation: 'AYN-shunt',
-                        meaning: 'Belonging to the very distant past; hundreds of years old.',
-                    },
-                    {
-                        word: 'luminous',
-                        pronunciation: 'LOO-muh-nus',
-                        meaning: 'Radiating or reflecting bright, warm light in the dark.',
-                    },
-                ],
-            },
-            {
-                id: 2,
-                type: 'text',
-                layout_style: 'interactive_story',
-                title: 'Key Reading Skill: Context Clues',
-                content:
-                    'When you encounter an unfamiliar word in a passage, look at the surrounding sentences for <span class="vocab-gloss-token" tabindex="0" role="button" data-vocab-word="context clues" data-vocab-pronunciation="KON-tekst klooz" data-vocab-meaning="Hints found within a sentence or paragraph that help a reader figure out the meaning of an unfamiliar word." style="background:linear-gradient(180deg, #FEF9C3 0%, #FDE047 100%);color:#78350F;font-weight:900;padding:0.08rem 0.42rem;border-radius:8px;border-bottom:3px solid #D97706;cursor:pointer;display:inline-block;">context clues</span> about its meaning—just like Mira used her lantern to illuminate the hidden trail markers.',
-                vocabulary_glosses: [
-                    {
-                        word: 'context clues',
-                        pronunciation: 'KON-tekst klooz',
-                        meaning: 'Hints found within a sentence or paragraph that help a reader figure out the meaning of an unfamiliar word.',
-                    },
-                ],
-            },
-        ],
-    },
-    {
-        id: 102,
-        title: 'Echoes Across the Timber Bridge',
-        slug: 'echoes-across-timber-bridge',
-        description: 'Learn how character motivations drive the plot forward during a canyon storm.',
-        body: 'A rushing turquoise river separated the forest from the Crystal Cavern. The rope bridge swayed gently in the breeze as Leo stepped onto the first oak plank.\n\nThough his knees trembled, Leo remembered his promise to deliver the library scroll to the village below. Courage is not the absence of fear—it is choosing to move forward when the goal matters most.',
-        estimated_duration_minutes: 8,
-        xp_reward: 150,
-        sort_order: 3,
-        contents_count: 2,
-        contents: [
-            {
-                id: 3,
-                type: 'text',
-                title: 'Chapter 2: The Swaying Crossing',
-                content:
-                    'A rushing turquoise river separated the forest from the Crystal Cavern. The rope bridge swayed gently in the breeze as Leo stepped onto the first oak plank.',
-            },
-            {
-                id: 4,
-                type: 'text',
-                title: 'Key Reading Skill: Character Motivation',
-                content:
-                    'Ask yourself WHY a character makes a tough choice. Leo crossed the swaying bridge because his promise to the village mattered more than his fear.',
-            },
-        ],
-    },
-    {
-        id: 103,
-        title: 'Secrets of the Starlight Lagoon',
-        slug: 'secrets-of-starlight-lagoon',
-        description: 'Uncover the main idea and supporting details hidden beneath the glowing tide pools.',
-        body: 'At the edge of Coral Lagoon, bioluminescent waves painted the shoreline in electric blue. Each tide pool held a miniature ecosystem where hermit crabs guarded pearl-white shells.\n\nBy observing the patterns of the tide, the island chroniclers learned how every small detail supports the harmony of the entire ocean realm.',
-        estimated_duration_minutes: 7,
-        xp_reward: 160,
-        sort_order: 5,
-        contents_count: 2,
-        contents: [
-            {
-                id: 5,
-                type: 'text',
-                title: 'Chapter 3: The Glowing Tide Pools',
-                content:
-                    'At the edge of Coral Lagoon, bioluminescent waves painted the shoreline in electric blue. Each tide pool held a miniature ecosystem where hermit crabs guarded pearl-white shells.',
-            },
-        ],
-    },
-];
-
-const fallbackQuizzes = [
-    {
-        id: 201,
-        title: 'Forest Rune Decoder Challenge',
-        slug: 'forest-rune-decoder-challenge',
-        type: 'multiple_choice',
-        description: 'Test your grasp of context clues and story setting to unlock the Timber Crossing!',
-        reading_passage:
-            'Mira held her lantern close to the mossy stone. The inscription was "luminous," casting a bright golden glow that lit up the dark forest path around her boots.',
-        xp_reward: 180,
-        passing_percentage: 80,
-        sort_order: 2,
-        questions_count: 2,
-        questions: [
-            {
-                id: 1001,
-                question_text: 'Based on the passage, what does the word "luminous" most nearly mean?',
-                hint: 'Look at what the inscription does to the dark forest path.',
-                options: [
-                    { id: 1, option_text: 'Shining or glowing with light', is_correct: true },
-                    { id: 2, option_text: 'Heavy and covered in moss', is_correct: false },
-                    { id: 3, option_text: 'Silent and invisible at night', is_correct: false },
-                ],
-            },
-            {
-                id: 1002,
-                question_text: 'Which detail from the text best helps you understand the meaning of "luminous"?',
-                hint: 'Find the phrase that describes the visual effect.',
-                options: [
-                    { id: 4, option_text: '"casting a bright golden glow"', is_correct: true },
-                    { id: 5, option_text: '"held her lantern close"', is_correct: false },
-                    { id: 6, option_text: '"around her boots"', is_correct: false },
-                ],
-            },
-        ],
-    },
-    {
-        id: 202,
-        title: 'Crystal Cavern Conflict Trial',
-        slug: 'crystal-cavern-conflict-trial',
-        type: 'multiple_choice',
-        description: 'Identify character motivation and story conflict to light the cavern crystals!',
-        reading_passage:
-            'Although the storm winds howled across the canyon, Leo gripped the rope handrail tightly. The villagers on the far ridge needed the medicine scroll before sunrise.',
-        xp_reward: 200,
-        passing_percentage: 80,
-        sort_order: 4,
-        questions_count: 1,
-        questions: [
-            {
-                id: 1003,
-                question_text: 'What motivates Leo to cross the bridge during the storm?',
-                hint: 'Think about who is waiting on the far ridge.',
-                options: [
-                    { id: 7, option_text: 'Delivering the urgent scroll to the villagers before sunrise', is_correct: true },
-                    { id: 8, option_text: 'Searching for shiny crystals inside the river', is_correct: false },
-                    { id: 9, option_text: 'Testing if the oak planks are strong enough', is_correct: false },
-                ],
-            },
-        ],
-    },
-    {
-        id: 203,
-        title: 'Guardian Boss Finale: Elder Oak',
-        slug: 'guardian-boss-finale-elder-oak',
-        type: 'multiple_choice',
-        description: 'Prove your mastery of the entire module to unlock the Grand Treasure Vault!',
-        reading_passage:
-            'Every island in the Whispering Woods taught the explorers a vital lesson: observe context clues closely, understand why characters act, and connect small details to the big theme.',
-        xp_reward: 250,
-        passing_percentage: 85,
-        sort_order: 6,
-        questions_count: 1,
-        questions: [
-            {
-                id: 1004,
-                question_text: 'What is the central theme of the Whispering Woods expedition?',
-                hint: 'Combine the lessons from all three islands.',
-                options: [
-                    {
-                        id: 10,
-                        option_text: 'Careful reading and courage help explorers unlock deeper meaning in every story',
-                        is_correct: true,
-                    },
-                    {
-                        id: 11,
-                        option_text: 'Fast runners always reach the treasure chest first',
-                        is_correct: false,
-                    },
-                    {
-                        id: 12,
-                        option_text: 'Lanterns only work near pine trees',
-                        is_correct: false,
-                    },
-                ],
-            },
-        ],
-    },
-];
 
 /* ==========================================================================
    BIOME ISLAND THEMES & STORYBOOK DIORAMA ARTWORK
@@ -332,12 +143,8 @@ const formatQuizTypeLabel = (type) => {
 /* ==========================================================================
    MILESTONE STREAM & STATE
    ========================================================================== */
-const useDemoStream = computed(() => {
-    return (props.lectures?.length || 0) === 0 && (props.quizzes?.length || 0) === 0;
-});
-
-const rawLectures = computed(() => (useDemoStream.value ? fallbackLectures : props.lectures));
-const rawQuizzes = computed(() => (useDemoStream.value ? fallbackQuizzes : props.quizzes));
+const rawLectures = computed(() => props.lectures || []);
+const rawQuizzes = computed(() => props.quizzes || []);
 
 const milestones = computed(() => {
     const lectureItems = (rawLectures.value || []).map((l) => ({
@@ -395,9 +202,32 @@ const milestones = computed(() => {
 });
 
 const totalStepsCount = computed(() => milestones.value.length);
-const currentStep = ref(Math.max(1, props.initialStep || 2));
+
+// Compute default initial step based on actual database completions
+const computeDbUnlockedStep = () => {
+    if (props.initialStep !== null && props.initialStep !== undefined) {
+        return Number(props.initialStep);
+    }
+    const ms = milestones.value;
+    if (ms.length === 0) {
+        return 1;
+    }
+    // Find the first milestone that is NOT completed
+    for (let i = 0; i < ms.length; i++) {
+        const item = ms[i];
+        const isCompleted = item.itemType === 'quiz'
+            ? (props.completedQuizIds || []).includes(item.id)
+            : (props.completedLectureIds || []).includes(item.id);
+        if (!isCompleted) {
+            return i + 1; // Step is 1-indexed
+        }
+    }
+    // If all completed, currentStep is past the last step
+    return ms.length + 1;
+};
+
+const currentStep = ref(computeDbUnlockedStep());
 const activeFilter = ref('all'); // 'all' | 'lecture' | 'quiz'
-const selectedNode = ref(null);
 const shakingStep = ref(null);
 const lockedTooltipStep = ref(null);
 const isChestOpen = ref(false);
@@ -407,18 +237,12 @@ const showQuestCelebrationToast = ref(false);
 const lastCompletedStepTitle = ref('');
 const lastCompletedStepXp = ref(0);
 
-// Interactive Quiz Answers inside the Mobile Bottom Sheet
-const selectedQuizAnswers = ref({});
-const submittedQuizQuestions = ref({});
-
 watch(
-    () => milestones.value.length,
-    (len) => {
-        if (len > 0 && currentStep.value > len + 1) {
-            currentStep.value = Math.min(props.initialStep || 1, len);
-        }
+    () => [milestones.value.length, props.completedQuizIds, props.completedLectureIds],
+    () => {
+        currentStep.value = computeDbUnlockedStep();
     },
-    { immediate: true },
+    { immediate: true, deep: true },
 );
 
 const isAllCompleted = computed(() => {
@@ -508,13 +332,13 @@ const nodePositions = computed(() => {
 
 const svgHeight = computed(() => {
     if (milestones.value.length === 0) {
-        return 480;
+        return 580;
     }
 
-    return topStartOffset + (milestones.value.length - 1) * rowPitch + 340;
+    return topStartOffset + (milestones.value.length - 1) * rowPitch + 480;
 });
 
-const finaleY = computed(() => svgHeight.value - 135);
+const finaleY = computed(() => svgHeight.value - 145);
 
 const segmentColors = ['#10B981', '#F59E0B', '#A855F7', '#0EA5E9', '#EC4899', '#6366F1'];
 
@@ -609,51 +433,12 @@ const handleNodeInteraction = (node) => {
         return;
     }
 
-    selectedNode.value = node;
-};
-
-const closeStepModal = () => {
-    selectedNode.value = null;
-    activeStudentVocabGloss.value = null;
-};
-
-const activeStudentVocabGloss = ref(null);
-
-const handleStoryPassageInteraction = (event) => {
-    const token = event.target?.closest?.('.vocab-gloss-token, [data-vocab-meaning]');
-    if (!token) {
+    if (node.itemType === 'quiz') {
+        openFullQuizArena(node);
         return;
     }
 
-    const word = token.getAttribute('data-vocab-word') || token.textContent?.trim() || 'Word';
-    const meaning = token.getAttribute('data-vocab-meaning') || '';
-    const pronunciation = token.getAttribute('data-vocab-pronunciation') || '';
-
-    if (meaning) {
-        activeStudentVocabGloss.value = { word, meaning, pronunciation };
-    }
-};
-
-const selectBlockVocabGloss = (gloss) => {
-    if (!gloss?.meaning) {
-        return;
-    }
-    activeStudentVocabGloss.value = {
-        word: gloss.word,
-        meaning: gloss.meaning,
-        pronunciation: gloss.pronunciation || '',
-    };
-};
-
-const selectQuizOption = (questionId, option) => {
-    selectedQuizAnswers.value = {
-        ...selectedQuizAnswers.value,
-        [questionId]: option.id,
-    };
-    submittedQuizQuestions.value = {
-        ...submittedQuizQuestions.value,
-        [questionId]: option.is_correct ? 'correct' : 'incorrect',
-    };
+    openFullLectureReader(node);
 };
 
 const scrollToCurrentStep = () => {
@@ -666,34 +451,6 @@ const scrollToCurrentStep = () => {
     if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-};
-
-const completeStepAndAdvance = (stepNumber) => {
-    const completedMilestone = milestones.value.find((m) => m.step === stepNumber);
-
-    if (stepNumber === currentStep.value && currentStep.value <= totalStepsCount.value) {
-        currentStep.value++;
-        lastCompletedStepTitle.value = completedMilestone?.title || `Quest ${stepNumber}`;
-        lastCompletedStepXp.value = completedMilestone?.xp || 150;
-        showQuestCelebrationToast.value = true;
-
-        window.setTimeout(() => {
-            showQuestCelebrationToast.value = false;
-        }, 3800);
-
-        if (currentStep.value > totalStepsCount.value) {
-            window.setTimeout(() => {
-                isChestOpen.value = true;
-                nextTick(() => scrollToCurrentStep());
-            }, 380);
-        } else {
-            nextTick(() => {
-                window.setTimeout(() => scrollToCurrentStep(), 260);
-            });
-        }
-    }
-
-    closeStepModal();
 };
 
 const handleChestClick = () => {
@@ -908,7 +665,7 @@ onMounted(() => {
                 </div>
 
                 <!-- Filter Pills & Quick Jump CTA -->
-                <div class="world-hero-controls">
+                <div v-if="milestones.length > 0" class="world-hero-controls">
                     <div class="clay-quest-filter-group" role="tablist" aria-label="Filter quest milestones">
                         <button
                             type="button"
@@ -962,7 +719,11 @@ onMounted(() => {
                  3. TIER 3: GRAPHIC-RICH MOBILE-FIRST 3D S-CURVE EXPEDITION MAP
                  ========================================================================= -->
             <div class="clay-map-viewport">
-                <!-- Ambient Floating Clouds & Sparkles inside the Map Canvas -->
+                <!-- =====================================================================
+                     ACTIVE EXPEDITION MAP (WHEN REALM HAS STORIES OR QUIZZES)
+                     ===================================================================== -->
+                <template v-if="milestones.length > 0">
+                    <!-- Ambient Floating Clouds & Sparkles inside the Map Canvas -->
                 <div class="map-sky-decor" aria-hidden="true">
                     <div class="map-cloud map-cloud-1"></div>
                     <div class="map-cloud map-cloud-2"></div>
@@ -1440,6 +1201,50 @@ onMounted(() => {
                         </div>
                     </div>
                 </div>
+                </template>
+
+                <!-- =====================================================================
+                     EMPTY EXPEDITION STAGE (WHEN NO STORIES OR QUIZZES YET)
+                     ===================================================================== -->
+                <div v-else class="clay-empty-expedition-stage">
+                    <div class="clay-empty-expedition-card">
+                        <div class="empty-icon-wrapper" aria-hidden="true">
+                            <div class="empty-icon-bubble">
+                                <span class="empty-emoji">🏕️</span>
+                            </div>
+                            <div class="empty-sparkle-decor spark-1">✨</div>
+                            <div class="empty-sparkle-decor spark-2">🌟</div>
+                        </div>
+
+                        <span class="empty-status-pill">EXPEDITION ON PAUSE</span>
+
+                        <h2 class="empty-title">No Activity Yet</h2>
+
+                        <p class="empty-desc">
+                            There are no story scrolls or quiz challenges available for this realm yet. Come back later!
+                        </p>
+
+                        <div class="empty-actions">
+                            <button
+                                type="button"
+                                class="clay-empty-back-btn"
+                                @click="goBackToWorlds"
+                            >
+                                <svg viewBox="0 0 20 20" class="empty-btn-icon" aria-hidden="true">
+                                    <path
+                                        d="M12.5 4.5L7 10l5.5 5.5"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2.6"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    />
+                                </svg>
+                                <span>Back to Realms</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- =========================================================================
@@ -1480,306 +1285,6 @@ onMounted(() => {
                 </div>
             </Transition>
         </section>
-
-        <!-- =========================================================================
-             INTERACTIVE 3D CLAY MOBILE BOTTOM SHEET: STORY LECTURE & QUIZ ARENA
-             ========================================================================= -->
-        <Teleport to="body">
-            <Transition name="clay-sheet-pop">
-                <div
-                    v-if="selectedNode"
-                    class="clay-modal-backdrop"
-                    role="dialog"
-                    aria-modal="true"
-                    :aria-labelledby="'quest-sheet-title-' + selectedNode.step"
-                    @click.self="closeStepModal"
-                >
-                    <div class="clay-quest-bottom-sheet">
-                        <span class="sheet-grab-bar" aria-hidden="true"></span>
-
-                        <button
-                            type="button"
-                            class="clay-sheet-close-btn"
-                            aria-label="Close quest drawer"
-                            @click="closeStepModal"
-                        >
-                            ✕
-                        </button>
-
-                        <!-- Sheet Header Badges -->
-                        <div class="quest-sheet-badges">
-                            <span
-                                class="sheet-step-pill"
-                                :style="{
-                                    backgroundColor: selectedNode.biome.pillBg,
-                                    color: selectedNode.biome.pillText,
-                                }"
-                            >
-                                STEP {{ selectedNode.step }} • {{ selectedNode.biome.label.toUpperCase() }}
-                            </span>
-                            <span class="sheet-xp-bounty-pill">+{{ selectedNode.xp }} XP</span>
-                        </div>
-
-                        <h2 :id="'quest-sheet-title-' + selectedNode.step" class="quest-sheet-title">
-                            {{ selectedNode.title }}
-                        </h2>
-                        <p class="quest-sheet-subtitle">{{ selectedNode.subtitle }}</p>
-
-                        <!-- 3-Column Quick Stats Pod -->
-                        <div class="quest-sheet-stats-grid">
-                            <div class="sheet-stat-box">
-                                <span class="stat-lbl">{{ selectedNode.itemType === 'quiz' ? 'ITEMS' : 'TIME' }}</span>
-                                <strong class="stat-val">{{ selectedNode.duration }}</strong>
-                            </div>
-                            <div class="sheet-stat-box">
-                                <span class="stat-lbl">REWARD</span>
-                                <strong class="stat-val text-amber">+{{ selectedNode.xp }} XP</strong>
-                            </div>
-                            <div class="sheet-stat-box">
-                                <span class="stat-lbl">MASTERY</span>
-                                <strong class="stat-val text-emerald">3 ★ Stars</strong>
-                            </div>
-                        </div>
-
-                        <!-- SCROLLABLE QUEST CONTENT AREA (STORY READER OR INTERACTIVE QUIZ) -->
-                        <div class="quest-sheet-scroll-body">
-                            <!-- CASE A: STORY LECTURE READER -->
-                            <template v-if="selectedNode.itemType === 'lecture'">
-                                <button
-                                    type="button"
-                                    class="clay-open-full-reader-banner"
-                                    @click="openFullLectureReader(selectedNode)"
-                                >
-                                    <span>📖 Open Full-Screen Story Book Reader</span>
-                                    <span class="full-reader-arrow">Read Full Page ↗</span>
-                                </button>
-
-                                <!-- Interactive Word Meaning Popover Card (Revealed on Hover or Tap) -->
-                                <Transition name="toast-pop">
-                                    <div
-                                        v-if="activeStudentVocabGloss"
-                                        class="clay-student-vocab-meaning-card"
-                                        role="status"
-                                        aria-live="polite"
-                                    >
-                                        <div class="vocab-meaning-header">
-                                            <div>
-                                                <span class="vocab-meaning-kicker">✨ WORD MEANING DISCOVERED</span>
-                                                <div class="vocab-meaning-title-row">
-                                                    <strong class="vocab-meaning-word">{{ activeStudentVocabGloss.word }}</strong>
-                                                    <span v-if="activeStudentVocabGloss.pronunciation" class="vocab-meaning-pron">
-                                                        /{{ activeStudentVocabGloss.pronunciation }}/
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                class="vocab-meaning-close-btn"
-                                                aria-label="Close word meaning"
-                                                @click="activeStudentVocabGloss = null"
-                                            >
-                                                ✕
-                                            </button>
-                                        </div>
-                                        <p class="vocab-meaning-definition">
-                                            {{ activeStudentVocabGloss.meaning }}
-                                        </p>
-                                    </div>
-                                </Transition>
-
-                                <div v-if="selectedNode.contents && selectedNode.contents.length > 0" class="story-blocks-list">
-                                    <div
-                                        v-for="(block, bIdx) in selectedNode.contents"
-                                        :key="block.id || bIdx"
-                                        class="clay-story-passage-card"
-                                    >
-                                        <div class="story-block-top-row">
-                                            <span class="story-block-kicker">
-                                                {{ block.title || `Story Scroll Part ${bIdx + 1}` }}
-                                            </span>
-                                            <span
-                                                v-if="block.layout_style === 'interactive_story' || (block.vocabulary_glosses && block.vocabulary_glosses.length > 0)"
-                                                class="story-interactive-hint-pill"
-                                            >
-                                                🔍 Hover or tap glowing words for meaning!
-                                            </span>
-                                        </div>
-
-                                        <!-- Dedicated Full-Page Read-Aloud Audio Player (For students who prefer listening to the page) -->
-                                        <div v-if="block.narration_audio_url" class="clay-page-narration-box">
-                                            <div class="narration-box-head">
-                                                <span class="narration-head-icon" aria-hidden="true">🎧</span>
-                                                <div class="narration-head-copy">
-                                                    <strong>Listen to Full-Page Story Reading</strong>
-                                                    <span>Prefer listening? Press play to hear the whole page read aloud!</span>
-                                                </div>
-                                            </div>
-                                            <audio
-                                                controls
-                                                class="narration-audio-element"
-                                                :src="block.narration_audio_url"
-                                            ></audio>
-                                        </div>
-
-                                        <div
-                                            v-if="(!block.type || block.type === 'text') && block.content"
-                                            class="story-block-paragraph"
-                                            @click="handleStoryPassageInteraction"
-                                            @mouseover="handleStoryPassageInteraction"
-                                            @focusin="handleStoryPassageInteraction"
-                                            v-html="block.content"
-                                        ></div>
-
-                                        <img
-                                            v-else-if="block.type === 'image' && block.media_url"
-                                            :src="block.media_url"
-                                            :alt="block.title || 'Storybook Illustration'"
-                                            style="width: 100%; border-radius: 14px; margin-top: 0.4rem;"
-                                        />
-
-                                        <audio
-                                            v-else-if="block.type === 'audio' && (block.media_url || block.external_url)"
-                                            controls
-                                            style="width: 100%; margin-top: 0.4rem;"
-                                            :src="block.media_url || block.external_url"
-                                        ></audio>
-
-                                        <video
-                                            v-else-if="block.type === 'video' && block.media_url"
-                                            controls
-                                            style="width: 100%; border-radius: 14px; margin-top: 0.4rem;"
-                                            :src="block.media_url"
-                                        ></video>
-
-                                        <!-- Quick-Tap Vocabulary Chips for Accessibility & Mobile Convenience -->
-                                        <div
-                                            v-if="block.vocabulary_glosses && block.vocabulary_glosses.length > 0"
-                                            class="clay-story-vocab-chips-row"
-                                        >
-                                            <span class="vocab-chips-label">📚 Page Words:</span>
-                                            <button
-                                                v-for="(gloss, gIdx) in block.vocabulary_glosses"
-                                                :key="gIdx"
-                                                type="button"
-                                                class="clay-vocab-word-chip"
-                                                :class="{ 'is-active': activeStudentVocabGloss?.word === gloss.word }"
-                                                @click="selectBlockVocabGloss(gloss)"
-                                                @mouseenter="selectBlockVocabGloss(gloss)"
-                                            >
-                                                🔍 {{ gloss.word }}
-                                            </button>
-                                        </div>
-
-                                        <p v-if="block.caption" style="margin: 0.45rem 0 0; font-size: 0.78rem; color: #475569; font-weight: 700;">
-                                            💬 {{ block.caption }}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div v-else class="clay-story-passage-card">
-                                    <span class="story-block-kicker">Story Scroll Passage</span>
-                                    <p class="story-block-paragraph">
-                                        {{ selectedNode.body || selectedNode.summary }}
-                                    </p>
-                                </div>
-                            </template>
-
-                            <!-- CASE B: INTERACTIVE QUIZ CHALLENGE ARENA -->
-                            <template v-else>
-                                <button
-                                    type="button"
-                                    class="clay-open-full-reader-banner"
-                                    @click="openFullQuizArena(selectedNode)"
-                                >
-                                    <span>⚡ Open Full-Screen Interactive Quiz Arena</span>
-                                    <span class="full-reader-arrow">Play Full Quiz ↗</span>
-                                </button>
-
-                                <div v-if="selectedNode.readingPassage" class="clay-quiz-passage-box">
-                                    <span class="passage-kicker">📜 READING PASSAGE</span>
-                                    <p class="passage-quote">"{{ selectedNode.readingPassage }}"</p>
-                                </div>
-
-                                <div
-                                    v-if="selectedNode.questions && selectedNode.questions.length > 0"
-                                    class="quiz-questions-stack"
-                                >
-                                    <div
-                                        v-for="(q, qIdx) in selectedNode.questions"
-                                        :key="q.id || qIdx"
-                                        class="clay-quiz-question-card"
-                                    >
-                                        <span class="q-number-badge">Question {{ qIdx + 1 }}</span>
-                                        <h4 class="q-prompt-text">{{ q.question_text }}</h4>
-
-                                        <div class="q-options-list">
-                                            <button
-                                                v-for="opt in q.options"
-                                                :key="opt.id"
-                                                type="button"
-                                                class="clay-quiz-option-btn"
-                                                :class="{
-                                                    'opt-selected-correct':
-                                                        selectedQuizAnswers[q.id] === opt.id && opt.is_correct,
-                                                    'opt-selected-wrong':
-                                                        selectedQuizAnswers[q.id] === opt.id && !opt.is_correct,
-                                                }"
-                                                @click="selectQuizOption(q.id, opt)"
-                                            >
-                                                <span class="opt-radio-dot"></span>
-                                                <span class="opt-label-text">{{ opt.option_text }}</span>
-                                            </button>
-                                        </div>
-
-                                        <p
-                                            v-if="submittedQuizQuestions[q.id] === 'correct'"
-                                            class="q-feedback-banner feedback-correct"
-                                        >
-                                            ✓ Spot on, Explorer! Great reading comprehension!
-                                        </p>
-                                        <p
-                                            v-else-if="submittedQuizQuestions[q.id] === 'incorrect'"
-                                            class="q-feedback-banner feedback-retry"
-                                        >
-                                            💡 Hint: {{ q.hint || 'Re-read the passage carefully and try another choice!' }}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div v-else class="clay-story-passage-card">
-                                    <span class="story-block-kicker">Challenge Overview</span>
-                                    <p class="story-block-paragraph">{{ selectedNode.summary }}</p>
-                                </div>
-                            </template>
-                        </div>
-
-                        <!-- Sticky Sheet Footer Action Button -->
-                        <div class="quest-sheet-footer">
-                            <button
-                                v-if="selectedNode.step === currentStep"
-                                type="button"
-                                class="clay-sheet-primary-cta"
-                                @click="completeStepAndAdvance(selectedNode.step)"
-                            >
-                                <span class="cta-top-shine" aria-hidden="true"></span>
-                                <span>
-                                    COMPLETE QUEST & CLAIM +{{ selectedNode.xp }} XP ✓
-                                </span>
-                            </button>
-
-                            <button
-                                v-else-if="selectedNode.step < currentStep"
-                                type="button"
-                                class="clay-sheet-replay-cta"
-                                @click="closeStepModal"
-                            >
-                                <span>✓ QUEST COMPLETED • DONE REVIEWING</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </Transition>
-        </Teleport>
 
         <!-- =========================================================================
              3D CLAY LOCKED TREASURE VAULT BOTTOM SHEET / DIALOG
@@ -2283,6 +1788,173 @@ onMounted(() => {
         inset 0 4px 10px rgba(255, 255, 255, 0.9);
     overflow: hidden;
     padding: 0.5rem 0 2rem;
+}
+
+/* ==========================================================================
+   EMPTY EXPEDITION STAGE (NO ACTIVITIES YET)
+   ========================================================================== */
+.clay-empty-expedition-stage {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 480px;
+    padding: 3rem 1.25rem;
+    position: relative;
+    z-index: 5;
+}
+
+.clay-empty-expedition-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    max-width: 460px;
+    width: 100%;
+    background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+    border-radius: 28px;
+    padding: 2.25rem 1.75rem;
+    border: 3.5px solid #FFFFFF;
+    box-shadow:
+        0 10px 0 #CBD5E1,
+        0 20px 32px rgba(15, 23, 42, 0.12),
+        inset 0 3px 6px rgba(255, 255, 255, 0.95);
+    position: relative;
+    animation: clayEmptyFloat 4s ease-in-out infinite alternate;
+}
+
+@keyframes clayEmptyFloat {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-6px); }
+}
+
+.empty-icon-wrapper {
+    position: relative;
+    margin-bottom: 1.25rem;
+}
+
+.empty-icon-bubble {
+    width: 92px;
+    height: 92px;
+    border-radius: 50%;
+    background: linear-gradient(180deg, #FEF3C7 0%, #FDE68A 65%, #F59E0B 100%);
+    border: 3.5px solid #FFFFFF;
+    box-shadow:
+        0 6px 0 #D97706,
+        0 12px 20px rgba(217, 119, 6, 0.25),
+        inset 0 4px 6px rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.empty-emoji {
+    font-size: 2.85rem;
+    filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.15));
+}
+
+.empty-sparkle-decor {
+    position: absolute;
+    font-size: 1.35rem;
+    animation: sparkleSpin 3s ease-in-out infinite alternate;
+    pointer-events: none;
+}
+
+.spark-1 {
+    top: -6px;
+    right: -10px;
+}
+
+.spark-2 {
+    bottom: -4px;
+    left: -12px;
+    animation-delay: 1.5s;
+}
+
+@keyframes sparkleSpin {
+    0% { transform: scale(0.9) rotate(-10deg); opacity: 0.8; }
+    100% { transform: scale(1.15) rotate(15deg); opacity: 1; }
+}
+
+.empty-status-pill {
+    display: inline-block;
+    padding: 0.35rem 0.95rem;
+    background: #FEF3C7;
+    color: #92400E;
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-radius: 9999px;
+    border: 2px solid #FDE68A;
+    margin-bottom: 0.75rem;
+}
+
+.empty-title {
+    font-family: var(--font-display);
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: #1E293B;
+    margin: 0 0 0.5rem;
+    letter-spacing: -0.02em;
+}
+
+.empty-desc {
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1.55;
+    color: #64748B;
+    margin: 0 0 1.5rem;
+    max-width: 380px;
+}
+
+.empty-actions {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+.clay-empty-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.8rem 1.65rem;
+    background: linear-gradient(180deg, #38BDF8 0%, #0284C7 100%);
+    color: #FFFFFF;
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    border-radius: 9999px;
+    border: 2px solid #FFFFFF;
+    box-shadow:
+        0 5px 0 #0369A1,
+        0 10px 18px rgba(2, 132, 199, 0.35),
+        inset 0 2px 4px rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.clay-empty-back-btn:hover {
+    transform: translateY(-2px);
+    box-shadow:
+        0 7px 0 #0369A1,
+        0 14px 22px rgba(2, 132, 199, 0.4),
+        inset 0 2px 4px rgba(255, 255, 255, 0.85);
+}
+
+.clay-empty-back-btn:active {
+    transform: translateY(3px);
+    box-shadow:
+        0 2px 0 #0369A1,
+        0 4px 8px rgba(2, 132, 199, 0.3),
+        inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.empty-btn-icon {
+    width: 18px;
+    height: 18px;
 }
 
 /* Ambient Clouds inside Map */
@@ -2873,7 +2545,7 @@ onMounted(() => {
    ========================================================================== */
 .finale-vault-pod {
     position: absolute;
-    bottom: 22px;
+    bottom: 36px;
     left: 50%;
     transform: translateX(-50%);
     width: 92%;
@@ -3221,7 +2893,7 @@ onMounted(() => {
 }
 
 /* ==========================================================================
-   MOBILE BOTTOM SHEETS (QUEST READER, QUIZ ARENA & LOCKED VAULT)
+   LOCKED TREASURE VAULT MODAL
    ========================================================================== */
 .clay-modal-backdrop {
     position: fixed;
@@ -3234,7 +2906,6 @@ onMounted(() => {
     justify-content: center;
 }
 
-.clay-quest-bottom-sheet,
 .clay-locked-vault-sheet {
     position: relative;
     width: 100%;
@@ -3257,303 +2928,6 @@ onMounted(() => {
     background: #CBD5E1;
     margin: 0 auto 0.65rem;
     flex-shrink: 0;
-}
-
-.clay-sheet-close-btn {
-    position: absolute;
-    top: 0.85rem;
-    right: 1rem;
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background: #F1F5F9;
-    border: 2px solid #E2E8F0;
-    font-family: var(--font-display);
-    font-size: 0.9rem;
-    font-weight: 800;
-    color: #475569;
-    cursor: pointer;
-}
-
-.quest-sheet-badges {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    margin-bottom: 0.4rem;
-}
-
-.sheet-step-pill {
-    padding: 0.22rem 0.6rem;
-    border-radius: 9999px;
-    font-family: var(--font-display);
-    font-size: 0.65rem;
-    font-weight: 800;
-}
-
-.sheet-xp-bounty-pill {
-    padding: 0.22rem 0.6rem;
-    border-radius: 9999px;
-    background: #FEF3C7;
-    color: #B45309;
-    font-family: var(--font-display);
-    font-size: 0.68rem;
-    font-weight: 800;
-}
-
-.quest-sheet-title {
-    margin: 0 0 0.15rem;
-    font-family: var(--font-display);
-    font-size: 1.22rem;
-    font-weight: 800;
-    color: #1E1B4B;
-    padding-right: 2rem;
-}
-
-.quest-sheet-subtitle {
-    margin: 0 0 0.75rem;
-    font-family: var(--font-body);
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: #0284C7;
-}
-
-.quest-sheet-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
-    margin-bottom: 0.85rem;
-    flex-shrink: 0;
-}
-
-.sheet-stat-box {
-    background: #F1F5F9;
-    border: 1.5px solid #E2E8F0;
-    border-radius: 16px;
-    padding: 0.48rem 0.55rem;
-    text-align: center;
-}
-
-.stat-lbl {
-    display: block;
-    font-family: var(--font-display);
-    font-size: 0.56rem;
-    font-weight: 800;
-    color: #64748B;
-}
-
-.stat-val {
-    font-family: var(--font-display);
-    font-size: 0.8rem;
-    font-weight: 800;
-    color: #1E1B4B;
-}
-
-.text-amber { color: #D97706; }
-.text-emerald { color: #059669; }
-
-.quest-sheet-scroll-body {
-    flex: 1 1 auto;
-    overflow-y: auto;
-    padding-right: 0.2rem;
-    margin-bottom: 0.9rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.7rem;
-}
-
-.clay-story-passage-card {
-    background: #FFFFFF;
-    border: 2px solid #E2E8F0;
-    border-radius: 20px;
-    padding: 0.85rem 0.95rem;
-    box-shadow: 0 4px 0 #E2E8F0;
-}
-
-.story-block-kicker {
-    display: inline-block;
-    font-family: var(--font-display);
-    font-size: 0.68rem;
-    font-weight: 800;
-    color: #0284C7;
-    margin-bottom: 0.35rem;
-}
-
-.story-block-paragraph {
-    margin: 0;
-    font-family: var(--font-body);
-    font-size: 0.86rem;
-    font-weight: 700;
-    line-height: 1.55;
-    color: #334155;
-    white-space: pre-line;
-}
-
-/* Interactive Quiz Styles inside Bottom Sheet */
-.clay-quiz-passage-box {
-    background: #FFFBEB;
-    border-left: 4px solid #F59E0B;
-    border-radius: 14px;
-    padding: 0.75rem 0.9rem;
-}
-
-.passage-kicker {
-    display: block;
-    font-family: var(--font-display);
-    font-size: 0.64rem;
-    font-weight: 800;
-    color: #B45309;
-    margin-bottom: 0.25rem;
-}
-
-.passage-quote {
-    margin: 0;
-    font-family: var(--font-body);
-    font-size: 0.82rem;
-    font-weight: 700;
-    font-style: italic;
-    color: #475569;
-    line-height: 1.45;
-}
-
-.quiz-questions-stack {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-
-.clay-quiz-question-card {
-    background: #FFFFFF;
-    border: 2px solid #E2E8F0;
-    border-radius: 20px;
-    padding: 0.85rem;
-    box-shadow: 0 4px 0 #CBD5E1;
-}
-
-.q-number-badge {
-    display: inline-block;
-    padding: 0.15rem 0.5rem;
-    border-radius: 8px;
-    background: #E0E7FF;
-    color: #3730A3;
-    font-family: var(--font-display);
-    font-size: 0.62rem;
-    font-weight: 800;
-    margin-bottom: 0.35rem;
-}
-
-.q-prompt-text {
-    margin: 0 0 0.6rem;
-    font-family: var(--font-display);
-    font-size: 0.88rem;
-    font-weight: 800;
-    color: #1E1B4B;
-    line-height: 1.3;
-}
-
-.q-options-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.42rem;
-}
-
-.clay-quiz-option-btn {
-    width: 100%;
-    text-align: left;
-    display: flex;
-    align-items: center;
-    gap: 0.55rem;
-    padding: 0.6rem 0.75rem;
-    border-radius: 14px;
-    background: #F8FAFC;
-    border: 2px solid #CBD5E1;
-    box-shadow: 0 3px 0 #CBD5E1;
-    font-family: var(--font-body);
-    font-size: 0.8rem;
-    font-weight: 800;
-    color: #1E293B;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.opt-selected-correct {
-    background: #DCFCE7;
-    border-color: #10B981;
-    box-shadow: 0 3px 0 #059669;
-    color: #065F46;
-}
-
-.opt-selected-wrong {
-    background: #FFE4E6;
-    border-color: #F43F5E;
-    box-shadow: 0 3px 0 #E11D48;
-    color: #9F1239;
-}
-
-.opt-radio-dot {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    border: 2px solid currentColor;
-    flex-shrink: 0;
-}
-
-.q-feedback-banner {
-    margin: 0.55rem 0 0;
-    padding: 0.45rem 0.65rem;
-    border-radius: 12px;
-    font-family: var(--font-body);
-    font-size: 0.74rem;
-    font-weight: 800;
-}
-
-.feedback-correct {
-    background: #DCFCE7;
-    color: #065F46;
-}
-
-.feedback-retry {
-    background: #FEF3C7;
-    color: #92400E;
-}
-
-.quest-sheet-footer {
-    flex-shrink: 0;
-}
-
-.clay-sheet-primary-cta {
-    position: relative;
-    width: 100%;
-    padding: 0.85rem 1.2rem;
-    border-radius: 20px;
-    background: linear-gradient(180deg, #34D399 0%, #059669 100%);
-    color: #FFFFFF;
-    border: 2.5px solid #FFFFFF;
-    box-shadow:
-        0 6px 0 #065F46,
-        0 12px 24px rgba(5, 150, 105, 0.35);
-    font-family: var(--font-display);
-    font-size: 0.92rem;
-    font-weight: 800;
-    letter-spacing: 0.03em;
-    cursor: pointer;
-}
-
-.clay-sheet-primary-cta:active {
-    transform: translateY(3px);
-    box-shadow: 0 2px 0 #065F46;
-}
-
-.clay-sheet-replay-cta {
-    width: 100%;
-    padding: 0.8rem 1.2rem;
-    border-radius: 20px;
-    background: #DCFCE7;
-    color: #065F46;
-    border: 2px solid #A7F3D0;
-    font-family: var(--font-display);
-    font-size: 0.86rem;
-    font-weight: 800;
-    cursor: pointer;
 }
 
 /* Locked Vault Sheet */
@@ -3935,7 +3309,6 @@ onMounted(() => {
         padding: 1.5rem;
     }
 
-    .clay-quest-bottom-sheet,
     .clay-locked-vault-sheet {
         border-radius: 32px;
         border: 3.5px solid #FFFFFF;

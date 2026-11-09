@@ -1,6 +1,19 @@
 <script setup>
 import { Head, router } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import SoundController from '@/Components/SoundController.vue';
+import { useSound } from '@/Services/soundManager';
+
+const {
+    state: soundState,
+    playPop,
+    playBoing,
+    playSparkle,
+    playWhoosh,
+    playSuccess,
+    playBonus,
+    playClick,
+} = useSound();
 
 const props = defineProps({
     user: {
@@ -87,6 +100,8 @@ const exploreDashboard = () => {
     }
 
     isLaunching.value = true;
+    playWhoosh();
+    playSuccess();
 
     launchTimeoutId = window.setTimeout(() => {
         router.visit('/students/dashboard', {
@@ -136,6 +151,9 @@ onBeforeUnmount(() => {
             @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700;800;900&family=Nunito:wght@600;700;800;900&display=swap');
         </component>
 
+        <!-- Playful Sound & Music HUD Controller (Floating Widget) -->
+        <SoundController variant="floating" />
+
         <!-- LAYER 1: Organic Neumorphic Blobs -->
         <div class="blob-layer" aria-hidden="true">
             <div class="blob blob-left"></div>
@@ -167,6 +185,8 @@ onBeforeUnmount(() => {
                     '--float-duration': item.duration,
                     '--enter-delay': `${300 + index * 45}ms`,
                 }"
+                @mouseenter="playPop(1.15)"
+                @click="playPop(1.3)"
             >
                 {{ item.icon }}
             </span>
@@ -197,42 +217,42 @@ onBeforeUnmount(() => {
         <!-- LAYER 4: Rich 3D Storybook Realms & Character Diorama -->
         <div class="storybook-diorama-layer" aria-hidden="true">
             <!-- Left Mountain Pop-Up Book Island -->
-            <div class="diorama-pod pod-book-left">
+            <div class="diorama-pod pod-book-left" @mouseenter="playPop(0.95)">
                 <div class="island-pedestal"></div>
                 <img src="/images/book_left_trees_mountains.png" alt="" class="diorama-img book-left-img" />
             </div>
 
             <!-- Foreground Left Reading Girl -->
-            <div class="diorama-pod pod-girl-left">
+            <div class="diorama-pod pod-girl-left" @mouseenter="playSparkle">
                 <img src="/images/girl_left_reading_book.png" alt="" class="diorama-img girl-left-img" />
                 <div class="char-sparkle-halo halo-left">✨</div>
             </div>
 
             <!-- Mid-Left Scholar Boy on Book with Laptop -->
-            <div class="diorama-pod pod-boy-laptop">
+            <div class="diorama-pod pod-boy-laptop" @mouseenter="playPop(1.1)">
                 <img src="/images/boy_left_on_book_laptop.png" alt="" class="diorama-img boy-laptop-img" />
-                <div class="floating-speech-chip chip-left">
+                <div class="floating-speech-chip chip-left" @mouseenter.stop="playPop(1.25)">
                     <span class="chip-emoji">💡</span>
                     <span>Ready for Chapter 1!</span>
                 </div>
             </div>
 
             <!-- Right River/Waterfall Pop-Up Book Island -->
-            <div class="diorama-pod pod-book-right">
+            <div class="diorama-pod pod-book-right" @mouseenter="playPop(0.95)">
                 <div class="island-pedestal"></div>
                 <img src="/images/book_right_mountains_river.png" alt="" class="diorama-img book-right-img" />
             </div>
 
             <!-- Foreground Right Tablet Girl -->
-            <div class="diorama-pod pod-girl-right">
+            <div class="diorama-pod pod-girl-right" @mouseenter="playSparkle">
                 <img src="/images/girl_right_using_tablet.png" alt="" class="diorama-img girl-right-img" />
                 <div class="char-sparkle-halo halo-right">⭐</div>
             </div>
 
             <!-- Mid-Right Girl with Message & Book -->
-            <div class="diorama-pod pod-girl-message">
+            <div class="diorama-pod pod-girl-message" @mouseenter="playPop(1.1)">
                 <img src="/images/book_with_message_and_laptop_girl.png" alt="" class="diorama-img girl-message-img" />
-                <div class="floating-speech-chip chip-right">
+                <div class="floating-speech-chip chip-right" @mouseenter.stop="playPop(1.25)">
                     <span class="chip-emoji">💬</span>
                     <span>Reading Quest Awaits!</span>
                 </div>
@@ -242,7 +262,11 @@ onBeforeUnmount(() => {
         <!-- LAYER: Floating Gamified Adventure Loot & Badges -->
         <div class="gamified-badges-layer" aria-hidden="true">
             <!-- Badge 1: Daily Quest (Upper Left) -->
-            <div class="float-quest-card quest-card-left">
+            <div
+                class="float-quest-card quest-card-left"
+                @mouseenter="playSparkle"
+                @click="playSparkle"
+            >
                 <div class="quest-card-icon">📜</div>
                 <div class="quest-card-text">
                     <span class="quest-label">DAILY QUEST</span>
@@ -252,7 +276,11 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- Badge 2: Star Vault (Upper Right) -->
-            <div class="float-quest-card quest-card-right">
+            <div
+                class="float-quest-card quest-card-right"
+                @mouseenter="playSparkle"
+                @click="playSparkle"
+            >
                 <div class="quest-card-icon">💎</div>
                 <div class="quest-card-text">
                     <span class="quest-label">READING VAULT</span>
@@ -262,13 +290,21 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- Badge 3: Streak Protector (Bottom Left) -->
-            <div class="float-mini-badge badge-streak">
+            <div
+                class="float-mini-badge badge-streak"
+                @mouseenter="playSparkle"
+                @click="playSparkle"
+            >
                 <span class="badge-icon">🔥</span>
                 <span class="badge-text">1-DAY STREAK READY</span>
             </div>
 
             <!-- Badge 4: Explorer Guild (Bottom Right) -->
-            <div class="float-mini-badge badge-guild">
+            <div
+                class="float-mini-badge badge-guild"
+                @mouseenter="playSparkle"
+                @click="playSparkle"
+            >
                 <span class="badge-icon">🧭</span>
                 <span class="badge-text">EXPLORER GUILD</span>
             </div>
@@ -332,7 +368,11 @@ onBeforeUnmount(() => {
                 </p>
 
                 <!-- Welcome Bonus Perk Pill -->
-                <div class="welcome-perk-banner">
+                <div
+                    class="welcome-perk-banner"
+                    @mouseenter="playBonus"
+                    @click="playBonus"
+                >
                     <span class="perk-sparkle">✨</span>
                     <span class="perk-text">
                         <strong>+500 XP Welcome Bonus</strong> available when you explore today!
@@ -347,6 +387,7 @@ onBeforeUnmount(() => {
                         class="btn-explore"
                         :disabled="isLaunching"
                         aria-label="Explore your student dashboard"
+                        @mouseenter="playPop(1.18)"
                         @click="exploreDashboard"
                     >
                         <span class="btn-gloss" aria-hidden="true"></span>
@@ -629,10 +670,21 @@ onBeforeUnmount(() => {
         inset -2px -2px 5px rgba(164, 176, 204, 0.4);
     opacity: 0;
     scale: 0.4;
+    pointer-events: auto;
+    cursor: pointer;
     transition:
         opacity 0.5s ease var(--enter-delay, 300ms),
-        scale 0.6s var(--spring-bounce) var(--enter-delay, 300ms);
+        scale 0.6s var(--spring-bounce) var(--enter-delay, 300ms),
+        transform 0.2s var(--spring-bounce);
     animation: toyFloat var(--float-duration, 5s) ease-in-out var(--float-delay, 0s) infinite alternate;
+}
+
+.toy-badge:hover {
+    transform: translateY(-8px) scale(1.18) rotate(4deg);
+    box-shadow:
+        0 6px 0 var(--game-border),
+        8px 14px 20px var(--neu-navy-ambient),
+        inset 2px 2px 4px rgba(255, 255, 255, 0.95);
 }
 
 .is-mounted .toy-badge {
@@ -763,7 +815,13 @@ onBeforeUnmount(() => {
 
 .diorama-pod {
     position: absolute;
+    pointer-events: auto;
+    cursor: pointer;
     transition: transform 0.35s ease-out, opacity 0.7s ease;
+}
+
+.diorama-pod:hover .diorama-img {
+    transform: scale(1.05);
 }
 
 .diorama-img {
@@ -772,6 +830,7 @@ onBeforeUnmount(() => {
     height: auto;
     filter: drop-shadow(0 16px 26px rgba(29, 36, 64, 0.22));
     user-select: none;
+    transition: transform 0.25s var(--spring-bounce);
 }
 
 /* Island Pedestal */
@@ -886,9 +945,16 @@ onBeforeUnmount(() => {
     align-items: center;
     gap: 0.35rem;
     white-space: nowrap;
+    pointer-events: auto;
+    cursor: pointer;
     box-shadow:
         0 4px 0 var(--game-border),
         0 8px 18px rgba(29, 36, 64, 0.15);
+    transition: transform 0.2s var(--spring-bounce);
+}
+
+.floating-speech-chip:hover {
+    transform: translateY(-4px) scale(1.08);
 }
 
 .chip-left {
@@ -941,11 +1007,20 @@ onBeforeUnmount(() => {
     display: flex;
     align-items: center;
     gap: 0.65rem;
+    pointer-events: auto;
+    cursor: pointer;
     box-shadow:
         0 6px 0 var(--game-border),
         0 14px 28px rgba(29, 36, 64, 0.14),
         inset 1px 1px 2px rgba(255, 255, 255, 0.9);
-    transition: transform 0.25s var(--spring-bounce);
+    transition: transform 0.25s var(--spring-bounce), box-shadow 0.25s ease;
+}
+
+.float-quest-card:hover {
+    transform: translateY(-6px) scale(1.05);
+    box-shadow:
+        0 8px 0 var(--game-border),
+        0 18px 32px rgba(29, 36, 64, 0.2);
 }
 
 .quest-card-left {
@@ -1023,9 +1098,16 @@ onBeforeUnmount(() => {
     font-size: 0.72rem;
     font-weight: 900;
     color: var(--game-navy);
+    pointer-events: auto;
+    cursor: pointer;
     box-shadow:
         0 4px 0 var(--game-border),
         0 8px 16px rgba(29, 36, 64, 0.12);
+    transition: transform 0.2s var(--spring-bounce);
+}
+
+.float-mini-badge:hover {
+    transform: translateY(-4px) scale(1.08);
 }
 
 .badge-streak {
