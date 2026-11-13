@@ -2,8 +2,11 @@
 import { router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { useSound } from '@/Services/soundManager';
+import { flushAllClientCache, prefetchRoute } from '@/Composables/usePrefetch';
+import { usePixarTheme } from '@/Composables/usePixarTheme';
 
 const { playPop, playBoing, playSparkle, playClick, playBonus } = useSound();
+const { activeWorld } = usePixarTheme();
 
 const props = defineProps({
     user: {
@@ -101,12 +104,19 @@ const cycleAvatar = () => {
     }, 320);
 };
 
+const effectiveLevel = computed(() => props.user?.gamification?.level ?? props.level ?? 1);
+const effectiveXp = computed(() => props.user?.gamification?.xp_in_level ?? props.xp ?? 0);
+const effectiveMaxXp = computed(() => props.user?.gamification?.xp_for_next_level ?? props.maxXp ?? 200);
+const effectiveStars = computed(() => props.user?.gamification?.total_stars ?? props.stars ?? 0);
+const effectivePoints = computed(() => props.user?.gamification?.total_xp ?? props.points ?? 0);
+const effectiveTitle = computed(() => props.user?.gamification?.level_title ?? `Level ${effectiveLevel.value} Explorer`);
+
 const xpPercentage = computed(() => {
-    if (!props.maxXp || props.maxXp <= 0) {
+    if (!effectiveMaxXp.value || effectiveMaxXp.value <= 0) {
         return 0;
     }
 
-    return Math.min(100, Math.max(0, Math.round((props.xp / props.maxXp) * 100)));
+    return Math.min(100, Math.max(0, Math.round((effectiveXp.value / effectiveMaxXp.value) * 100)));
 });
 
 const ringCircumference = 2 * Math.PI * 28;
@@ -114,10 +124,10 @@ const ringDashOffset = computed(() => {
     return ringCircumference - (xpPercentage.value / 100) * ringCircumference;
 });
 
-const formattedPoints = computed(() => Number(props.points || 0).toLocaleString());
-const formattedStars = computed(() => Number(props.stars || 0).toLocaleString());
-const formattedXp = computed(() => Number(props.xp || 0).toLocaleString());
-const formattedMaxXp = computed(() => Number(props.maxXp || 1000).toLocaleString());
+const formattedPoints = computed(() => Number(effectivePoints.value || 0).toLocaleString());
+const formattedStars = computed(() => Number(effectiveStars.value || 0).toLocaleString());
+const formattedXp = computed(() => Number(effectiveXp.value || 0).toLocaleString());
+const formattedMaxXp = computed(() => Number(effectiveMaxXp.value || 200).toLocaleString());
 
 const goToModules = () => {
     playClick();
@@ -141,37 +151,67 @@ const goToWelcome = () => {
 
 const handleLogout = () => {
     playClick();
+    flushAllClientCache();
     router.post('/logout');
 };
 </script>
 
 <template>
-    <div class="clay-student-shell">
-        <!-- Google Fonts: Fredoka & Nunito -->
-        <component :is="'style'">
-            @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700;800&family=Nunito:wght@600;700;800;900&display=swap');
-        </component>
-
-        <!-- Rich 3D Cartoon Sky & Floating Clay Clouds Backdrop -->
+    <div class="clay-student-shell" :data-pixar-theme="activeWorld">
+        <!-- 5-Plane Pixar Atmospheric World Backdrop -->
         <div class="clay-sky-backdrop" aria-hidden="true">
-            <div class="clay-sun-glow"></div>
-            <div class="clay-cloud-blob blob-sky-left"></div>
-            <div class="clay-cloud-blob blob-lilac-right"></div>
-            <div class="clay-cloud-blob blob-mint-bottom"></div>
+            <div class="clay-sun-bloom"></div>
+            <div class="clay-bounce-bloom"></div>
 
-            <!-- Floating 3D Cartoon Stars -->
-            <svg viewBox="0 0 36 36" class="floating-sky-star star-a">
+            <!-- Drifting Volumetric Clouds -->
+            <svg class="px-shell-cloud px-shell-cloud--1" viewBox="0 0 260 110" fill="none">
+                <defs>
+                    <linearGradient id="pxShellCloud" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.92" />
+                        <stop offset="100%" stop-color="#D9EEFF" stop-opacity="0.65" />
+                    </linearGradient>
+                </defs>
                 <path
-                    d="M18 3L22.2 12.2L32 13.5L24.8 20.4L26.6 30.2L18 25.4L9.4 30.2L11.2 20.4L4 13.5L13.8 12.2L18 3Z"
-                    fill="#FBBF24"
+                    d="M44 92h170c22 0 38-15 38-34 0-17-12-31-29-34-6-15-21-24-39-24-15 0-28 7-36 18-7-4-16-7-25-7-22 0-40 16-43 37-19 2-32 16-32 32 0 7 3 12 10 12h86Z"
+                    fill="url(#pxShellCloud)"
                 />
             </svg>
-            <svg viewBox="0 0 36 36" class="floating-sky-star star-b">
+            <svg class="px-shell-cloud px-shell-cloud--2" viewBox="0 0 220 96" fill="none">
                 <path
-                    d="M18 3L22.2 12.2L32 13.5L24.8 20.4L26.6 30.2L18 25.4L9.4 30.2L11.2 20.4L4 13.5L13.8 12.2L18 3Z"
-                    fill="#F472B6"
+                    d="M36 80h148c19 0 32-13 32-29 0-14-10-26-25-29-6-13-18-21-33-21-13 0-24 6-31 16-6-4-13-6-21-6-19 0-34 14-36 32-16 2-28 13-28 27 0 6 3 10 9 10h85Z"
+                    fill="url(#pxShellCloud)"
                 />
             </svg>
+
+            <!-- Drifting Volumetric Memory Orbs & Sparkles -->
+            <span class="px-shell-orb px-shell-orb--1"></span>
+            <span class="px-shell-orb px-shell-orb--2"></span>
+            <span class="px-shell-orb px-shell-orb--3"></span>
+            <span class="px-shell-sparkle px-shell-sparkle--1"></span>
+            <span class="px-shell-sparkle px-shell-sparkle--2"></span>
+
+            <!-- Tri-Ridge Multi-Stop Horizon Hills -->
+            <div class="px-shell-hills">
+                <svg viewBox="0 0 1440 200" preserveAspectRatio="none">
+                    <defs>
+                        <linearGradient id="pxShellHillFar" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="var(--px-hill-far-1)" />
+                            <stop offset="100%" stop-color="var(--px-hill-far-2)" />
+                        </linearGradient>
+                        <linearGradient id="pxShellHillMid" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="var(--px-hill-mid-1)" />
+                            <stop offset="100%" stop-color="var(--px-hill-mid-2)" />
+                        </linearGradient>
+                        <linearGradient id="pxShellHillNear" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="var(--px-hill-near-1)" />
+                            <stop offset="100%" stop-color="var(--px-hill-near-2)" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M0,108 C220,30 460,126 740,66 C1020,10 1240,102 1440,56 L1440,200 L0,200 Z" fill="url(#pxShellHillFar)" />
+                    <path d="M0,132 C260,72 520,164 850,102 C1110,54 1280,130 1440,98 L1440,200 L0,200 Z" fill="url(#pxShellHillMid)" />
+                    <path d="M0,156 C310,110 580,186 910,130 C1150,90 1310,148 1440,124 L1440,200 L0,200 Z" fill="url(#pxShellHillNear)" />
+                </svg>
+            </div>
         </div>
 
         <!-- STICKY 3D CLAYMORPHISM GAME HUD -->
@@ -281,7 +321,7 @@ const handleLogout = () => {
                             </span>
 
                             <!-- 3D Puffy Clay Level Pill -->
-                            <span class="clay-lvl-pill">LVL {{ level }}</span>
+                            <span class="clay-lvl-pill">LVL {{ effectiveLevel }}</span>
                         </button>
 
                         <!-- Player Identity & Companion Badge -->
@@ -379,7 +419,7 @@ const handleLogout = () => {
                             <svg viewBox="0 0 16 16" class="xp-bolt-svg" aria-hidden="true">
                                 <path d="M9.5 1L3 9h4.5L6.5 15L13 7H8.5L9.5 1z" fill="#F59E0B" />
                             </svg>
-                            Level {{ level }} Explorer XP
+                            {{ effectiveTitle }} • Level {{ effectiveLevel }}
                         </span>
                         <span class="xp-numbers-readout">
                             <strong>{{ formattedXp }}</strong> / {{ formattedMaxXp }} XP ({{ xpPercentage }}%)
@@ -389,10 +429,10 @@ const handleLogout = () => {
                     <div
                         class="clay-xp-track"
                         role="progressbar"
-                        :aria-valuenow="xp"
+                        :aria-valuenow="effectiveXp"
                         :aria-valuemin="0"
-                        :aria-valuemax="maxXp"
-                        :aria-label="`Experience progress: ${xp} of ${maxXp} XP`"
+                        :aria-valuemax="effectiveMaxXp"
+                        :aria-label="`Experience progress: ${effectiveXp} of ${effectiveMaxXp} XP`"
                     >
                         <div class="clay-xp-fill" :style="{ width: `${xpPercentage}%` }">
                             <span class="xp-bubble-shine" aria-hidden="true"></span>
@@ -414,7 +454,8 @@ const handleLogout = () => {
                 class="clay-dock-btn"
                 :class="{ 'is-active': activeNav === 'modules' }"
                 :aria-current="activeNav === 'modules' ? 'page' : undefined"
-                @mouseenter="playPop(1.1)"
+                @mouseenter="playPop(1.1); prefetchRoute('/students/dashboard', ['student-nav', 'student-modules'])"
+                @focus="prefetchRoute('/students/dashboard', ['student-nav', 'student-modules'])"
                 @click="goToModules"
             >
                 <span class="clay-dock-pill pill-realms" aria-hidden="true">
@@ -433,7 +474,8 @@ const handleLogout = () => {
                 :class="{ 'is-active': activeNav === 'ranking' }"
                 :aria-current="activeNav === 'ranking' ? 'page' : undefined"
                 aria-label="View Leaderboard and Explorer Rankings"
-                @mouseenter="playPop(1.1)"
+                @mouseenter="playPop(1.1); prefetchRoute('/students/ranking', ['student-nav', 'student-ranking'])"
+                @focus="prefetchRoute('/students/ranking', ['student-nav', 'student-ranking'])"
                 @click="goToRanking"
             >
                 <span class="clay-dock-pill pill-ranking" aria-hidden="true">
@@ -453,7 +495,8 @@ const handleLogout = () => {
                 :class="{ 'is-active': activeNav === 'settings' }"
                 :aria-current="activeNav === 'settings' ? 'page' : undefined"
                 aria-label="View Student Audio and Account Settings"
-                @mouseenter="playPop(1.1)"
+                @mouseenter="playPop(1.1); prefetchRoute('/students/settings', ['student-nav', 'student-settings'])"
+                @focus="prefetchRoute('/students/settings', ['student-nav', 'student-settings'])"
                 @click="goToSettings"
             >
                 <span class="clay-dock-pill pill-settings" aria-hidden="true">
@@ -498,28 +541,41 @@ const handleLogout = () => {
    SMOOTH 3D CARTOON CLAYMORPHISM DESIGN SYSTEM (NO NEUMORPHISM)
    ========================================================================== */
 .clay-student-shell {
-    --font-display: 'Fredoka', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-body: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
-    --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --font-display: var(--px-font-display, 'Fredoka', -apple-system, BlinkMacSystemFont, sans-serif);
+    --font-body: var(--px-font-body, 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif);
+    --spring-bounce: var(--px-ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 
-    --ink-primary: #1E1B4B;
-    --ink-secondary: #4338CA;
-    --ink-muted: #64748B;
+    --ink-primary: var(--px-ink, #1E1B4B);
+    --ink-secondary: var(--px-secondary, #4338CA);
+    --ink-muted: var(--px-ink-muted, #64748B);
 
     min-height: 100vh;
     min-height: 100dvh;
-    background: linear-gradient(165deg, #E0F2FE 0%, #EDE9FE 48%, #FEF3C7 100%);
+    background: linear-gradient(166deg, var(--px-sky-top) 0%, var(--px-sky-mid) 50%, var(--px-sky-bottom) 100%);
     font-family: var(--font-body);
-    color: var(--ink-primary);
+    color: var(--px-ink);
     position: relative;
+    isolation: isolate;
     padding-bottom: calc(6.75rem + env(safe-area-inset-bottom, 0px));
     overflow-x: hidden;
     box-sizing: border-box;
     -webkit-tap-highlight-color: transparent;
+    transition: background 380ms var(--px-ease-settle), color 220ms ease;
+}
+
+.clay-student-shell::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: var(--px-noise-svg);
+    background-repeat: repeat;
+    opacity: 0.03;
+    pointer-events: none;
+    z-index: 90;
 }
 
 /* ==========================================================================
-   3D CARTOON SKY & PUFFY CLOUD BLOBS BACKDROP
+   5-PLANE PIXAR SKY, VOLUMETRIC ORBS & HILLS BACKDROP
    ========================================================================== */
 .clay-sky-backdrop {
     position: fixed;
@@ -529,72 +585,94 @@ const handleLogout = () => {
     overflow: hidden;
 }
 
-.clay-sun-glow {
+.clay-sun-bloom {
     position: absolute;
-    width: 320px;
-    height: 320px;
-    top: -110px;
-    right: -70px;
+    inset: -15% auto auto -10%;
+    width: 65vw;
+    height: 60vh;
+    background: radial-gradient(ellipse 60% 55% at 30% 25%, var(--px-sun-bloom) 0%, transparent 72%);
+}
+
+.clay-bounce-bloom {
+    position: absolute;
+    inset: auto -10% 10% auto;
+    width: 55vw;
+    height: 55vh;
+    background: radial-gradient(ellipse 58% 54% at 70% 60%, var(--px-secondary-bloom) 0%, transparent 72%);
+}
+
+.px-shell-cloud {
+    position: absolute;
+    height: auto;
+    opacity: var(--px-cloud-opacity);
+    filter: drop-shadow(0 10px 20px rgba(var(--px-shadow-rgb), 0.12));
+    will-change: transform;
+    animation: shellCloudDrift var(--_cdur, 30s) ease-in-out infinite alternate;
+}
+
+.px-shell-cloud--1 { width: clamp(140px, 16vw, 230px); top: 10%; left: 3%; --_cdur: 28s; }
+.px-shell-cloud--2 { width: clamp(130px, 15vw, 210px); top: 18%; right: 4%; --_cdur: 34s; animation-delay: -10s; }
+
+@keyframes shellCloudDrift {
+    0% { transform: translate3d(-12px, 0, 0); }
+    100% { transform: translate3d(18px, -8px, 0); }
+}
+
+.px-shell-orb {
+    position: absolute;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(253, 224, 71, 0.55) 0%, rgba(253, 224, 71, 0) 70%);
+    background:
+        radial-gradient(circle at 28% 24%, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0.5) 16%, transparent 40%),
+        radial-gradient(circle at 58% 60%, var(--_orb, var(--px-orb-1)) 0%, var(--_orb, var(--px-orb-1)) 58%, rgba(255, 255, 255, 0.1) 100%);
+    box-shadow:
+        inset 0 -8px 18px rgba(var(--px-shadow-rgb), 0.2),
+        inset 0 3px 8px rgba(255, 255, 255, 0.65),
+        0 14px 32px -6px rgba(var(--px-shadow-rgb), 0.2);
+    opacity: 0.72;
+    will-change: transform;
+    animation: shellOrbFloat var(--_dur, 18s) ease-in-out infinite alternate;
 }
 
-.clay-cloud-blob {
+.px-shell-orb--1 { width: 112px; height: 112px; top: 16%; left: 4%; --_orb: var(--px-orb-1); --_dur: 17s; }
+.px-shell-orb--2 { width: 84px; height: 84px; top: 32%; right: 5%; --_orb: var(--px-orb-2); --_dur: 14s; animation-delay: -4s; }
+.px-shell-orb--3 { width: 96px; height: 96px; bottom: 18%; left: 7%; --_orb: var(--px-orb-3); --_dur: 20s; animation-delay: -7s; }
+
+@keyframes shellOrbFloat {
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    100% { transform: translate3d(14px, -18px, 0) scale(1.05); }
+}
+
+.px-shell-sparkle {
     position: absolute;
-    border-radius: 9999px;
-    filter: blur(36px);
-    opacity: 0.65;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #FFFFFF 0%, var(--px-sparkle-color) 58%, transparent 100%);
+    box-shadow: 0 0 12px 3px var(--px-sparkle-color);
+    animation: shellTwinkle 4s ease-in-out infinite alternate;
 }
 
-.blob-sky-left {
-    width: 260px;
-    height: 200px;
-    top: 8%;
-    left: -80px;
-    background: #7DD3FC;
+.px-shell-sparkle--1 { top: 24%; right: 12%; }
+.px-shell-sparkle--2 { bottom: 26%; left: 16%; animation-delay: -2s; }
+
+@keyframes shellTwinkle {
+    0% { transform: translate3d(0, 4px, 0) scale(0.7); opacity: 0.4; }
+    100% { transform: translate3d(3px, -8px, 0) scale(1.2); opacity: 0.92; }
 }
 
-.blob-lilac-right {
-    width: 280px;
-    height: 240px;
-    top: 42%;
-    right: -95px;
-    background: #C4B5FD;
+.px-shell-hills {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: -2px;
+    height: clamp(90px, 16vh, 180px);
+    pointer-events: none;
 }
 
-.blob-mint-bottom {
-    width: 260px;
-    height: 200px;
-    bottom: 6%;
-    left: -70px;
-    background: #6EE7B7;
-}
-
-.floating-sky-star {
-    position: absolute;
-    width: 26px;
-    height: 26px;
-    opacity: 0.45;
-    filter: drop-shadow(0 4px 6px rgba(245, 158, 11, 0.25));
-    animation: starBob 4.5s ease-in-out infinite alternate;
-}
-
-.star-a {
-    top: 15%;
-    right: 8%;
-}
-
-.star-b {
-    bottom: 18%;
-    left: 6%;
-    width: 20px;
-    height: 20px;
-    animation-delay: -2.2s;
-}
-
-@keyframes starBob {
-    0% { transform: translateY(0) rotate(-8deg) scale(0.95); }
-    100% { transform: translateY(-10px) rotate(12deg) scale(1.08); }
+.px-shell-hills svg {
+    width: 100%;
+    height: 100%;
+    display: block;
 }
 
 /* ==========================================================================
@@ -604,7 +682,6 @@ const handleLogout = () => {
     position: sticky;
     top: 0;
     z-index: 40;
-    /* padding: max(0.55rem, env(safe-area-inset-top, 0.55rem)) 0.8rem 0.4rem; */
     max-width: 1040px;
     margin: 0 auto;
 }
@@ -612,15 +689,13 @@ const handleLogout = () => {
 .clay-hud-console {
     position: relative;
     overflow: hidden;
-    background: linear-gradient(180deg, #FFFFFF 0%, #F5F3FF 100%);
-    /* border-radius: 28px; */
+    background: linear-gradient(180deg, var(--px-surface-card) 0%, var(--px-surface-card-bottom) 100%);
     padding: 0.72rem 0.85rem;
-    border: 3px solid #FFFFFF;
+    border: 2.5px solid var(--px-card-border);
     box-shadow:
-        0 6px 0 #C7D2FE,
-        0 14px 28px rgba(67, 56, 202, 0.14),
-        inset 0 3px 6px rgba(255, 255, 255, 0.95),
-        inset 0 -4px 8px rgba(199, 210, 254, 0.45);
+        0 6px 0 var(--px-hud-ledge),
+        0 16px 32px rgba(var(--px-shadow-rgb), 0.16),
+        inset 0 2px 3px var(--px-rim-top);
     display: flex;
     flex-direction: column;
     gap: 0.58rem;
@@ -633,7 +708,8 @@ const handleLogout = () => {
     right: 20px;
     height: 12px;
     border-radius: 9999px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 100%);
+    background: linear-gradient(180deg, var(--px-rim-top) 0%, rgba(255, 255, 255, 0) 100%);
+    opacity: 0.65;
     pointer-events: none;
 }
 
@@ -659,12 +735,12 @@ const handleLogout = () => {
     height: 58px;
     padding: 0;
     border-radius: 50%;
-    background: linear-gradient(145deg, #FFFFFF 0%, #EEF2FF 100%);
-    border: 2.5px solid #FFFFFF;
+    background: var(--px-surface-elevated);
+    border: 2.5px solid var(--px-card-border);
     box-shadow:
-        0 4px 0 #C7D2FE,
-        0 8px 16px rgba(67, 56, 202, 0.16),
-        inset 0 2px 4px rgba(255, 255, 255, 0.9);
+        0 4px 0 var(--px-hud-ledge),
+        0 8px 16px rgba(var(--px-shadow-rgb), 0.2),
+        inset 0 2px 4px var(--px-rim-top);
     cursor: pointer;
     flex-shrink: 0;
     display: flex;
@@ -921,7 +997,7 @@ const handleLogout = () => {
     justify-content: space-between;
     font-size: 0.66rem;
     font-weight: 800;
-    color: #475569;
+    color: var(--px-ink-muted);
     padding: 0 0.15rem;
 }
 
@@ -931,7 +1007,7 @@ const handleLogout = () => {
     gap: 0.22rem;
     font-family: var(--font-display);
     font-weight: 700;
-    color: var(--ink-primary);
+    color: var(--px-ink);
 }
 
 .xp-bolt-svg {
@@ -940,7 +1016,7 @@ const handleLogout = () => {
 }
 
 .xp-numbers-readout strong {
-    color: #4F46E5;
+    color: var(--px-link-ink);
     font-weight: 900;
 }
 
@@ -948,11 +1024,11 @@ const handleLogout = () => {
     width: 100%;
     height: 13px;
     border-radius: 9999px;
-    background: #E0E7FF;
-    border: 2px solid #FFFFFF;
+    background: var(--px-xp-track-bg);
+    border: 2px solid var(--px-card-border);
     box-shadow:
-        inset 0 2px 4px rgba(67, 56, 202, 0.18),
-        0 2px 0 #C7D2FE;
+        inset 0 2px 4px rgba(var(--px-shadow-rgb), 0.2),
+        0 2px 0 rgba(var(--px-shadow-rgb), 0.14);
     padding: 1.5px;
     overflow: hidden;
     box-sizing: border-box;
@@ -961,8 +1037,8 @@ const handleLogout = () => {
 .clay-xp-fill {
     height: 100%;
     border-radius: 9999px;
-    background: linear-gradient(90deg, #10B981 0%, #06B6D4 50%, #6366F1 100%);
-    box-shadow: inset 0 -2px 3px rgba(15, 23, 42, 0.2);
+    background: var(--px-xp-fill-grad);
+    box-shadow: inset 0 -2px 3px rgba(var(--px-shadow-rgb), 0.22);
     position: relative;
     transition: width 450ms var(--spring-bounce);
 }
@@ -997,17 +1073,19 @@ const handleLogout = () => {
     left: 50%;
     transform: translateX(-50%);
     z-index: 50;
-    background: linear-gradient(180deg, #FFFFFF 0%, #F5F3FF 100%);
+    background: linear-gradient(180deg, var(--px-surface-card) 0%, var(--px-surface-card-bottom) 100%);
+    backdrop-filter: blur(14px) saturate(145%);
+    -webkit-backdrop-filter: blur(14px) saturate(145%);
     border-radius: 30px;
     padding: 0.4rem 0.75rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    border: 3px solid #FFFFFF;
+    border: 2.5px solid var(--px-card-border);
     box-shadow:
-        0 7px 0 #C7D2FE,
-        0 16px 32px rgba(49, 46, 129, 0.22),
-        inset 0 3px 5px rgba(255, 255, 255, 0.95);
+        0 7px 0 var(--px-hud-ledge),
+        0 18px 34px rgba(var(--px-shadow-rgb), 0.28),
+        inset 0 2px 4px var(--px-rim-top);
     max-width: calc(100vw - 1.25rem);
 }
 
@@ -1024,13 +1102,13 @@ const handleLogout = () => {
     align-items: center;
     justify-content: center;
     gap: 0.18rem;
-    color: #475569;
+    color: var(--px-ink-muted);
     transition: transform 180ms var(--spring-bounce), color 150ms ease;
     outline: none;
 }
 
 .clay-dock-btn:focus-visible {
-    box-shadow: 0 0 0 3px #6366F1;
+    box-shadow: 0 0 0 3px var(--px-focus-stroke);
 }
 
 .clay-dock-btn:active {
@@ -1041,11 +1119,11 @@ const handleLogout = () => {
     width: 40px;
     height: 34px;
     border-radius: 14px;
-    background: linear-gradient(180deg, #F8FAFC 0%, #E0E7FF 100%);
-    border: 2px solid #FFFFFF;
+    background: var(--px-surface-well);
+    border: 1.5px solid var(--px-card-border);
     box-shadow:
-        0 3px 0 #C7D2FE,
-        inset 0 2px 3px rgba(255, 255, 255, 0.9);
+        0 3px 0 rgba(var(--px-shadow-rgb), 0.18),
+        inset 0 2px 3px var(--px-rim-top);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1053,27 +1131,27 @@ const handleLogout = () => {
 }
 
 .pill-realms {
-    color: #2563EB;
+    color: var(--px-link-ink);
 }
 
 .pill-ranking {
-    color: #D97706;
+    color: #F59E0B;
 }
 
 .pill-settings {
-    color: #7C3AED;
+    color: #A78BFA;
 }
 
 .clay-dock-btn:hover .pill-ranking {
-    color: #B45309;
+    color: #FBBF24;
 }
 
 .clay-dock-btn:hover .pill-settings {
-    color: #6D28D9;
+    color: var(--px-secondary-lit);
 }
 
 .pill-exit {
-    color: #E11D48;
+    color: #FB7185;
 }
 
 .dock-svg-icon {
@@ -1083,16 +1161,16 @@ const handleLogout = () => {
 }
 
 .clay-dock-btn.is-active {
-    color: #1E1B4B;
+    color: var(--px-ink);
 }
 
 .clay-dock-btn.is-active .clay-dock-pill {
-    background: linear-gradient(180deg, #60A5FA 0%, #2563EB 100%);
-    color: #FFFFFF;
-    border-color: #DBEAFE;
+    background: linear-gradient(180deg, var(--px-secondary-lit) 0%, var(--px-secondary) 100%);
+    color: var(--px-secondary-ink);
+    border-color: var(--px-card-border);
     box-shadow:
-        0 4px 0 #1D4ED8,
-        0 6px 12px rgba(37, 99, 235, 0.32),
+        0 4px 0 var(--px-secondary-pedestal),
+        0 6px 14px var(--px-secondary-glow),
         inset 0 2px 4px rgba(255, 255, 255, 0.55);
     transform: translateY(-2px);
 }
@@ -1108,7 +1186,7 @@ const handleLogout = () => {
     width: 2px;
     height: 32px;
     border-radius: 9999px;
-    background: #E0E7FF;
+    background: var(--px-card-border);
 }
 
 .dock-exit-btn:hover .pill-exit {
@@ -1193,7 +1271,9 @@ const handleLogout = () => {
     .clay-xp-fill,
     .clay-dock-btn,
     .clay-dock-pill,
-    .floating-sky-star {
+    .px-shell-cloud,
+    .px-shell-orb,
+    .px-shell-sparkle {
         animation: none !important;
         transition: none !important;
     }

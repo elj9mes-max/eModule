@@ -387,11 +387,6 @@ onMounted(() => {
 
 <template>
     <div class="reading-journey-wrapper">
-        <!-- Embedded Google Display Fonts -->
-        <component :is="'style'">
-            @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700;800;900&family=Nunito:wght@600;700;800;900&display=swap');
-        </component>
-
         <!-- Neumorphic Ambient Backdrop Background -->
         <div class="ocean-backdrop">
             <!-- Animated Ambient Wave Ripples -->
@@ -410,6 +405,10 @@ onMounted(() => {
                 <img
                     src="/images/book_left_trees_mountains.png"
                     alt="3D Pop-Up Book with Nature, Trees, and Mountains"
+                    width="965"
+                    height="777"
+                    loading="lazy"
+                    decoding="async"
                     class="flank-img"
                 />
             </div>
@@ -417,6 +416,10 @@ onMounted(() => {
                 <img
                     src="/images/boy_left_on_book_laptop.png"
                     alt="3D Cartoon Boy Student on Book with Laptop"
+                    width="838"
+                    height="905"
+                    loading="lazy"
+                    decoding="async"
                     class="flank-img"
                 />
             </div>
@@ -424,6 +427,10 @@ onMounted(() => {
                 <img
                     src="/images/girl_left_reading_book.png"
                     alt="3D Cartoon Girl Student Reading Purple Book"
+                    width="945"
+                    height="878"
+                    loading="lazy"
+                    decoding="async"
                     class="flank-img"
                 />
             </div>
@@ -434,6 +441,10 @@ onMounted(() => {
                 <img
                     src="/images/book_right_mountains_river.png"
                     alt="3D Pop-Up Island Storybook with Mountains and River"
+                    width="996"
+                    height="640"
+                    loading="lazy"
+                    decoding="async"
                     class="flank-img"
                 />
             </div>
@@ -441,6 +452,10 @@ onMounted(() => {
                 <img
                     src="/images/book_with_message_and_laptop_girl.png"
                     alt="3D Open Book with Speech Bubble and Girl on Laptop"
+                    width="1030"
+                    height="682"
+                    loading="lazy"
+                    decoding="async"
                     class="flank-img"
                 />
             </div>
@@ -448,6 +463,10 @@ onMounted(() => {
                 <img
                     src="/images/girl_right_using_tablet.png"
                     alt="3D Cartoon Girl Studying on Tablet"
+                    width="942"
+                    height="814"
+                    loading="lazy"
+                    decoding="async"
                     class="flank-img"
                 />
             </div>
@@ -1154,24 +1173,23 @@ onMounted(() => {
 .soft-glow {
     position: absolute;
     border-radius: 50%;
-    filter: blur(80px);
     pointer-events: none;
 }
 
 .glow-top {
     top: -5%;
     left: 20%;
-    width: 400px;
-    height: 400px;
-    background: rgba(254, 240, 138, 0.35);
+    width: 480px;
+    height: 480px;
+    background: radial-gradient(circle, rgba(254, 240, 138, 0.35) 0%, rgba(254, 240, 138, 0) 70%);
 }
 
 .glow-bottom {
     bottom: 5%;
     right: 15%;
-    width: 500px;
-    height: 500px;
-    background: rgba(251, 113, 133, 0.22);
+    width: 580px;
+    height: 580px;
+    background: radial-gradient(circle, rgba(251, 113, 133, 0.22) 0%, rgba(251, 113, 133, 0) 70%);
 }
 
 /* 3D Flanking Scenery Wings */
@@ -1725,8 +1743,7 @@ onMounted(() => {
     inset: 0;
     border-radius: 50%;
     transform: translateY(6px);
-    background: rgba(14, 116, 144, 0.16);
-    filter: blur(4px);
+    background: radial-gradient(ellipse at center, rgba(14, 116, 144, 0.22) 0%, rgba(14, 116, 144, 0) 75%);
     z-index: -1;
 }
 

@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\EvaluationItem;
-use App\Models\Module;
+use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Models\QuizAttemptAnswer;
-use App\Models\ReflectionPrompt;
+use App\Services\Cache\EModuleCacheService;
+use App\Services\Gamification\LevelProgressionService;
+use App\Services\QuizAnswerContextBuilder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,6 +17,12 @@ use Inertia\Response;
 
 class TeacherGradingController extends Controller
 {
+    public function __construct(
+        private readonly EModuleCacheService $cache,
+        private readonly QuizAnswerContextBuilder $contextBuilder,
+        private readonly LevelProgressionService $progressionService,
+    ) {}
+
     /**
      * Display the list of student submissions for teacher grading and review.
      */
@@ -27,27 +34,22 @@ class TeacherGradingController extends Controller
             return redirect()->route('students.dashboard');
         }
 
-        $teacherModules = $user->modules()->select('id', 'title', 'slug')->get();
-        $teacherModuleIds = $teacherModules->pluck('id');
+        $teacherModules = $this->cache->getTeacherModuleSummaries($user->id);
+        $teacherModuleIds = array_column($teacherModules, 'id');
 
         $statusFilter = (string) $request->input('status', 'pending_review');
         $moduleFilter = $request->input('module');
-        $typeFilter = $request->input('type', 'all');
+        $typeFilter = (string) $request->input('type', 'all');
+        $searchFilter = trim((string) $request->input('search', ''));
 
-        $baseQuery = QuizAttempt::query()
-            ->whereHas('quiz', fn ($q) => $q->whereIn('module_id', $teacherModuleIds));
+        $stats = $this->cache->getTeacherGradingStats($user->id);
 
-        $pendingCount = (clone $baseQuery)->where('status', 'pending_review')->count();
-        $gradedCount = (clone $baseQuery)->where('status', 'completed')->count();
-        $totalCount = (clone $baseQuery)->count();
-
-        // If user requested a status filter, apply it (unless 'all')
-        if ($statusFilter !== 'all') {
-            $baseQuery->where('status', $statusFilter);
-        }
+        $quizIdsSubquery = Quiz::query()
+            ->select('id')
+            ->whereIn('module_id', $teacherModuleIds);
 
         if (! empty($moduleFilter)) {
-            $baseQuery->whereHas('quiz.module', function ($q) use ($moduleFilter): void {
+            $quizIdsSubquery->whereHas('module', function ($q) use ($moduleFilter): void {
                 if (is_numeric($moduleFilter)) {
                     $q->where('id', (int) $moduleFilter);
                 } else {
@@ -56,39 +58,42 @@ class TeacherGradingController extends Controller
             });
         }
 
-        if (! empty($typeFilter) && $typeFilter !== 'all') {
-            $baseQuery->whereHas('quiz', fn ($q) => $q->where('type', $typeFilter));
+        if ($typeFilter !== '' && $typeFilter !== 'all') {
+            $quizIdsSubquery->where('type', $typeFilter);
         }
 
-        $attempts = $baseQuery
+        $baseQuery = QuizAttempt::query()
+            ->whereIn('quiz_id', $quizIdsSubquery);
+
+        if ($statusFilter !== 'all') {
+            $baseQuery->where('status', $statusFilter);
+        }
+
+        if ($searchFilter !== '') {
+            $like = '%'.$searchFilter.'%';
+            $baseQuery->where(function ($query) use ($like): void {
+                $query->whereHas('user', fn ($q) => $q->where('name', 'like', $like)->orWhere('email', 'like', $like))
+                    ->orWhereHas('quiz', fn ($q) => $q->where('title', 'like', $like))
+                    ->orWhereHas('quiz.module', fn ($q) => $q->where('title', 'like', $like));
+            });
+        }
+
+        $paginatedAttempts = $baseQuery
             ->with([
-                'user',
-                'quiz.module',
+                'user:id,name,email',
+                'quiz:id,module_id,title,slug,type,passing_percentage,xp_reward',
+                'quiz.module:id,title,slug',
                 'answers',
             ])
             ->latest('id')
-            ->get();
+            ->paginate(25)
+            ->withQueryString();
 
-        // Pre-fetch prompts and items for answers
-        $evaluationItemIds = $attempts->flatMap->answers
-            ->where('item_type', 'evaluation')
-            ->pluck('item_id')
-            ->unique();
-        $evaluationItems = EvaluationItem::query()
-            ->whereIn('id', $evaluationItemIds)
-            ->get()
-            ->keyBy('id');
+        $attempts = $paginatedAttempts->getCollection();
 
-        $reflectionPromptIds = $attempts->flatMap->answers
-            ->where('item_type', 'reflection')
-            ->pluck('item_id')
-            ->unique();
-        $reflectionPrompts = ReflectionPrompt::query()
-            ->whereIn('id', $reflectionPromptIds)
-            ->get()
-            ->keyBy('id');
+        $dictionaries = $this->contextBuilder->dictionariesFromAttempts($attempts);
 
-        $mappedSubmissions = $attempts->map(function (QuizAttempt $attempt) use ($evaluationItems, $reflectionPrompts): array {
+        $mappedSubmissions = $attempts->map(function (QuizAttempt $attempt) use ($dictionaries): array {
             $isPending = $attempt->status === 'pending_review';
 
             return [
@@ -124,43 +129,9 @@ class TeacherGradingController extends Controller
                     'title' => $attempt->quiz->module->title,
                     'slug' => $attempt->quiz->module->slug,
                 ],
-                'answers' => $attempt->answers->map(function (QuizAttemptAnswer $ans) use ($evaluationItems, $reflectionPrompts): array {
-                    $itemContext = null;
-
-                    if ($ans->item_type === 'evaluation') {
-                        $eval = $evaluationItems->get($ans->item_id);
-                        if ($eval) {
-                            $itemContext = [
-                                'section_title' => $eval->section_title,
-                                'question_prompt' => $eval->question_prompt,
-                                'step1_prompt' => $eval->step1_prompt,
-                                'sentence_template' => $eval->sentence_template,
-                            ];
-                        }
-                    } elseif ($ans->item_type === 'reflection') {
-                        $ref = $reflectionPrompts->get($ans->item_id);
-                        if ($ref) {
-                            $itemContext = [
-                                'prompt_text' => $ref->prompt_text,
-                                'min_words' => $ref->min_words,
-                                'max_words' => $ref->max_words,
-                            ];
-                        }
-                    }
-
-                    return [
-                        'id' => $ans->id,
-                        'item_type' => $ans->item_type,
-                        'item_id' => $ans->item_id,
-                        'answer_data' => $ans->answer_data,
-                        'answer_text' => $ans->answer_text,
-                        'is_correct' => $ans->is_correct,
-                        'points_earned' => $ans->points_earned,
-                        'points_possible' => $ans->points_possible,
-                        'teacher_notes' => $ans->teacher_notes,
-                        'context' => $itemContext,
-                    ];
-                })->values()->all(),
+                'answers' => $attempt->answers->map(
+                    fn (QuizAttemptAnswer $ans): array => $this->contextBuilder->formatAnswer($ans, $dictionaries)
+                )->values()->all(),
             ];
         })->values()->all();
 
@@ -172,20 +143,21 @@ class TeacherGradingController extends Controller
                 'role' => $user->role->value,
             ],
             'submissions' => $mappedSubmissions,
-            'modules' => $teacherModules->map(fn (Module $m): array => [
-                'id' => $m->id,
-                'title' => $m->title,
-                'slug' => $m->slug,
-            ])->values()->all(),
+            'modules' => $teacherModules,
             'filters' => [
                 'status' => $statusFilter,
                 'module' => $moduleFilter,
                 'type' => $typeFilter,
+                'search' => $searchFilter,
             ],
-            'stats' => [
-                'pending_count' => $pendingCount,
-                'graded_count' => $gradedCount,
-                'total_count' => $totalCount,
+            'stats' => $stats,
+            'pagination' => [
+                'current_page' => $paginatedAttempts->currentPage(),
+                'last_page' => $paginatedAttempts->lastPage(),
+                'per_page' => $paginatedAttempts->perPage(),
+                'total' => $paginatedAttempts->total(),
+                'from' => $paginatedAttempts->firstItem(),
+                'to' => $paginatedAttempts->lastItem(),
             ],
         ]);
     }
@@ -271,6 +243,15 @@ class TeacherGradingController extends Controller
                 'completed_at' => now(),
             ]);
         });
+
+        $this->progressionService->recalculateStudentProfile((int) $attempt->user_id);
+
+        $this->cache->invalidateAttemptProgress(
+            (int) $attempt->user_id,
+            (int) $attempt->quiz->module_id,
+            (int) $user->id,
+            (int) $attempt->quiz_id,
+        );
 
         if ($request->wantsJson()) {
             return response()->json([

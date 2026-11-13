@@ -1,6 +1,8 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
+import TeacherLayout from '@/Components/TeacherLayout.vue';
+import { generateModuleDescription } from '@/Services/geminiAi.js';
 
 const props = defineProps({
     user: {
@@ -11,6 +13,14 @@ const props = defineProps({
             email: 'teacher@example.com',
             role: 'teacher',
         }),
+    },
+    classrooms: {
+        type: Array,
+        default: () => [],
+    },
+    pending_grading_count: {
+        type: Number,
+        default: 0,
     },
 });
 
@@ -51,9 +61,44 @@ const bannerInputRef = ref(null);
 const coverPreviewUrl = ref(null);
 const isDraggingBanner = ref(false);
 
+const isGeneratingDesc = ref(false);
+const aiDescError = ref('');
+const aiGeneratedSuccess = ref(false);
+
+const triggerAiModuleDescription = async () => {
+    const title = form.title.trim();
+    if (!title) {
+        aiDescError.value = 'Please enter a module title first!';
+        return;
+    }
+
+    isGeneratingDesc.value = true;
+    aiDescError.value = '';
+    aiGeneratedSuccess.value = false;
+
+    try {
+        const result = await generateModuleDescription({
+            title,
+            gradeLevel: '',
+            theme: form.theme,
+        });
+
+        if (result?.description) {
+            form.description = result.description;
+            aiGeneratedSuccess.value = true;
+            setTimeout(() => {
+                aiGeneratedSuccess.value = false;
+            }, 3000);
+        }
+    } catch (err) {
+        aiDescError.value = err.message || 'Unable to generate description with AI. Please try again.';
+    } finally {
+        isGeneratingDesc.value = false;
+    }
+};
+
 const form = useForm({
     title: '',
-    grade_level: 'Grade 3 • Reading Legends',
     description: '',
     theme: 'forest',
     icon: '🌲',
@@ -62,6 +107,7 @@ const form = useForm({
     boss_name: 'Grammar Goblin',
     max_students: null,
     status: 'draft',
+    classroom_ids: [],
 });
 
 const selectTheme = (themeOption) => {
@@ -104,15 +150,6 @@ const removeBanner = () => {
     }
 };
 
-const previewTitle = computed(() => form.title.trim() || 'Untitled Learning Module');
-const previewGrade = computed(() => form.grade_level.trim() || 'All Grades • Reading Quest');
-const previewXpBonus = computed(() => {
-    const val = Number(form.xp_bonus);
-    return Number.isFinite(val) && val >= 0 ? val : 0;
-});
-const previewBoss = computed(() => form.boss_name.trim() || 'Chapter Guardian');
-const previewStatusLabel = computed(() => (form.status === 'published' ? 'Published' : 'Draft Module'));
-
 const submitModule = () => {
     form.post('/teachers/modules');
 };
@@ -120,102 +157,20 @@ const submitModule = () => {
 const goToDashboard = () => {
     router.visit('/teachers/dashboard');
 };
-
-const goToStudents = () => {
-    router.visit('/teachers/students');
-};
-
-const handleLogout = () => {
-    router.post('/logout');
-};
 </script>
 
 <template>
     <Head title="Create Module • WEBREAD" />
 
-    <div class="game-dashboard-page">
-        <!-- Google Fonts: Fredoka & Nunito -->
-        <component :is="'style'">
-            @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700;800;900&family=Nunito:wght@600;700;800;900&display=swap');
-        </component>
-
-        <!-- Floating 3D Pop-Up Book Background Assets with Mountains -->
-        <div class="game-bg-elements" aria-hidden="true">
-            <img src="/images/book_left_trees_mountains.png" alt="" class="bg-asset bg-book-left" />
-            <img src="/images/book_right_mountains_river.png" alt="" class="bg-asset bg-book-right" />
-            <div class="floating-sparkle sp-1">✨</div>
-            <div class="floating-sparkle sp-2">⭐</div>
-            <div class="floating-sparkle sp-3">✨</div>
-            <div class="floating-sparkle sp-4">🌟</div>
-        </div>
-
-        <!-- 3D CARTOON + NEUMORPHIC GAME HUD (TOP STATUS BAR) -->
-        <header class="game-hud">
-            <div class="hud-profile-card">
-                <div class="hud-avatar-wrapper">
-                    <div class="avatar-ring">
-                        <span class="avatar-emoji">🧙‍♂️</span>
-                    </div>
-                    <span class="avatar-lvl-badge">LVL 42</span>
-                </div>
-
-                <div class="hud-profile-meta">
-                    <div class="hud-name-row">
-                        <span class="hud-title-crown">👑</span>
-                        <span class="hud-name">{{ user.name }}</span>
-                        <span class="instructor-tag">MASTER INSTRUCTOR</span>
-                    </div>
-
-                    <div class="hud-xp-meter">
-                        <div class="xp-track">
-                            <div class="xp-fill" style="width: 84%">
-                                <div class="xp-shine"></div>
-                            </div>
-                        </div>
-                        <span class="xp-label">8,450 / 10,000 XP</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="hud-inventory-meters">
-                <div class="inventory-pill gems-pill" title="Classroom Reading Gems">
-                    <span class="pill-icon gem-icon">💎</span>
-                    <div class="pill-data">
-                        <span class="pill-num">1,450</span>
-                        <span class="pill-lbl">GEMS</span>
-                    </div>
-                </div>
-
-                <div class="inventory-pill stars-pill" title="Guild Star Power">
-                    <span class="pill-icon star-icon">⭐</span>
-                    <div class="pill-data">
-                        <span class="pill-num">3,820</span>
-                        <span class="pill-lbl">STARS</span>
-                    </div>
-                </div>
-
-                <div class="inventory-pill energy-pill" title="Classroom Energy">
-                    <span class="pill-icon energy-icon">⚡</span>
-                    <div class="pill-data">
-                        <span class="pill-num">95%</span>
-                        <span class="pill-lbl">ENERGY</span>
-                    </div>
-                </div>
-
-                <div class="inventory-pill guild-pill" title="Active Guild Members" @click="goToStudents" style="cursor: pointer;">
-                    <span class="pill-icon guild-icon">🎒</span>
-                    <div class="pill-data">
-                        <span class="pill-num">118</span>
-                        <span class="pill-lbl">STUDENTS</span>
-                    </div>
-                </div>
-            </div>
-        </header>
-
+    <TeacherLayout
+        :user="user"
+        active-nav="modules"
+        :pending-grading-count="pending_grading_count"
+    >
         <!-- MAIN STAGE: CREATE MODULE FORGE -->
-        <main class="game-stage">
+        <section class="game-stage">
             <!-- Header Bar -->
-            <section class="panel-header-row">
+            <div class="panel-header-row">
                 <div>
                     <div class="forge-badge-pill">✨ MODULE ARCHITECT FORGE</div>
                     <h1 class="panel-title">🏰 Create New Module</h1>
@@ -228,11 +183,11 @@ const handleLogout = () => {
                         <span>← BACK TO YOUR MODULES</span>
                     </button>
                 </div>
-            </section>
+            </div>
 
-            <!-- 2-Column Builder Grid -->
+            <!-- Builder Grid -->
             <div class="builder-grid">
-                <!-- LEFT: Tactile 3D + Neumorphic Form -->
+                <!-- Tactile 3D + Neumorphic Form -->
                 <form class="module-form-card" @submit.prevent="submitModule">
                     <!-- Section 1: Module Identity -->
                     <div class="form-section">
@@ -254,31 +209,34 @@ const handleLogout = () => {
                             <p v-if="form.errors.title" class="field-error">{{ form.errors.title }}</p>
                         </div>
 
-                        <div class="field-row-2">
-                            <div class="field-group">
-                                <label for="module-grade" class="field-label">GRADE & TRACK SUBTITLE</label>
-                                <input
-                                    id="module-grade"
-                                    v-model="form.grade_level"
-                                    type="text"
-                                    class="neu-input"
-                                    placeholder="e.g., Grade 3 • Reading Legends"
-                                />
-                                <p v-if="form.errors.grade_level" class="field-error">{{ form.errors.grade_level }}</p>
-                            </div>
-
-                            <div class="field-group">
-                                <label for="module-status" class="field-label">MODULE STATUS</label>
-                                <select id="module-status" v-model="form.status" class="neu-select">
-                                    <option value="draft">📝 Draft (Hidden)</option>
-                                    <option value="published">🌟 Published (Active)</option>
-                                </select>
-                                <p v-if="form.errors.status" class="field-error">{{ form.errors.status }}</p>
-                            </div>
+                        <div class="field-group">
+                            <label for="module-status" class="field-label">MODULE STATUS</label>
+                            <select id="module-status" v-model="form.status" class="neu-select">
+                                <option value="draft">📝 Draft (Hidden)</option>
+                                <option value="published">🌟 Published (Active)</option>
+                            </select>
+                            <p v-if="form.errors.status" class="field-error">{{ form.errors.status }}</p>
                         </div>
 
                         <div class="field-group">
-                            <label for="module-desc" class="field-label">MODULE DESCRIPTION</label>
+                            <div class="field-header-row">
+                                <label for="module-desc" class="field-label">MODULE DESCRIPTION</label>
+                                <button
+                                    type="button"
+                                    class="ai-generate-desc-btn"
+                                    :class="{ 'is-loading': isGeneratingDesc, 'is-success': aiGeneratedSuccess }"
+                                    :disabled="isGeneratingDesc"
+                                    title="Auto-generate a kid-friendly description from your module title"
+                                    @click="triggerAiModuleDescription"
+                                >
+                                    <span v-if="isGeneratingDesc" class="ai-sparkle-spin">✨</span>
+                                    <span v-else-if="aiGeneratedSuccess" class="ai-check-icon">✓</span>
+                                    <span v-else class="ai-sparkle-icon">✨</span>
+                                    <span class="ai-btn-text">
+                                        {{ isGeneratingDesc ? 'Generating...' : aiGeneratedSuccess ? 'Generated!' : 'Generate with AI' }}
+                                    </span>
+                                </button>
+                            </div>
                             <textarea
                                 id="module-desc"
                                 v-model="form.description"
@@ -286,6 +244,7 @@ const handleLogout = () => {
                                 class="neu-textarea"
                                 placeholder="Describe what reading skills, stories, and multimedia lectures students will explore inside this module..."
                             ></textarea>
+                            <p v-if="aiDescError" class="ai-desc-error">{{ aiDescError }}</p>
                             <p v-if="form.errors.description" class="field-error">{{ form.errors.description }}</p>
                         </div>
                     </div>
@@ -367,7 +326,7 @@ const handleLogout = () => {
                     <div class="form-section">
                         <h2 class="section-heading">
                             <span class="section-num">3</span>
-                            <span>Quest Rewards & Classroom Settings</span>
+                            <span>Quest Rewards & Classroom Assignment</span>
                         </h2>
 
                         <div class="field-row-2">
@@ -413,6 +372,45 @@ const handleLogout = () => {
                                 />
                             </div>
                         </div>
+
+                        <!-- Classroom Selection (Assign to Classrooms) -->
+                        <div class="field-group">
+                            <label class="field-label">ASSIGN TO CLASSROOMS (OPTIONAL)</label>
+                            <p class="field-help-sub">
+                                Select which classrooms will immediately have access to this adventure module.
+                            </p>
+
+                            <div v-if="classrooms && classrooms.length > 0" class="classroom-checkbox-grid">
+                                <label
+                                    v-for="c in classrooms"
+                                    :key="c.id"
+                                    class="classroom-check-card"
+                                    :class="{ 'is-selected': form.classroom_ids.includes(c.id) }"
+                                >
+                                    <input
+                                        v-model="form.classroom_ids"
+                                        type="checkbox"
+                                        :value="c.id"
+                                        class="classroom-checkbox-native"
+                                    />
+                                    <div class="classroom-check-content">
+                                        <div class="check-top-line">
+                                            <span class="check-room-icon">{{ c.icon || '🏫' }}</span>
+                                            <span class="check-indicator">
+                                                {{ form.classroom_ids.includes(c.id) ? '✓' : '+' }}
+                                            </span>
+                                        </div>
+                                        <strong class="check-room-name">{{ c.name }}</strong>
+                                        <span class="check-room-meta">{{ c.grade_level || 'Reading Guild' }} • {{ c.students_count }} students</span>
+                                    </div>
+                                </label>
+                            </div>
+
+                            <div v-else class="no-classrooms-hint">
+                                <span>🏫 No classrooms created yet. You can create classrooms later in the Classrooms page and assign this module anytime!</span>
+                            </div>
+                            <p v-if="form.errors.classroom_ids" class="field-error">{{ form.errors.classroom_ids }}</p>
+                        </div>
                     </div>
 
                     <!-- Form Actions -->
@@ -425,371 +423,12 @@ const handleLogout = () => {
                         </button>
                     </div>
                 </form>
-
-                <!-- RIGHT: Live 3D Cartoon + Neumorphic Module Card Preview -->
-                <aside class="preview-column">
-                    <div class="preview-sticky-wrap">
-                        <div class="preview-header-tag">
-                            <span>🔮 LIVE 3D NEUMORPHIC CARD PREVIEW</span>
-                        </div>
-
-                        <div class="kingdom-card" :class="`theme-${form.theme}`">
-                            <!-- 3D Clay Decorative Accent: Star perched on top frame rim -->
-                            <div class="clay-accent clay-star" aria-hidden="true">
-                                <svg viewBox="0 0 54 54" class="clay-star-svg" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <defs>
-                                        <filter id="previewClayStarDropShadow" x="-30%" y="-30%" width="160%" height="160%">
-                                            <feDropShadow dx="-2" dy="5" stdDeviation="3.5" flood-color="#8C5320" flood-opacity="0.32" />
-                                        </filter>
-                                        <radialGradient id="previewClayStarFill" cx="35%" cy="30%" r="65%">
-                                            <stop offset="0%" stop-color="#FFF2B2" />
-                                            <stop offset="40%" stop-color="#FCD34D" />
-                                            <stop offset="80%" stop-color="#F59E0B" />
-                                            <stop offset="100%" stop-color="#D97706" />
-                                        </radialGradient>
-                                        <linearGradient id="previewClayStarBevel" x1="0%" y1="0%" x2="100%" y2="100%">
-                                            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9" />
-                                            <stop offset="100%" stop-color="#B45309" stop-opacity="0.35" />
-                                        </linearGradient>
-                                    </defs>
-                                    <g filter="url(#previewClayStarDropShadow)">
-                                        <path d="M27 5 C28.5 5 31.2 15 33 17 C34.8 19 45 20 46 21.5 C47 23 39.5 29.5 38.5 31.5 C37.5 33.5 40 43.5 38.5 44.5 C37 45.5 29 40 27 40 C25 40 17 45.5 15.5 44.5 C14 43.5 16.5 33.5 15.5 31.5 C14.5 29.5 7 23 8 21.5 C9 20 19.2 19 21 17 C22.8 15 25.5 5 27 5 Z"
-                                            fill="url(#previewClayStarFill)" stroke="url(#previewClayStarBevel)" stroke-width="2.5" stroke-linejoin="round" />
-                                        <ellipse cx="23" cy="16" rx="3.5" ry="2" transform="rotate(-25 23 16)" fill="#FFFFFF" fill-opacity="0.75" />
-                                    </g>
-                                </svg>
-                            </div>
-
-                            <!-- 3D Clay Decorative Accent: Left Puffy Cloud -->
-                            <div class="clay-accent clay-cloud clay-cloud-left" aria-hidden="true">
-                                <svg viewBox="0 0 110 70" class="clay-cloud-svg" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <defs>
-                                        <filter id="previewCloudShadowLeft" x="-30%" y="-30%" width="170%" height="170%">
-                                            <feDropShadow dx="-4" dy="7" stdDeviation="5.5" flood-color="#404B6D" flood-opacity="0.22" />
-                                        </filter>
-                                        <linearGradient id="previewCloudGradLeft" x1="20%" y1="0%" x2="60%" y2="100%">
-                                            <stop offset="0%" stop-color="#FFFFFF" />
-                                            <stop offset="60%" stop-color="#F2F5FB" />
-                                            <stop offset="100%" stop-color="#D7E0F0" />
-                                        </linearGradient>
-                                        <radialGradient id="previewCloudPuffLeft" cx="30%" cy="25%" r="70%">
-                                            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95" />
-                                            <stop offset="60%" stop-color="#FFFFFF" stop-opacity="0" />
-                                        </radialGradient>
-                                    </defs>
-                                    <g filter="url(#previewCloudShadowLeft)">
-                                        <path d="M26 52 C15 52 8 44 8 36 C8 28 14 22 22 21 C24 12 33 5 45 5 C56 5 65 11 68 20 C72 17 78 17 82 20 C88 24 90 31 88 37 C96 39 102 45 102 52 C102 60 95 65 85 65 L26 65 C18 65 14 59 16 54 Z"
-                                            fill="url(#previewCloudGradLeft)" />
-                                        <ellipse cx="45" cy="20" rx="16" ry="10" fill="url(#previewCloudPuffLeft)" />
-                                        <ellipse cx="72" cy="30" rx="12" ry="8" fill="url(#previewCloudPuffLeft)" />
-                                        <ellipse cx="26" cy="36" rx="10" ry="7" fill="url(#previewCloudPuffLeft)" />
-                                    </g>
-                                </svg>
-                            </div>
-
-                            <!-- 3D Clay Decorative Accent: Right Puffy Cloud -->
-                            <div class="clay-accent clay-cloud clay-cloud-right" aria-hidden="true">
-                                <svg viewBox="0 0 110 70" class="clay-cloud-svg" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <defs>
-                                        <filter id="previewCloudShadowRight" x="-30%" y="-30%" width="170%" height="170%">
-                                            <feDropShadow dx="4" dy="7" stdDeviation="5.5" flood-color="#404B6D" flood-opacity="0.22" />
-                                        </filter>
-                                        <linearGradient id="previewCloudGradRight" x1="40%" y1="0%" x2="40%" y2="100%">
-                                            <stop offset="0%" stop-color="#FFFFFF" />
-                                            <stop offset="60%" stop-color="#F2F5FB" />
-                                            <stop offset="100%" stop-color="#D7E0F0" />
-                                        </linearGradient>
-                                        <radialGradient id="previewCloudPuffRight" cx="35%" cy="25%" r="70%">
-                                            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95" />
-                                            <stop offset="60%" stop-color="#FFFFFF" stop-opacity="0" />
-                                        </radialGradient>
-                                    </defs>
-                                    <g filter="url(#previewCloudShadowRight)">
-                                        <path d="M24 61 C14 61 8 54 8 46 C8 39 13 33 20 31 C21 21 30 14 41 14 C48 14 55 18 58 24 C62 20 68 19 74 22 C81 26 84 34 82 40 C91 41 98 47 98 55 C98 62 91 67 82 67 L24 67 Z"
-                                            fill="url(#previewCloudGradRight)" />
-                                        <ellipse cx="42" cy="25" rx="14" ry="9" fill="url(#previewCloudPuffRight)" />
-                                        <ellipse cx="68" cy="33" rx="11" ry="7" fill="url(#previewCloudPuffRight)" />
-                                    </g>
-                                </svg>
-                            </div>
-
-                            <!-- Floating Discrete Status Clay Badge -->
-                            <div class="clay-card-badges">
-                                <span class="clay-badge-pill" :class="{ 'badge-draft': form.status === 'draft', 'badge-pub': form.status === 'published' }">
-                                    {{ previewStatusLabel }}
-                                </span>
-                            </div>
-
-                            <!-- Stepped Neumorphic Bezel holding Center Picture Window -->
-                            <div class="frame-inner-bezel">
-                                <div class="frame-window">
-                                    <img
-                                        v-if="coverPreviewUrl"
-                                        :src="coverPreviewUrl"
-                                        alt="Module Banner Preview"
-                                        class="frame-center-image"
-                                    />
-                                    <!-- 3D Cartoon Fallback Fantasy Landscape (when no banner uploaded) -->
-                                    <div v-else class="frame-fallback-scene" aria-hidden="true">
-                                        <svg viewBox="0 0 600 360" preserveAspectRatio="xMidYMid slice" class="fallback-scenery-svg">
-                                            <defs>
-                                                <linearGradient id="prevScenerySky" x1="0%" y1="0%" x2="0%" y2="100%">
-                                                    <stop offset="0%" stop-color="#AEE2FF" />
-                                                    <stop offset="45%" stop-color="#D0EDFE" />
-                                                    <stop offset="100%" stop-color="#FFF2E7" />
-                                                </linearGradient>
-                                                <linearGradient id="prevMountPink" x1="0%" y1="0%" x2="0%" y2="100%">
-                                                    <stop offset="0%" stop-color="#EAA6BF" />
-                                                    <stop offset="100%" stop-color="#C782A6" />
-                                                </linearGradient>
-                                                <linearGradient id="prevMountPurple" x1="0%" y1="0%" x2="0%" y2="100%">
-                                                    <stop offset="0%" stop-color="#CBB5EA" />
-                                                    <stop offset="100%" stop-color="#9C82CA" />
-                                                </linearGradient>
-                                                <linearGradient id="prevHillGreen1" x1="0%" y1="0%" x2="0%" y2="100%">
-                                                    <stop offset="0%" stop-color="#B2EDB8" />
-                                                    <stop offset="100%" stop-color="#72D086" />
-                                                </linearGradient>
-                                                <linearGradient id="prevHillGreen2" x1="0%" y1="0%" x2="0%" y2="100%">
-                                                    <stop offset="0%" stop-color="#78E3AC" />
-                                                    <stop offset="100%" stop-color="#40B880" />
-                                                </linearGradient>
-                                                <linearGradient id="prevHillYellow" x1="0%" y1="0%" x2="0%" y2="100%">
-                                                    <stop offset="0%" stop-color="#FDE89C" />
-                                                    <stop offset="100%" stop-color="#F6C852" />
-                                                </linearGradient>
-                                                <linearGradient id="prevPathGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                                    <stop offset="0%" stop-color="#FCE1AE" />
-                                                    <stop offset="100%" stop-color="#F3C377" />
-                                                </linearGradient>
-                                            </defs>
-
-                                            <!-- Pastel Sky -->
-                                            <rect width="600" height="360" fill="url(#prevScenerySky)" />
-
-                                            <!-- Background Clouds -->
-                                            <path d="M70 120 C70 100 90 85 115 85 C135 85 152 98 158 112 C168 108 180 114 184 124 C192 126 198 134 198 142 C198 152 188 158 175 158 L75 158 C62 158 55 148 58 138 C58 130 63 123 70 120 Z" fill="#FFFFFF" fill-opacity="0.85" />
-                                            <path d="M360 90 C360 72 378 58 402 58 C422 58 438 70 444 84 C454 80 466 86 470 95 C478 97 484 104 484 112 C484 122 474 128 460 128 L365 128 C352 128 346 118 349 108 C349 100 354 93 360 90 Z" fill="#FFFFFF" fill-opacity="0.88" />
-
-                                            <!-- Distant Snow-Capped Mountains -->
-                                            <path d="M120 250 L195 120 L270 250 Z" fill="url(#prevMountPink)" />
-                                            <path d="M195 120 L175 160 C185 168 205 168 215 160 Z" fill="#FFFFFF" />
-                                            <path d="M220 260 L330 90 L440 260 Z" fill="url(#prevMountPurple)" />
-                                            <path d="M330 90 L295 150 C315 162 345 162 365 150 Z" fill="#FFFFFF" />
-                                            <path d="M380 260 L450 145 L520 260 Z" fill="url(#prevMountPink)" />
-                                            <path d="M450 145 L430 180 C440 188 460 188 470 180 Z" fill="#FFFFFF" />
-
-                                            <!-- Rolling Hills -->
-                                            <path d="M-20 260 Q80 190 220 240 T460 230 Q540 240 620 210 L620 360 L-20 360 Z" fill="url(#prevHillGreen1)" />
-                                            <path d="M-20 280 Q140 220 310 270 T620 250 L620 360 L-20 360 Z" fill="url(#prevHillGreen2)" />
-                                            <path d="M-20 310 Q160 260 360 300 T620 280 L620 360 L-20 360 Z" fill="url(#prevHillYellow)" />
-
-                                            <!-- Winding Cartoon Path -->
-                                            <path d="M250 360 Q280 300 290 260 Q300 240 310 235 L330 238 Q320 245 315 265 Q310 305 350 360 Z" fill="url(#prevPathGrad)" />
-
-                                            <!-- Candy Trees Left Side -->
-                                            <rect x="75" y="225" width="10" height="35" rx="3" fill="#8B5E3C" />
-                                            <circle cx="80" cy="215" r="28" fill="#B388FF" />
-                                            <circle cx="72" cy="205" r="10" fill="#D1C4E9" fill-opacity="0.6" />
-                                            <rect x="135" y="240" width="8" height="28" rx="2" fill="#8B5E3C" />
-                                            <circle cx="139" cy="235" r="20" fill="#FF80AB" />
-                                            <circle cx="134" cy="228" r="7" fill="#FFD1DC" fill-opacity="0.6" />
-                                            <rect x="180" y="250" width="8" height="24" rx="2" fill="#8B5E3C" />
-                                            <circle cx="184" cy="245" r="18" fill="#80D8FF" />
-
-                                            <!-- Candy Trees Right Side -->
-                                            <rect x="495" y="215" width="12" height="42" rx="3" fill="#8B5E3C" />
-                                            <circle cx="501" cy="205" r="32" fill="#FF6E6E" />
-                                            <circle cx="492" cy="192" r="12" fill="#FFA4A4" fill-opacity="0.6" />
-                                            <rect x="445" y="235" width="10" height="32" rx="2.5" fill="#8B5E3C" />
-                                            <circle cx="450" cy="225" r="22" fill="#FFA726" />
-                                            <circle cx="444" cy="218" r="8" fill="#FFCC80" fill-opacity="0.6" />
-                                            <polygon points="415,260 405,230 425,230" fill="#26A69A" />
-                                            <polygon points="415,240 407,215 423,215" fill="#4DB6AC" />
-                                        </svg>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- 3D Extruded Neumorphic Plaque with Module Title -->
-                            <div class="clay-title-plaque">
-                                <span class="plaque-title-text" :title="previewTitle">
-                                    {{ previewTitle }}
-                                </span>
-                            </div>
-                        </div>
-
-                        <!-- Next Step Hint Box -->
-                        <div class="next-step-hint-card">
-                            <span class="hint-icon">💡</span>
-                            <div class="hint-content">
-                                <strong>What happens next?</strong>
-                                <p>
-                                    After saving this module, you can open it to create <strong>Lectures</strong> with titles, descriptions, rich text passages, images, audio files, and videos!
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </aside>
             </div>
-        </main>
-
-        <!-- 3D CARTOON + NEUMORPHIC BOTTOM GAME NAVIGATION DOCK -->
-        <nav class="game-bottom-dock" aria-label="Game Console Dock">
-            <button
-                type="button"
-                class="dock-item active"
-                @click="goToDashboard"
-                title="Your Modules"
-            >
-                <div class="dock-bubble">
-                    <span class="dock-icon">🏰</span>
-                </div>
-                <span class="dock-label">MODULES</span>
-            </button>
-
-            <button
-                type="button"
-                class="dock-item"
-                @click="goToStudents"
-                title="Student Leaderboard & Rankings"
-            >
-                <div class="dock-bubble">
-                    <span class="dock-icon">🏆</span>
-                </div>
-                <span class="dock-label">STUDENTS</span>
-            </button>
-
-            <div class="dock-divider"></div>
-
-            <button
-                type="button"
-                class="dock-item logout-item"
-                @click="handleLogout"
-                title="Exit Game"
-            >
-                <div class="dock-bubble exit-bubble">
-                    <span class="dock-icon">🚪</span>
-                </div>
-                <span class="dock-label">EXIT</span>
-            </button>
-        </nav>
-    </div>
+        </section>
+    </TeacherLayout>
 </template>
 
 <style scoped>
-/* ==========================================================================
-   CARTOON 3D + NEUMORPHISM GAME TOKENS & BACKGROUND
-   ========================================================================== */
-.game-dashboard-page {
-    --game-navy: #1D2440;
-    --game-border: #2B3354;
-    --game-blue: #2395EB;
-    --game-blue-shadow: #1467A6;
-    --game-coral: #FF6B4A;
-    --game-coral-shadow: #BF3E22;
-    --game-gold: #FFC000;
-    --game-gold-shadow: #B88500;
-    --game-green: #06D6A0;
-    --game-green-shadow: #038F6A;
-    --game-purple: #845EC2;
-    --game-purple-shadow: #58398A;
-    --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
-    --font-game: 'Fredoka', -apple-system, sans-serif;
-    --font-ui: 'Nunito', -apple-system, sans-serif;
-
-    /* Neumorphic Tactile Lighting Tokens */
-    --neu-bg-base: #F5F0E3;
-    --neu-surface: linear-gradient(145deg, #FFFFFF 0%, #F3EFE4 100%);
-    --neu-light: rgba(255, 255, 255, 0.92);
-    --neu-shadow: rgba(196, 187, 168, 0.55);
-    --neu-navy-ambient: rgba(29, 36, 64, 0.12);
-    --neu-bevel-light: inset 3px 3px 6px rgba(255, 255, 255, 0.95);
-    --neu-bevel-dark: inset -4px -4px 8px rgba(194, 185, 166, 0.38);
-
-    min-height: 100vh;
-    background-color: var(--neu-bg-base);
-    background-image:
-        radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.75) 0%, transparent 45%),
-        radial-gradient(circle at 85% 80%, rgba(220, 210, 188, 0.65) 0%, transparent 50%),
-        radial-gradient(#DFD7C4 2px, transparent 2px),
-        radial-gradient(#DFD7C4 2px, var(--neu-bg-base) 2px);
-    background-size: 100% 100%, 100% 100%, 36px 36px, 36px 36px;
-    background-position: 0 0, 0 0, 0 0, 18px 18px;
-    font-family: var(--font-game);
-    color: var(--game-navy);
-    position: relative;
-    padding-bottom: 7.5rem;
-    overflow-x: hidden;
-    box-sizing: border-box;
-}
-
-/* Soft Matte Neumorphic Grain Texture Overlay */
-.game-dashboard-page::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 2;
-    opacity: 0.035;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-}
-
-/* 3D Floating Scenery Assets (Books with Mountains) */
-.game-bg-elements {
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 1;
-}
-
-.bg-asset {
-    position: absolute;
-    width: 28vw;
-    max-width: 380px;
-    opacity: 0.28;
-    filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.08));
-}
-
-.bg-book-left {
-    bottom: 5%;
-    left: -4%;
-    animation: floatIslandLeft 7s ease-in-out infinite alternate;
-}
-
-.bg-book-right {
-    top: 15%;
-    right: -4%;
-    animation: floatIslandRight 8s ease-in-out infinite alternate;
-}
-
-@keyframes floatIslandLeft {
-    from { transform: translateY(0) rotate(-1deg); }
-    to { transform: translateY(-16px) rotate(1deg); }
-}
-
-@keyframes floatIslandRight {
-    from { transform: translateY(0) rotate(1deg); }
-    to { transform: translateY(-18px) rotate(-1.5deg); }
-}
-
-.floating-sparkle {
-    position: absolute;
-    font-size: 1.5rem;
-    opacity: 0.45;
-    animation: sparklePulse 3s ease-in-out infinite alternate;
-}
-
-.sp-1 { top: 12%; left: 18%; animation-delay: 0.2s; }
-.sp-2 { top: 22%; right: 24%; animation-delay: 0.9s; }
-.sp-3 { bottom: 25%; left: 32%; animation-delay: 1.5s; }
-.sp-4 { bottom: 35%; right: 15%; animation-delay: 2.1s; }
-
-@keyframes sparklePulse {
-    from { transform: scale(0.8) translateY(0); opacity: 0.2; }
-    to { transform: scale(1.2) translateY(-8px); opacity: 0.7; }
-}
-
 /* 3D + Neumorphic Tactile Button Base */
 .btn-3d {
     font-family: var(--font-game);
@@ -813,217 +452,6 @@ const handleLogout = () => {
         0 1px 0 #1D2440,
         inset 3px 3px 6px rgba(0, 0, 0, 0.22),
         inset -2px -2px 5px rgba(255, 255, 255, 0.4) !important;
-}
-
-/* ==========================================================================
-   GAME HUD (TOP STATUS ROW)
-   ========================================================================== */
-.game-hud {
-    position: relative;
-    z-index: 10;
-    padding: 1.25rem 2rem;
-    max-width: 1300px;
-    margin: 0 auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1.5rem;
-    flex-wrap: wrap;
-}
-
-.hud-profile-card {
-    background: var(--neu-surface);
-    border: 3px solid var(--game-border);
-    border-radius: 26px;
-    padding: 0.7rem 1.45rem 0.7rem 0.9rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    box-shadow:
-        0 6px 0 var(--game-border),
-        -6px -6px 14px var(--neu-light),
-        8px 12px 22px var(--neu-navy-ambient),
-        var(--neu-bevel-light),
-        var(--neu-bevel-dark);
-}
-
-.hud-avatar-wrapper {
-    position: relative;
-}
-
-.avatar-ring {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: linear-gradient(145deg, #FFEA85 0%, #FFA800 100%);
-    border: 3px solid #1D2440;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow:
-        0 3px 0 #1D2440,
-        inset 3px 3px 6px rgba(255, 255, 255, 0.85),
-        inset -3px -3px 6px rgba(184, 120, 0, 0.45);
-}
-
-.avatar-emoji {
-    font-size: 1.9rem;
-    line-height: 1;
-}
-
-.avatar-lvl-badge {
-    position: absolute;
-    bottom: -6px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: linear-gradient(145deg, #FF7E62 0%, #EB4D2C 100%);
-    color: #FFFFFF;
-    font-size: 0.65rem;
-    font-weight: 900;
-    padding: 0.1rem 0.48rem;
-    border-radius: 9999px;
-    border: 2px solid #1D2440;
-    white-space: nowrap;
-    box-shadow:
-        0 2px 0 #1D2440,
-        inset 1px 1px 2px rgba(255, 255, 255, 0.6);
-}
-
-.hud-profile-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-}
-
-.hud-name-row {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-}
-
-.hud-title-crown {
-    font-size: 1.1rem;
-}
-
-.hud-name {
-    font-size: 1.2rem;
-    font-weight: 900;
-    color: var(--game-navy);
-}
-
-.instructor-tag {
-    font-size: 0.65rem;
-    font-weight: 900;
-    background: linear-gradient(145deg, #F0F8FF 0%, #D9EEFD 100%);
-    color: #1467A6;
-    border: 1.5px solid #2395EB;
-    padding: 0.15rem 0.55rem;
-    border-radius: 8px;
-    letter-spacing: 0.04em;
-    box-shadow:
-        inset 1px 1px 2px rgba(255, 255, 255, 0.9),
-        0 2px 0 rgba(35, 149, 235, 0.25);
-}
-
-.hud-xp-meter {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-}
-
-.xp-track {
-    width: 145px;
-    height: 14px;
-    background: #E2E6F0;
-    border: 2px solid #1D2440;
-    border-radius: 9999px;
-    overflow: hidden;
-    position: relative;
-    box-shadow:
-        inset 2px 3px 5px rgba(29, 36, 64, 0.25),
-        inset -2px -2px 4px rgba(255, 255, 255, 0.85);
-}
-
-.xp-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #06D6A0 0%, #2395EB 100%);
-    border-radius: 9999px;
-    position: relative;
-}
-
-.xp-shine {
-    position: absolute;
-    top: 2px;
-    left: 4px;
-    right: 4px;
-    height: 3px;
-    background: rgba(255, 255, 255, 0.65);
-    border-radius: 9999px;
-}
-
-.xp-label {
-    font-size: 0.72rem;
-    font-weight: 900;
-    color: #6C7594;
-}
-
-.hud-inventory-meters {
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
-    flex-wrap: wrap;
-}
-
-.inventory-pill {
-    background: var(--neu-surface);
-    border: 3px solid var(--game-border);
-    border-radius: 22px;
-    padding: 0.45rem 1.05rem 0.45rem 0.6rem;
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    box-shadow:
-        0 5px 0 var(--game-border),
-        -4px -4px 10px var(--neu-light),
-        6px 9px 16px var(--neu-navy-ambient),
-        var(--neu-bevel-light),
-        var(--neu-bevel-dark);
-}
-
-.pill-icon {
-    font-size: 1.35rem;
-    line-height: 1;
-    width: 38px;
-    height: 38px;
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #EFF2FA;
-    box-shadow:
-        inset 2px 2px 5px rgba(163, 174, 198, 0.55),
-        inset -2px -2px 5px rgba(255, 255, 255, 0.95);
-    border: 1.5px solid rgba(29, 36, 64, 0.12);
-}
-
-.pill-data {
-    display: flex;
-    flex-direction: column;
-}
-
-.pill-num {
-    font-size: 1.15rem;
-    font-weight: 900;
-    line-height: 1;
-    color: var(--game-navy);
-}
-
-.pill-lbl {
-    font-size: 0.62rem;
-    font-weight: 900;
-    letter-spacing: 0.06em;
-    color: #8C96B0;
-    margin-top: 0.15rem;
 }
 
 /* ==========================================================================
@@ -1109,12 +537,11 @@ const handleLogout = () => {
         inset 2px 2px 5px rgba(255, 255, 255, 0.95);
 }
 
-/* 2-Column Builder Grid */
+/* Builder Form Container */
 .builder-grid {
-    display: grid;
-    grid-template-columns: 1.55fr 1fr;
-    gap: 1.75rem;
-    align-items: start;
+    display: block;
+    max-width: 900px;
+    margin: 0 auto;
 }
 
 /* Form Card */
@@ -1189,6 +616,72 @@ const handleLogout = () => {
     display: grid;
     grid-template-columns: 1.1fr 1.1fr 0.8fr;
     gap: 1rem;
+}
+
+.field-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ai-generate-desc-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.75rem;
+    background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 50%, #BFDBFE 100%);
+    border: 1.5px solid #93C5FD;
+    border-radius: 9999px;
+    color: #1D4ED8;
+    font-family: var(--font-game);
+    font-size: 0.75rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ai-generate-desc-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%);
+    border-color: #60A5FA;
+    color: #1E40AF;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.ai-generate-desc-btn:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: 0 1px 2px rgba(37, 99, 235, 0.15);
+}
+
+.ai-generate-desc-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.ai-generate-desc-btn.is-success {
+    background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+    border-color: #6EE7B7;
+    color: #065F46;
+}
+
+.ai-sparkle-spin {
+    display: inline-block;
+    animation: ai-spin 1s linear infinite;
+}
+
+@keyframes ai-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.ai-desc-error {
+    margin: 0.2rem 0 0 0;
+    font-size: 0.76rem;
+    font-weight: 800;
+    color: #DC2626;
 }
 
 .field-label {
@@ -1614,408 +1107,125 @@ const handleLogout = () => {
         inset 2px 2px 5px rgba(255, 255, 255, 0.7);
 }
 
-/* ==========================================================================
-   RIGHT COLUMN: LIVE 3D NEUMORPHIC CARD PREVIEW
-   ========================================================================== */
-.preview-sticky-wrap {
-    position: sticky;
-    top: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.85rem;
-    padding-top: 0.5rem;
-    padding-bottom: 1.5rem;
+.field-help-sub {
+    font-size: 0.78rem;
+    font-family: var(--font-ui);
+    color: #6C7594;
+    margin: -0.15rem 0 0.2rem 0;
+    font-weight: 700;
 }
 
-.preview-header-tag {
-    text-align: center;
-    background: var(--neu-surface);
-    border: 2.5px solid var(--game-border);
-    border-radius: 9999px;
-    padding: 0.45rem 1rem;
-    font-size: 0.76rem;
-    font-weight: 900;
-    letter-spacing: 0.05em;
-    color: var(--game-navy);
-    box-shadow:
-        0 4px 0 var(--game-border),
-        var(--neu-bevel-light),
-        var(--neu-bevel-dark);
+.classroom-checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 0.75rem;
 }
 
-/* 3D CARTOON NEUMORPHISM KINGDOM CARD */
-.kingdom-card {
-    --frame-grad-1: #D4DEFD;
-    --frame-grad-2: #E8E1F8;
-    --frame-grad-3: #FDE4EB;
-    --frame-grad-4: #FEE7DD;
-    --frame-bezel-1: #C2CEF7;
-    --frame-bezel-2: #E5DBF5;
-    --frame-shadow-dark: rgba(72, 60, 108, 0.24);
-
+.classroom-check-card {
     position: relative;
-    border-radius: 36px;
-    padding: 16px;
-    background: linear-gradient(135deg, var(--frame-grad-1) 0%, var(--frame-grad-2) 32%, var(--frame-grad-3) 68%, var(--frame-grad-4) 100%);
-    box-shadow:
-        -12px 18px 34px -4px var(--frame-shadow-dark),
-        0 6px 14px rgba(0, 0, 0, 0.05),
-        inset 3px 3px 6px rgba(255, 255, 255, 0.95),
-        inset -4px -4px 7px rgba(162, 172, 208, 0.42);
-    user-select: none;
-    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
-    margin-bottom: 0.5rem;
-}
-
-/* Biome Color Variations for Frame */
-.theme-forest {
-    --frame-grad-1: #D1F4E6;
-    --frame-grad-2: #E1F7EC;
-    --frame-grad-3: #FDE8D7;
-    --frame-grad-4: #FEECE2;
-    --frame-bezel-1: #B4ECCF;
-    --frame-bezel-2: #C8F0DC;
-    --frame-shadow-dark: rgba(30, 95, 75, 0.22);
-}
-
-.theme-ocean {
-    --frame-grad-1: #CCE6FD;
-    --frame-grad-2: #DEEFFE;
-    --frame-grad-3: #FDE2EE;
-    --frame-grad-4: #FEEDEB;
-    --frame-bezel-1: #B3DAFC;
-    --frame-bezel-2: #CBE6FD;
-    --frame-shadow-dark: rgba(30, 80, 125, 0.24);
-}
-
-.theme-cosmic {
-    --frame-grad-1: #D8D2FB;
-    --frame-grad-2: #E8D8FA;
-    --frame-grad-3: #FCE0ED;
-    --frame-grad-4: #FEDDE3;
-    --frame-bezel-1: #C6BCF8;
-    --frame-bezel-2: #DACAF6;
-    --frame-shadow-dark: rgba(75, 45, 115, 0.26);
-}
-
-.theme-volcano {
-    --frame-grad-1: #FEE1D6;
-    --frame-grad-2: #FEDBD4;
-    --frame-grad-3: #FEE7C8;
-    --frame-grad-4: #FEF0D4;
-    --frame-bezel-1: #FCCEC0;
-    --frame-bezel-2: #FDC7B8;
-    --frame-shadow-dark: rgba(135, 55, 35, 0.24);
-}
-
-/* Stepped Inner Frame Bezel */
-.frame-inner-bezel {
-    border-radius: 26px;
-    padding: 7px;
-    background: linear-gradient(135deg, var(--frame-bezel-1) 0%, var(--frame-bezel-2) 100%);
-    box-shadow:
-        inset 2.5px 2.5px 5px rgba(50, 40, 80, 0.2),
-        inset -2.5px -2.5px 5px rgba(255, 255, 255, 0.85);
-}
-
-/* Recessed Center Picture Window */
-.frame-window {
-    position: relative;
-    border-radius: 20px;
-    overflow: hidden;
-    aspect-ratio: 16 / 9.5;
-    background: #AEE2FF;
-    box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.32);
-}
-
-.frame-center-image {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-}
-
-.frame-fallback-scene {
-    width: 100%;
-    height: 100%;
-    display: flex;
-}
-
-.fallback-scenery-svg {
-    width: 100%;
-    height: 100%;
-    display: block;
-}
-
-/* 3D Decorative Overlapping Clay Accents */
-.clay-accent {
-    position: absolute;
-    pointer-events: none;
-    z-index: 10;
-}
-
-/* Clay Star: Peeking on top rim */
-.clay-star {
-    top: -14px;
-    right: 28%;
-    width: 48px;
-    height: 48px;
-    transform: rotate(10deg);
-}
-
-.clay-star-svg {
-    width: 100%;
-    height: 100%;
-    display: block;
-    overflow: visible;
-}
-
-/* Clay Clouds on Left and Right Frame Edges */
-.clay-cloud-left {
-    top: 36%;
-    left: -18px;
-    width: 82px;
-    height: 54px;
-}
-
-.clay-cloud-right {
-    top: 28%;
-    right: -18px;
-    width: 82px;
-    height: 54px;
-}
-
-.clay-cloud-svg {
-    width: 100%;
-    height: 100%;
-    display: block;
-    overflow: visible;
-}
-
-/* Discrete Floating Clay Status Badges */
-.clay-card-badges {
-    position: absolute;
-    top: 22px;
-    left: 22px;
-    z-index: 11;
-    display: flex;
-    gap: 0.35rem;
-    pointer-events: none;
-}
-
-.clay-badge-pill {
-    font-size: 0.65rem;
-    font-weight: 900;
-    letter-spacing: 0.05em;
-    padding: 0.22rem 0.55rem;
-    border-radius: 9999px;
-}
-
-.clay-badge-pill.badge-pub {
-    background: linear-gradient(135deg, #F2FCF9 0%, #D4F5EC 100%);
-    color: #038F6A;
-    box-shadow:
-        0 2px 4px rgba(6, 214, 160, 0.25),
-        inset 0 1px 2px rgba(255, 255, 255, 0.9);
-}
-
-.clay-badge-pill.badge-draft {
-    background: linear-gradient(135deg, #FFF1F2 0%, #FFE4E6 100%);
-    color: #E11D48;
-    box-shadow:
-        0 2px 4px rgba(225, 29, 72, 0.2),
-        inset 0 1px 2px rgba(255, 255, 255, 0.9);
-}
-
-/* 3D Extruded Neumorphic Plaque with Bubble Title at Bottom */
-.clay-title-plaque {
-    position: absolute;
-    bottom: -18px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: calc(100% - 64px);
-    max-width: 88%;
-    min-height: 52px;
-    padding: 0.55rem 1.25rem;
-    border-radius: 9999px;
-    background: linear-gradient(180deg, #FDF2F7 0%, #FCE4EF 35%, #F7C6DF 80%, #F1AED2 100%);
-    border: 2px solid rgba(255, 255, 255, 0.85);
-    box-shadow:
-        0 10px 22px rgba(110, 50, 95, 0.24),
-        0 4px 8px rgba(0, 0, 0, 0.07),
-        inset 0 3px 3px rgba(255, 255, 255, 0.98),
-        inset 0 -3px 5px rgba(180, 50, 115, 0.26);
     display: flex;
     align-items: center;
-    justify-content: center;
-    text-align: center;
-    z-index: 12;
+    background: #EEF1F9;
+    border: 2px solid var(--game-border);
+    border-radius: 16px;
+    padding: 0.75rem 0.95rem;
+    cursor: pointer;
+    box-shadow: 0 3px 0 var(--game-border);
+    transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    user-select: none;
 }
 
-.plaque-title-text {
-    font-family: 'Fredoka', cursive, sans-serif;
-    font-weight: 900;
-    font-size: 1.15rem;
-    line-height: 1.15;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    background: linear-gradient(90deg, #FF6B8B 0%, #FFA26B 20%, #F6C90E 40%, #06D6A0 60%, #4EA8DE 80%, #9D4EDD 95%, #FF6B8B 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 2px 0 #FFFFFF) drop-shadow(0 3px 2px rgba(70, 30, 80, 0.2));
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
+.classroom-check-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 0 var(--game-border);
+    border-color: var(--game-blue);
 }
 
-.next-step-hint-card {
-    background: var(--neu-surface);
-    border: 3px solid var(--game-border);
-    border-radius: 22px;
-    padding: 1rem 1.2rem;
+.classroom-check-card.is-selected {
+    background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
+    border-color: #2563EB;
+    box-shadow: 0 3px 0 #1D4ED8, 0 6px 12px rgba(37, 99, 235, 0.18);
+}
+
+.classroom-checkbox-native {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.classroom-check-content {
     display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
-    box-shadow:
-        0 5px 0 var(--game-border),
-        var(--neu-bevel-light),
-        var(--neu-bevel-dark);
+    flex-direction: column;
+    gap: 0.15rem;
+    width: 100%;
 }
 
-.hint-icon {
-    font-size: 1.5rem;
-    line-height: 1;
+.check-top-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.15rem;
 }
 
-.hint-content strong {
-    display: block;
-    font-size: 0.9rem;
+.check-room-icon {
+    font-size: 1.25rem;
+}
+
+.check-indicator {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 900;
+    background: #FFFFFF;
+    border: 2px solid #CBD5E1;
+    color: #94A3B8;
+    transition: all 0.15s ease;
+}
+
+.classroom-check-card.is-selected .check-indicator {
+    background: #2563EB;
+    border-color: #1D4ED8;
+    color: #FFFFFF;
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.35);
+}
+
+.check-room-name {
+    font-family: var(--font-game);
+    font-size: 0.92rem;
     font-weight: 900;
     color: var(--game-navy);
-    margin-bottom: 0.2rem;
 }
 
-.hint-content p {
+.check-room-meta {
+    font-family: var(--font-ui);
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: #64748B;
+}
+
+.no-classrooms-hint {
+    background: #F8FAFC;
+    border: 2px dashed #CBD5E1;
+    border-radius: 14px;
+    padding: 0.85rem 1rem;
     font-family: var(--font-ui);
     font-size: 0.82rem;
     font-weight: 700;
-    color: #6C7594;
-    margin: 0;
+    color: #64748B;
     line-height: 1.4;
-}
-
-/* ==========================================================================
-   3D CARTOON + NEUMORPHIC BOTTOM GAME NAVIGATION DOCK
-   ========================================================================== */
-.game-bottom-dock {
-    position: fixed;
-    bottom: 1.5rem;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 999;
-    background: var(--neu-surface);
-    border: 3.5px solid var(--game-border);
-    border-radius: 38px;
-    padding: 0.65rem 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    box-shadow:
-        0 10px 0 var(--game-border),
-        -6px -6px 16px rgba(255, 255, 255, 0.85),
-        0 22px 42px rgba(29, 36, 64, 0.25),
-        var(--neu-bevel-light),
-        var(--neu-bevel-dark);
-    user-select: none;
-    max-width: 95vw;
-}
-
-.dock-item {
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.25rem 0.5rem;
-    transition: transform 0.2s var(--spring-bounce);
-    outline: none;
-}
-
-.dock-item:hover {
-    transform: translateY(-4px);
-}
-
-.dock-bubble {
-    width: 50px;
-    height: 50px;
-    border-radius: 18px;
-    background: linear-gradient(145deg, #FFFFFF 0%, #E9EDF7 100%);
-    border: 2.5px solid var(--game-border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    box-shadow:
-        0 3px 0 var(--game-border),
-        inset 2px 2px 5px rgba(255, 255, 255, 0.95),
-        inset -2px -2px 5px rgba(164, 176, 204, 0.45);
-    transition: all 0.2s var(--spring-bounce);
-}
-
-.dock-item.active .dock-bubble {
-    background: linear-gradient(145deg, #38A3F5 0%, #1579C4 100%);
-    border-color: #0E5287;
-    box-shadow:
-        0 4px 0 #0E5287,
-        0 6px 14px rgba(35, 149, 235, 0.35),
-        inset 2px 2px 5px rgba(255, 255, 255, 0.6),
-        inset -2px -3px 6px rgba(14, 82, 135, 0.5);
-    transform: translateY(-4px) scale(1.08);
-}
-
-.dock-label {
-    font-family: var(--font-game);
-    font-size: 0.72rem;
-    font-weight: 900;
-    color: #727B94;
-    letter-spacing: 0.05em;
-}
-
-.dock-item.active .dock-label {
-    color: var(--game-blue);
-}
-
-.dock-divider {
-    width: 3px;
-    height: 42px;
-    background: #DFE4F2;
-    border-radius: 9999px;
 }
 
 /* ==========================================================================
    RESPONSIVE DESIGN
    ========================================================================== */
 @media (max-width: 980px) {
-    .builder-grid {
-        grid-template-columns: 1fr;
-    }
-
     .field-row-2,
     .field-row-3 {
         grid-template-columns: 1fr;
-    }
-
-    .game-hud {
-        flex-direction: column;
-        align-items: stretch;
-        padding: 1rem 1.25rem;
-    }
-
-    .bg-asset {
-        display: none;
     }
 }
 </style>

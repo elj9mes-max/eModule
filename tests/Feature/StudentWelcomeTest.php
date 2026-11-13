@@ -58,6 +58,7 @@ test('student dashboard returns modules list for the student', function () {
         'theme' => ModuleTheme::Forest,
         'xp_bonus' => 300,
     ]);
+    $module->enrollments()->create(['user_id' => $student->id]);
 
     $response = $this->actingAs($student)->get(route('students.dashboard'));
 

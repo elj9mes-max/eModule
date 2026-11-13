@@ -1,6 +1,7 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
+import { generateLectureAssist } from '@/Services/geminiAi.js';
 
 const props = defineProps({
     user: {
@@ -40,6 +41,53 @@ const previewTitle = computed(() => form.title.trim() || 'Untitled Reading Miles
 const previewDesc = computed(() => form.description.trim() || 'Students will explore reading passages, vocabulary terms, and interactive storytelling.');
 const previewXp = computed(() => Number(form.xp_reward) || 150);
 
+const isGeneratingAi = ref(false);
+const aiError = ref('');
+const aiObjectives = ref([]);
+const aiPromptInput = ref('');
+const showAiPanel = ref(false);
+
+const triggerAiLectureAssist = async () => {
+    const topic = aiPromptInput.value.trim() || form.title.trim() || props.module.title;
+    if (!topic) {
+        aiError.value = 'Please provide a topic or theme first.';
+        return;
+    }
+
+    isGeneratingAi.value = true;
+    aiError.value = '';
+
+    try {
+        const result = await generateLectureAssist({
+            topic,
+            gradeLevel: props.module.grade_level,
+            mode: 'describe',
+        });
+
+        if (result) {
+            if (result.title) {
+                form.title = result.title;
+            }
+            if (result.description) {
+                form.description = result.description;
+            }
+            if (result.xp_reward) {
+                form.xp_reward = result.xp_reward;
+            }
+            if (Array.isArray(result.learning_objectives)) {
+                aiObjectives.value = result.learning_objectives;
+                if (!form.body || form.body.trim() === '') {
+                    form.body = 'Learning Objectives:\n• ' + result.learning_objectives.join('\n• ');
+                }
+            }
+        }
+    } catch (err) {
+        aiError.value = err.message || 'Unable to generate lecture content with Gemini.';
+    } finally {
+        isGeneratingAi.value = false;
+    }
+};
+
 const submitLecture = () => {
     form.post(`/teachers/modules/${props.module.slug}/lectures`);
 };
@@ -57,11 +105,6 @@ const handleLogout = () => {
     <Head :title="`Create Lecture • ${module.title}`" />
 
     <div class="create-lecture-page">
-        <!-- Google Fonts: Fredoka & Nunito -->
-        <component :is="'style'">
-            @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700;800;900&family=Nunito:wght@600;700;800;900&display=swap');
-        </component>
-
         <!-- Ambient Floating Decorative Elements -->
         <div class="floating-bg-assets" aria-hidden="true">
             <img src="/images/book_left_trees_mountains.png" alt="" class="bg-asset bg-book-left" />
@@ -123,6 +166,55 @@ const handleLogout = () => {
                                 📍 Milestone Step #{{ module.next_sort_order }}
                             </span>
                             <span class="module-link-text">Part of {{ module.title }}</span>
+                        </div>
+
+                        <!-- AI Lecture Assistant Card -->
+                        <div class="ai-lecture-card">
+                            <div class="ai-header-bar">
+                                <div class="ai-badge-group">
+                                    <span class="ai-sparkle-icon">✨</span>
+                                    <span class="ai-badge-text">GEMINI AI ASSISTANT</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="ai-toggle-btn"
+                                    @click="showAiPanel = !showAiPanel"
+                                >
+                                    {{ showAiPanel ? '▲ Hide AI' : '▼ Auto-Draft with AI' }}
+                                </button>
+                            </div>
+
+                            <div v-show="showAiPanel" class="ai-body-content">
+                                <p class="ai-help-copy">
+                                    Need creative inspiration? Enter a theme or book topic, and Gemini AI will draft an exciting title, child-friendly description, and learning goals for <strong>{{ module.grade_level }}</strong>!
+                                </p>
+                                <div class="ai-input-row">
+                                    <input
+                                        v-model="aiPromptInput"
+                                        type="text"
+                                        class="ai-theme-input"
+                                        :placeholder="`e.g., Forest Folklore & Resolving Conflict (defaults to '${module.title}')`"
+                                        @keydown.enter.prevent="triggerAiLectureAssist"
+                                    />
+                                    <button
+                                        type="button"
+                                        class="btn-generate-ai"
+                                        :disabled="isGeneratingAi"
+                                        @click="triggerAiLectureAssist"
+                                    >
+                                        <span v-if="isGeneratingAi">⏳ Generating...</span>
+                                        <span v-else>✨ Generate</span>
+                                    </button>
+                                </div>
+                                <p v-if="aiError" class="ai-error-notice">⚠️ {{ aiError }}</p>
+
+                                <div v-if="aiObjectives.length > 0" class="ai-goals-box">
+                                    <strong class="ai-goals-title">🎯 Generated Learning Objectives:</strong>
+                                    <ul class="ai-goals-list">
+                                        <li v-for="(goal, idx) in aiObjectives" :key="idx">{{ goal }}</li>
+                                    </ul>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Lecture Title -->
@@ -986,6 +1078,157 @@ input:checked + .slider-round:before {
     .builder-grid {
         grid-template-columns: 1fr;
     }
+}
+
+/* Gemini AI Assistant Box */
+.ai-lecture-card {
+    background: linear-gradient(135deg, #EFF6FF 0%, #EEF2FF 100%);
+    border: 2px solid #BFDBFE;
+    border-radius: 16px;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
+}
+
+.ai-header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ai-badge-group {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.ai-sparkle-icon {
+    font-size: 1rem;
+    animation: sparkleSpin 3s infinite ease-in-out;
+}
+
+@keyframes sparkleSpin {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    50% { transform: scale(1.15) rotate(10deg); }
+}
+
+.ai-badge-text {
+    font-family: var(--font-heading);
+    font-size: 0.76rem;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    color: #1D4ED8;
+    background: #DBEAFE;
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    border: 1px solid #93C5FD;
+}
+
+.ai-toggle-btn {
+    background: #FFFFFF;
+    border: 1.5px solid #93C5FD;
+    border-radius: 10px;
+    color: #1E40AF;
+    font-family: var(--font-heading);
+    font-size: 0.78rem;
+    font-weight: 800;
+    padding: 0.35rem 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.ai-toggle-btn:hover {
+    background: #DBEAFE;
+}
+
+.ai-body-content {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed #BFDBFE;
+}
+
+.ai-help-copy {
+    font-size: 0.8rem;
+    color: #334155;
+    margin: 0 0 0.65rem 0;
+    line-height: 1.45;
+}
+
+.ai-input-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.ai-theme-input {
+    flex: 1;
+    border: 2px solid #CBD5E1;
+    border-radius: 12px;
+    padding: 0.55rem 0.85rem;
+    font-size: 0.84rem;
+    color: #0F172A;
+    background: #FFFFFF;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.ai-theme-input:focus {
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.btn-generate-ai {
+    background: linear-gradient(180deg, #3B82F6 0%, #1D4ED8 100%);
+    color: #FFFFFF;
+    border: none;
+    border-radius: 12px;
+    padding: 0.55rem 1rem;
+    font-family: var(--font-heading);
+    font-size: 0.8rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 3px 0 #1E3A8A;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-generate-ai:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 0 #1E3A8A;
+}
+
+.btn-generate-ai:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.ai-error-notice {
+    font-size: 0.78rem;
+    color: #DC2626;
+    margin: 0.5rem 0 0 0;
+    font-weight: 700;
+}
+
+.ai-goals-box {
+    margin-top: 0.75rem;
+    background: #FFFFFF;
+    border-radius: 10px;
+    border: 1px solid #E2E8F0;
+    padding: 0.6rem 0.8rem;
+}
+
+.ai-goals-title {
+    display: block;
+    font-size: 0.78rem;
+    color: #0F172A;
+    margin-bottom: 0.35rem;
+}
+
+.ai-goals-list {
+    margin: 0;
+    padding-left: 1.2rem;
+    font-size: 0.78rem;
+    color: #475569;
+    line-height: 1.45;
 }
 </style>
 

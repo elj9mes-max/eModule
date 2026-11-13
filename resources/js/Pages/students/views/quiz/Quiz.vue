@@ -2,6 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import { useSound } from '@/Services/soundManager';
+import { flushCacheTags, prefetchRoute } from '@/Composables/usePrefetch';
+import { usePixarTheme } from '@/Composables/usePixarTheme';
 
 const {
     playPop,
@@ -12,6 +14,8 @@ const {
     playClick,
     playBonus,
 } = useSound();
+
+const { activeWorld } = usePixarTheme();
 
 const props = defineProps({
     user: {
@@ -116,350 +120,24 @@ const getZoneTheme = (themeKey) => {
 /* ==========================================================================
    DEMO QUIZZES FOR ALL 6 FORMATS (FALLBACK & FORMAT SWITCHER PREVIEW)
    ========================================================================== */
-const fallbackModule = {
-    id: 1,
-    title: 'Whispering Woods: Reading Quest',
-    slug: 'whispering-woods',
-    grade_level: 'Grade 4 • Interactive Quiz Arena',
-    theme: 'forest',
-    xp_bonus: 300,
-    boss_name: 'Elder Oak Guardian',
-};
-
-const demoQuizzesByFormat = {
-    multiple_choice: {
-        id: 901,
-        title: 'Forest Rune Decoder Challenge',
-        slug: 'forest-rune-decoder-challenge',
-        type: 'multiple_choice',
-        description: 'Read the passage and pick the best answer for each question.',
-        reading_passage:
-            'Mira held her brass lantern close to the mossy stone. The inscription was "luminous," casting a bright golden glow that lit up the dark forest path around her boots.',
-        contexts: [
-            {
-                id: 1,
-                scenario:
-                    'Mira held her brass lantern close to the mossy stone. The inscription was "luminous," casting a bright golden glow that lit up the dark forest path around her boots.',
-                hint: 'Look at the words right after "luminous" for a context clue!',
-            },
-        ],
-        xp_reward: 150,
-        passing_percentage: 75,
-        time_limit_seconds: null,
-        questions: [
-            {
-                id: 101,
-                question_text: 'Based on the story passage, what does the word "luminous" most nearly mean?',
-                selection_type: 'single',
-                passage_context: 'The inscription was "luminous," casting a bright golden glow...',
-                hint: 'Notice what the inscription does to the dark forest path.',
-                explanation: '"Casting a bright golden glow" shows that luminous means shining or glowing with light.',
-                points: 10,
-                options: [
-                    {
-                        id: 1,
-                        option_text: 'Shining or glowing with bright light',
-                        is_correct: true,
-                        feedback: 'Spot on! The golden glow lights up the dark path.',
-                    },
-                    {
-                        id: 2,
-                        option_text: 'Heavy and covered in thick green moss',
-                        is_correct: false,
-                        feedback: 'The stone is mossy, but the inscription itself is glowing.',
-                    },
-                    {
-                        id: 3,
-                        option_text: 'Silent and completely invisible at night',
-                        is_correct: false,
-                        feedback: 'Look closely at how it lit up the path around her boots.',
-                    },
-                ],
-            },
-            {
-                id: 102,
-                question_text: 'Which TWO details from the passage show that Mira is exploring in a dark place?',
-                selection_type: 'multiple',
-                passage_context: '',
-                hint: 'Select two choices that mention light tools or darkness.',
-                explanation: 'Holding a lantern and lighting up a dark forest path both show it is dark.',
-                points: 15,
-                options: [
-                    { id: 4, option_text: 'She held her brass lantern close', is_correct: true, feedback: '' },
-                    { id: 5, option_text: 'It lit up the dark forest path', is_correct: true, feedback: '' },
-                    { id: 6, option_text: 'The stone had green moss on it', is_correct: false, feedback: '' },
-                ],
-            },
-        ],
-    },
-    color_the_conflict: {
-        id: 902,
-        title: 'Color the Conflict: Whispering Pines',
-        slug: 'color-the-conflict-whispering-pines',
-        type: 'color_the_conflict',
-        description: 'Read each story excerpt and paint it with the matching Literary Conflict color swatch!',
-        reading_passage:
-            'Every great story has a conflict—a struggle that tests the hero. Identify whether the conflict is against another character, oneself, nature, or society.',
-        contexts: [
-            {
-                id: 2,
-                scenario:
-                    'In the Whispering Woods, explorers face external storms, disagreements with rivals, and tough choices inside their own hearts.',
-                hint: 'Ask yourself: Who or what is opposing the main character in this moment?',
-            },
-        ],
-        xp_reward: 160,
-        passing_percentage: 70,
-        cards: [
-            {
-                id: 201,
-                excerpt:
-                    'A sudden mountain blizzard swept across the rope bridge, whipping icy wind against Leo as he tried to keep his footing on the frozen planks.',
-                conflict_type: 'character_vs_nature',
-                hint: 'Is Leo struggling against a person, his own feelings, or a force of weather?',
-                explanation: 'Leo is battling a mountain blizzard and icy wind—a classic Character vs. Nature conflict!',
-                feedback_incorrect: 'Look at the opponent: a mountain blizzard and icy wind are forces of nature.',
-                points: 10,
-            },
-            {
-                id: 202,
-                excerpt:
-                    'Mira stared at the two forest trails. Part of her wanted to turn back to safety, while another voice inside urged her to be brave and help her friends.',
-                conflict_type: 'character_vs_self',
-                hint: 'Where is this struggle happening—outside or inside Mira’s mind?',
-                explanation: 'Mira is wrestling with her own fear and courage inside her heart (Character vs. Self).',
-                feedback_incorrect: 'Notice that Mira is debating with her own feelings and doubts.',
-                points: 10,
-            },
-            {
-                id: 203,
-                excerpt:
-                    'Guard Captain Vance blocked the iron gate and crossed his arms. "No apprentice enters the library tower while I am on watch!" he barked at Tomas.',
-                conflict_type: 'character_vs_character',
-                hint: 'Two named individuals are directly opposing each other at the gate.',
-                explanation: 'Tomas and Captain Vance are clashing directly—Character vs. Character!',
-                feedback_incorrect: 'Captain Vance is another character directly blocking Tomas.',
-                points: 10,
-            },
-        ],
-    },
-    the_conflict_map: {
-        id: 903,
-        title: 'The Conflict Map: Sort the Story Events',
-        slug: 'the-conflict-map-sort-events',
-        type: 'the_conflict_map',
-        description: 'Place each story event card into the correct Conflict Zone bucket on the map!',
-        reading_passage:
-            'Sort each event from the chapter into the Conflict Zone bucket where it belongs.',
-        contexts: [
-            {
-                id: 3,
-                scenario:
-                    'Drag an event card into a Conflict Bucket—or simply tap the matching zone button on any card!',
-                hint: 'Match each event letter (A, B, C) to its conflict category.',
-            },
-        ],
-        xp_reward: 180,
-        passing_percentage: 70,
-        zones: [
-            {
-                id: 301,
-                conflict_type: 'character_vs_character',
-                label: 'Character vs. Character',
-                subtitle: 'Clashes between two characters',
-                color_theme: 'rose',
-            },
-            {
-                id: 302,
-                conflict_type: 'character_vs_nature',
-                label: 'Character vs. Nature',
-                subtitle: 'Struggles with weather, terrain, or wild animals',
-                color_theme: 'emerald',
-            },
-            {
-                id: 303,
-                conflict_type: 'character_vs_self',
-                label: 'Character vs. Self',
-                subtitle: 'Internal doubts, fear, or moral choices',
-                color_theme: 'purple',
-            },
-        ],
-        events: [
-            {
-                id: 311,
-                card_letter: 'A',
-                event_text: 'A flash flood washes away the wooden canoe while Sami paddles across the river.',
-                target_conflict_type: 'character_vs_nature',
-                hint: 'A flash flood is a natural force.',
-                explanation: 'The river flood is a force of nature challenging Sami.',
-                points: 10,
-            },
-            {
-                id: 312,
-                card_letter: 'B',
-                event_text: 'Elena argues with her rival Marco over who should lead the rescue team.',
-                target_conflict_type: 'character_vs_character',
-                hint: 'Two characters (Elena and Marco) are arguing.',
-                explanation: 'Elena and Marco are two characters in direct disagreement.',
-                points: 10,
-            },
-            {
-                id: 313,
-                card_letter: 'C',
-                event_text: 'Hana wonders if she is honest enough to admit she lost the village map.',
-                target_conflict_type: 'character_vs_self',
-                hint: 'Hana is struggling with her own conscience.',
-                explanation: 'Deciding whether to confess a mistake is an internal Character vs. Self conflict.',
-                points: 10,
-            },
-        ],
-    },
-    matching_type: {
-        id: 904,
-        title: 'Matching Challenge: Story Vocabulary & Clues',
-        slug: 'matching-challenge-story-vocabulary',
-        type: 'matching_type',
-        description: 'Match each numbered clue in Column A with the correct lettered answer in Column B!',
-        reading_passage:
-            'Connect each reading concept or vocabulary clue on the left with its matching definition on the right.',
-        contexts: [
-            {
-                id: 4,
-                scenario:
-                    'Tap a numbered item in Column A, then tap its matching letter in Column B (or click a letter badge directly on the item).',
-                hint: 'Each letter in Column B matches one numbered description.',
-            },
-        ],
-        xp_reward: 160,
-        passing_percentage: 75,
-        choices: [
-            { id: 401, choice_letter: 'A', choice_text: 'Luminous (glowing brightly in the dark)' },
-            { id: 402, choice_letter: 'B', choice_text: 'Protagonist (the main hero of the story)' },
-            { id: 403, choice_letter: 'C', choice_text: 'Context Clues (nearby words that hint at meaning)' },
-            { id: 404, choice_letter: 'D', choice_text: 'Setting (where and when the story takes place)' },
-        ],
-        matching_items: [
-            {
-                id: 411,
-                item_number: 1,
-                description: 'Words or phrases in a sentence that help you figure out an unfamiliar word.',
-                correct_choice_letter: 'C',
-                hint: 'You look around the text for these helpful hints.',
-                explanation: 'Context Clues (C) are hints inside surrounding sentences.',
-                points: 10,
-            },
-            {
-                id: 412,
-                item_number: 2,
-                description: 'An adjective describing the bright golden light of Mira’s lantern.',
-                correct_choice_letter: 'A',
-                hint: 'Which choice means glowing brightly?',
-                explanation: 'Luminous (A) means radiating or reflecting bright light.',
-                points: 10,
-            },
-            {
-                id: 413,
-                item_number: 3,
-                description: 'The time and place of the adventure, such as the Whispering Woods at twilight.',
-                correct_choice_letter: 'D',
-                hint: 'Think of the stage where the story happens.',
-                explanation: 'Setting (D) tells us where and when a story occurs.',
-                points: 10,
-            },
-        ],
-    },
-    evaluation: {
-        id: 905,
-        title: 'Evaluation Arena: Judge the Character’s Choice',
-        slug: 'evaluation-arena-character-choice',
-        type: 'evaluation',
-        description: 'Step 1: Pick your stance. Step 2: Complete the reasoning sentence using Word Helpers!',
-        reading_passage:
-            'When the bridge rope snapped, Leo shared his last lantern with the younger travelers instead of rushing ahead alone.',
-        contexts: [
-            {
-                id: 5,
-                scenario:
-                    'When the canyon wind blew out the torches, Leo slowed down and shared his brass lantern so the younger travelers could cross safely together.',
-                hint: 'Use the Word Helpers bank to complete your Step 2 explanation!',
-            },
-        ],
-        xp_reward: 200,
-        passing_percentage: 70,
-        word_helpers: ['compassionate', 'teamwork', 'selfless', 'protected', 'courageous'],
-        evaluation_items: [
-            {
-                id: 501,
-                section_title: 'Part 1: Evaluating Leo’s Leadership',
-                conflict_type: 'character_vs_nature',
-                question_prompt: 'Did Leo make the right decision by slowing down to share his lantern during the storm?',
-                step1_prompt: 'Step 1: Choose your judgment:',
-                sentence_template: 'I think Leo made a [stance] decision because his [blank] kept the younger travelers safe.',
-                hint: 'Pick the positive stance in Step 1, then fill both blanks in Step 2 (tap a Word Helper chip to insert it!).',
-                points: 20,
-                options: [
-                    {
-                        id: 511,
-                        option_text: 'Yes — protecting the group showed true leadership and empathy.',
-                        stance_value: 'agree',
-                        is_correct: true,
-                    },
-                    {
-                        id: 512,
-                        option_text: 'No — he should have left everyone behind in the dark.',
-                        stance_value: 'disagree',
-                        is_correct: false,
-                    },
-                ],
-            },
-        ],
-    },
-    reflection: {
-        id: 906,
-        title: 'Story Reflection Journal: Courage & Community',
-        slug: 'story-reflection-journal',
-        type: 'reflection',
-        description: 'Write a thoughtful reflection connecting the story’s conflict to real life.',
-        reading_passage:
-            'Throughout the Whispering Woods expedition, the characters overcame storms and misunderstandings by listening calmly and helping one another.',
-        contexts: [
-            {
-                id: 6,
-                scenario:
-                    'Reflect on how the characters in this module solved their conflicts through calm dialogue and bayanihan (helping one another).',
-                hint: 'You can click "Insert Starter Sentence" to begin your paragraph smoothly!',
-            },
-        ],
-        xp_reward: 180,
-        passing_percentage: 70,
-        prompts: [
-            {
-                id: 601,
-                prompt_text:
-                    'How can calm communication help resolve a disagreement with a friend or classmate in real life? Share an example.',
-                min_words: 12,
-                max_words: 120,
-                guiding_hint: 'Describe how listening first prevents a small misunderstanding from growing bigger.',
-                starter_sentence: 'When I have a disagreement with a friend, calm communication helps us because ',
-                points: 25,
-            },
-        ],
-    },
-};
+const fallbackModule = null;
+const demoQuizzesByFormat = {};
 
 /* ==========================================================================
-   ACTIVE QUIZ RESOLUTION & FORMAT SWITCHING
+   ACTIVE QUIZ RESOLUTION (STRICTLY FROM DATABASE)
    ========================================================================== */
 const activeDemoFormat = ref(props.quiz?.type || 'multiple_choice');
 
-const activeModule = computed(() => props.module || fallbackModule);
+const activeModule = computed(() => props.module || {
+    id: null,
+    title: '',
+    slug: '',
+    grade_level: '',
+    theme: 'forest',
+});
 
 const activeQuiz = computed(() => {
-    if (props.quiz && props.quiz.type === activeDemoFormat.value) {
-        return props.quiz;
-    }
-
-    return demoQuizzesByFormat[activeDemoFormat.value] || props.quiz || demoQuizzesByFormat.multiple_choice;
+    return props.quiz || null;
 });
 
 const quizType = computed(() => activeQuiz.value?.type || 'multiple_choice');
@@ -559,6 +237,7 @@ const selectedMapEventId = ref(null);
 const matchingSelected = ref({});
 const matchingChecked = ref(false);
 const activeMatchingItemId = ref(null);
+const activeMatchingChoiceLetter = ref(null);
 
 // 5. Evaluation: { [itemId]: { optionId: null, blanks: ['', ''] } }
 const evaluationState = ref({});
@@ -591,6 +270,7 @@ const resetQuizSession = () => {
     matchingSelected.value = {};
     matchingChecked.value = false;
     activeMatchingItemId.value = null;
+    activeMatchingChoiceLetter.value = null;
     evaluationState.value = {};
     evaluationChecked.value = {};
     reflectionText.value = {};
@@ -734,6 +414,28 @@ const checkConflictCard = (card) => {
 /* ==========================================================================
    3. THE CONFLICT MAP HANDLERS (DRAG-AND-DROP + TAP-TO-ASSIGN)
    ========================================================================== */
+const dragHoverZoneType = ref(null);
+const touchDraggingEventId = ref(null);
+
+const getZoneByConflictType = (conflictType) => {
+    return (activeQuiz.value?.zones || []).find((z) => z.conflict_type === conflictType) || null;
+};
+
+const getConflictEmoji = (conflictType) => {
+    switch (conflictType) {
+        case 'character_vs_character':
+            return '⚔️';
+        case 'character_vs_nature':
+            return '🌪️';
+        case 'character_vs_self':
+            return '🧠';
+        case 'character_vs_society':
+            return '🏛️';
+        default:
+            return '🎯';
+    }
+};
+
 const assignEventToZone = (eventId, zoneConflictType) => {
     playPop(1.2);
     mapAssignments.value = {
@@ -742,6 +444,9 @@ const assignEventToZone = (eventId, zoneConflictType) => {
     };
     mapChecked.value = false;
     selectedMapEventId.value = null;
+    dragHoverZoneType.value = null;
+    touchDraggingEventId.value = null;
+    draggedEventId.value = null;
 };
 
 const unassignEvent = (eventId) => {
@@ -753,6 +458,7 @@ const unassignEvent = (eventId) => {
 
 const handleEventDragStart = (eventId) => {
     draggedEventId.value = eventId;
+    selectedMapEventId.value = eventId;
 };
 
 const handleZoneDrop = (zoneConflictType) => {
@@ -760,12 +466,41 @@ const handleZoneDrop = (zoneConflictType) => {
         assignEventToZone(draggedEventId.value, zoneConflictType);
         draggedEventId.value = null;
     }
+    dragHoverZoneType.value = null;
 };
 
 const handleZoneTap = (zoneConflictType) => {
     if (selectedMapEventId.value !== null) {
         assignEventToZone(selectedMapEventId.value, zoneConflictType);
     }
+};
+
+const handleTouchStart = (eventId) => {
+    touchDraggingEventId.value = eventId;
+    selectedMapEventId.value = eventId;
+};
+
+const handleTouchMove = (e) => {
+    if (!touchDraggingEventId.value || !e.touches || e.touches.length === 0) return;
+    if (e.cancelable) {
+        e.preventDefault();
+    }
+    const touch = e.touches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const bucket = el?.closest('[data-zone-type]');
+    if (bucket) {
+        dragHoverZoneType.value = bucket.getAttribute('data-zone-type');
+    } else {
+        dragHoverZoneType.value = null;
+    }
+};
+
+const handleTouchEnd = () => {
+    if (touchDraggingEventId.value && dragHoverZoneType.value) {
+        assignEventToZone(touchDraggingEventId.value, dragHoverZoneType.value);
+    }
+    touchDraggingEventId.value = null;
+    dragHoverZoneType.value = null;
 };
 
 const getZoneEvents = (zoneConflictType) => {
@@ -779,30 +514,146 @@ const checkConflictMap = () => {
 };
 
 /* ==========================================================================
-   4. MATCHING TYPE HANDLERS
+   4. MATCHING TYPE HANDLERS & TABLE COLOR PALETTES
    ========================================================================== */
+const matchingChoicePalette = [
+    { key: 'coral', bg: '#FFF1F2', border: '#FDA4AF', text: '#9F1239', badgeBg: '#E11D48', badgeText: '#FFFFFF', ring: '#F43F5E' },
+    { key: 'amber', bg: '#FFFBEB', border: '#FCD34D', text: '#92400E', badgeBg: '#D97706', badgeText: '#FFFFFF', ring: '#F59E0B' },
+    { key: 'emerald', bg: '#ECFDF5', border: '#6EE7B7', text: '#065F46', badgeBg: '#059669', badgeText: '#FFFFFF', ring: '#10B981' },
+    { key: 'sky', bg: '#F0F9FF', border: '#7DD3FC', text: '#0369A1', badgeBg: '#0284C7', badgeText: '#FFFFFF', ring: '#0EA5E9' },
+    { key: 'purple', bg: '#FAF5FF', border: '#D8B4FE', text: '#6B21A8', badgeBg: '#7C3AED', badgeText: '#FFFFFF', ring: '#8B5CF6' },
+    { key: 'rose', bg: '#FFF1F2', border: '#F472B6', text: '#9D174D', badgeBg: '#DB2777', badgeText: '#FFFFFF', ring: '#EC4899' },
+    { key: 'indigo', bg: '#EEF2FF', border: '#A5B4FC', text: '#3730A3', badgeBg: '#4F46E5', badgeText: '#FFFFFF', ring: '#6366F1' },
+    { key: 'teal', bg: '#F0FDFA', border: '#5EEAD4', text: '#115E59', badgeBg: '#0D9488', badgeText: '#FFFFFF', ring: '#14B8A6' },
+];
+
+const getChoiceColorByLetter = (letter) => {
+    const choices = activeQuiz.value?.choices || [];
+    const idx = choices.findIndex((c) => c.choice_letter === letter);
+    const safeIdx = idx >= 0 ? idx % matchingChoicePalette.length : 0;
+    return matchingChoicePalette[safeIdx];
+};
+
+const getChoiceColorByIndex = (idx) => {
+    return matchingChoicePalette[idx % matchingChoicePalette.length];
+};
+
+const getClueRowStyle = (itemId) => {
+    const matchedLetter = matchingSelected.value[itemId];
+    if (matchedLetter) {
+        const theme = getChoiceColorByLetter(matchedLetter);
+        return {
+            backgroundColor: theme.bg,
+            borderColor: theme.border,
+            boxShadow: `0 3px 0 ${theme.border}`,
+        };
+    }
+    return {};
+};
+
+const getMatchedBadgeStyle = (letter) => {
+    const theme = getChoiceColorByLetter(letter);
+    return {
+        backgroundColor: theme.badgeBg,
+        color: theme.badgeText,
+    };
+};
+
+const getOptionRowStyle = (choiceLetter, idx) => {
+    const theme = getChoiceColorByIndex(idx);
+    const isSelected = activeMatchingChoiceLetter.value === choiceLetter;
+    return {
+        backgroundColor: theme.bg,
+        borderColor: isSelected ? theme.ring : theme.border,
+        boxShadow: isSelected ? `0 0 0 3px ${theme.ring}, 0 4px 10px rgba(0,0,0,0.06)` : `0 3px 0 ${theme.border}`,
+    };
+};
+
+const getOptionLetterCircleStyle = (idx) => {
+    const theme = getChoiceColorByIndex(idx);
+    return {
+        backgroundColor: theme.badgeBg,
+        color: theme.badgeText,
+    };
+};
+
+const isChoiceMatched = (choiceLetter) => {
+    return Object.values(matchingSelected.value).includes(choiceLetter);
+};
+
+const getClueNumberByAssignedChoice = (choiceLetter) => {
+    const entry = Object.entries(matchingSelected.value).find(([, letter]) => letter === choiceLetter);
+    if (!entry) return null;
+    const item = (activeQuiz.value?.matching_items || []).find((i) => i.id === Number(entry[0]));
+    return item ? item.item_number : null;
+};
+
+const getClueNumberById = (itemId) => {
+    const item = (activeQuiz.value?.matching_items || []).find((i) => i.id === itemId);
+    return item ? item.item_number : '';
+};
+
 const assignMatchingChoice = (itemId, choiceLetter) => {
+    playPop(1.2);
     matchingSelected.value = {
         ...matchingSelected.value,
         [itemId]: choiceLetter,
     };
     matchingChecked.value = false;
     activeMatchingItemId.value = null;
+    activeMatchingChoiceLetter.value = null;
 };
 
-const handleChoiceColumnTap = (choiceLetter) => {
+// Tap a clue in Column A
+const handleClueTap = (itemId) => {
+    // If a choice from Column B was already selected, connect it immediately!
+    if (activeMatchingChoiceLetter.value !== null) {
+        assignMatchingChoice(itemId, activeMatchingChoiceLetter.value);
+        return;
+    }
+
+    // Toggle active clue selection
+    if (activeMatchingItemId.value === itemId) {
+        activeMatchingItemId.value = null;
+    } else {
+        playPop(1.1);
+        activeMatchingItemId.value = itemId;
+        activeMatchingChoiceLetter.value = null;
+    }
+};
+
+// Tap an option in Column B
+const handleOptionTap = (choiceLetter) => {
+    // If a clue from Column A was already selected, connect it immediately!
     if (activeMatchingItemId.value !== null) {
         assignMatchingChoice(activeMatchingItemId.value, choiceLetter);
         return;
     }
 
-    // Otherwise assign to the first unassigned item
-    const firstUnassigned = (activeQuiz.value?.matching_items || []).find(
-        (item) => !matchingSelected.value[item.id],
-    );
-    if (firstUnassigned) {
-        assignMatchingChoice(firstUnassigned.id, choiceLetter);
+    // Toggle active choice selection
+    if (activeMatchingChoiceLetter.value === choiceLetter) {
+        activeMatchingChoiceLetter.value = null;
+    } else {
+        playPop(1.1);
+        activeMatchingChoiceLetter.value = choiceLetter;
+        activeMatchingItemId.value = null;
     }
+};
+
+const unmatchClue = (itemId) => {
+    playPop(0.9);
+    const next = { ...matchingSelected.value };
+    delete next[itemId];
+    matchingSelected.value = next;
+    matchingChecked.value = false;
+    if (activeMatchingItemId.value === itemId) {
+        activeMatchingItemId.value = null;
+    }
+};
+
+const clearMatchingSelection = () => {
+    activeMatchingItemId.value = null;
+    activeMatchingChoiceLetter.value = null;
 };
 
 const getChoiceTextByLetter = (letter) => {
@@ -1207,27 +1058,48 @@ const finishQuizAndShowSummary = () => {
         answers: packageAnswersPayload(),
     };
 
+    const getCsrfToken = () => {
+        const metaTag = document.querySelector('meta[name="csrf-token"]');
+        if (metaTag && metaTag.getAttribute('content')) {
+            return metaTag.getAttribute('content');
+        }
+        const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+        return match ? decodeURIComponent(match[1]) : '';
+    };
+
     fetch(`/students/modules/${props.module.slug}/quizzes/${props.quiz.slug}/submit`, {
         method: 'POST',
+        credentials: 'same-origin',
         headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            'X-CSRF-TOKEN': getCsrfToken(),
+            'X-XSRF-TOKEN': getCsrfToken(),
         },
         body: JSON.stringify(payload),
     })
-        .then((res) => res.json())
+        .then(async (res) => {
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok && !data.attempt) {
+                throw new Error(data.message || `Quiz submission failed (Status: ${res.status})`);
+            }
+            return data;
+        })
         .then((data) => {
             if (data.attempt) {
                 serverAttemptResult.value = data.attempt;
+            }
+            if (props.module?.slug) {
+                const tags = ['student-modules', `module-${props.module.slug}`];
+                flushCacheTags(tags);
+                prefetchRoute(`/students/modules/${props.module.slug}`, tags, ['15s', '60s']);
             }
             showCompletionModal.value = true;
             playSuccess();
         })
         .catch((err) => {
             console.error('Quiz submission error:', err);
-            showCompletionModal.value = true;
-            playSuccess();
+            alert(err.message || 'Unable to submit your quiz. Please refresh the page and try again.');
         })
         .finally(() => {
             isSubmittingQuiz.value = false;
@@ -1285,7 +1157,7 @@ onBeforeUnmount(() => {
 <template>
     <Head :title="`${activeQuiz?.title || 'Quiz Arena'} • ${activeModule?.title || 'WEBREAD'}`" />
 
-    <div class="clay-student-quiz-shell">
+    <div class="clay-student-quiz-shell" :data-pixar-theme="activeWorld">
         <!-- =========================================================================
              1. STICKY 3D CLAY QUIZ HUD BAR
              ========================================================================= -->
@@ -1313,16 +1185,12 @@ onBeforeUnmount(() => {
                     </button>
 
                     <div class="quiz-hud-title-group">
-                        <div class="quiz-hud-kicker-row">
-                            <span class="quiz-format-badge">{{ currentFormatInfo.label }}</span>
-                            <span class="quiz-module-kicker">{{ activeModule.title }}</span>
-                        </div>
-                        <h1 class="quiz-hud-main-title">{{ activeQuiz.title }}</h1>
+                        <h1 class="quiz-hud-main-title">{{ activeQuiz?.title || 'Quiz Arena' }}</h1>
                     </div>
                 </div>
 
                 <!-- Center: Interactive Progress Bar & Step Counter (Only when taking active quiz) -->
-                <div v-if="!existingAttempt" class="quiz-hud-progress-pod">
+                <div v-if="!existingAttempt && activeQuiz && activeItemsList.length > 0" class="quiz-hud-progress-pod">
                     <div class="progress-pod-labels">
                         <span class="progress-step-label">
                             Answered {{ answeredItemsCount }} of {{ totalItemsCount }}
@@ -1376,11 +1244,11 @@ onBeforeUnmount(() => {
                         <svg viewBox="0 0 16 16" class="hud-icon-svg" aria-hidden="true">
                             <path d="M9.5 1L3 9h4.5L6.5 15L13 7H8.5L9.5 1z" fill="currentColor" />
                         </svg>
-                        <span>+{{ activeQuiz.xp_reward || 150 }} XP</span>
+                        <span>+{{ activeQuiz?.xp_reward || 150 }} XP</span>
                     </div>
 
                     <button
-                        v-if="!existingAttempt"
+                        v-if="!existingAttempt && activeQuiz && activeItemsList.length > 0"
                         type="button"
                         class="clay-finish-quiz-btn"
                         @click="finishQuizAndShowSummary"
@@ -1455,6 +1323,21 @@ onBeforeUnmount(() => {
 
             <!-- ACTIVE QUIZ CONTENT (ONLY RENDERED WHEN QUIZ NOT ALREADY TAKEN) -->
             <template v-else>
+                <!-- EMPTY STATE WHEN THERE IS NO QUIZ OR QUESTIONS IN THE DATABASE -->
+                <section v-if="!activeQuiz || activeItemsList.length === 0" class="clay-empty-quiz-card">
+                    <div class="empty-quiz-content">
+                        <span class="empty-quiz-icon" aria-hidden="true">🎮</span>
+                        <h2 class="empty-quiz-title">No Quiz Questions Yet</h2>
+                        <p class="empty-quiz-desc">
+                            This quiz challenge currently has no questions published in the database. Please check back once questions are added!
+                        </p>
+                        <button type="button" class="clay-taken-back-btn" @click="goBackToMap">
+                            🗺️ Back to Expedition Map
+                        </button>
+                    </div>
+                </section>
+
+                <template v-else>
                 <!-- OPTIONAL COLLAPSIBLE READING PASSAGE / STORY SCENARIO BANNER -->
             <section
                 v-if="activeContexts.length > 0"
@@ -1513,13 +1396,13 @@ onBeforeUnmount(() => {
                                 Question {{ viewAllMode ? qIdx + 1 : currentItemIndex + 1 }} of {{ totalItemsCount }}
                             </span>
                             <div class="item-meta-right">
-                                <span class="selection-mode-tag">
+                                <!-- <span class="selection-mode-tag">
                                     {{
                                         question.selection_type === 'multiple'
                                             ? 'Select ALL that apply'
                                             : 'Pick ONE best answer'
                                     }}
-                                </span>
+                                </span> -->
                                 <span class="item-points-tag">{{ question.points || 10 }} pts</span>
                             </div>
                         </div>
@@ -1655,9 +1538,9 @@ onBeforeUnmount(() => {
                             <p class="excerpt-quote-body">"{{ card.excerpt }}"</p>
                         </div>
 
-                        <h3 class="swatch-picker-heading">
+                        <!-- <h3 class="swatch-picker-heading">
                             Tap a Conflict Color Swatch to paint this scene:
-                        </h3>
+                        </h3> -->
 
                         <!-- 6 Conflict Color Swatch Buttons -->
                         <div class="conflict-swatch-grid">
@@ -1691,14 +1574,14 @@ onBeforeUnmount(() => {
                         </div>
 
                         <div class="card-check-row">
-                            <button
+                            <!-- <button
                                 type="button"
                                 class="clay-check-answer-btn"
                                 :disabled="!colorSelected[card.id]"
                                 @click="checkConflictCard(card)"
                             >
                                 Verify Conflict Color ✓
-                            </button>
+                            </button> -->
 
                             <div
                                 v-if="colorChecked[card.id]"
@@ -1731,114 +1614,66 @@ onBeforeUnmount(() => {
                  FORMAT 3: THE CONFLICT MAP (DRAG-AND-DROP + TAP-TO-ASSIGN ZONES)
                  ===================================================================== -->
             <section v-else-if="quizType === 'the_conflict_map'" class="quiz-format-stage">
-                <div class="clay-interactive-card">
+                <div class="clay-interactive-card conflict-map-stage-card">
                     <div class="card-top-meta">
                         <span class="item-step-pill">
                             Interactive Conflict Map • {{ answeredItemsCount }}/{{ (activeQuiz.events || []).length }} Sorted
                         </span>
                         <span class="selection-mode-tag">
-                            Drag cards into buckets OR tap a zone button on any card
+                            Grab event card below & drag up into bucket (or tap card, then tap bucket)
                         </span>
                     </div>
 
-                    <div class="conflict-map-board">
-                        <!-- LEFT: EVENT CARDS DECK -->
-                        <div class="map-events-column">
-                            <h3 class="map-col-title">Story Event Cards</h3>
-
-                            <div
-                                v-for="ev in activeQuiz.events"
-                                :key="ev.id"
-                                class="clay-map-event-card"
-                                :class="{
-                                    'is-selected-for-tap': selectedMapEventId === ev.id,
-                                    'is-assigned': Boolean(mapAssignments[ev.id]),
-                                    'is-correct':
-                                        mapChecked && mapAssignments[ev.id] === ev.target_conflict_type,
-                                    'is-wrong':
-                                        mapChecked &&
-                                        mapAssignments[ev.id] &&
-                                        mapAssignments[ev.id] !== ev.target_conflict_type,
-                                }"
-                                draggable="true"
-                                @dragstart="handleEventDragStart(ev.id)"
-                                @click="selectedMapEventId = selectedMapEventId === ev.id ? null : ev.id"
-                            >
-                                <div class="event-card-top">
-                                    <span class="event-letter-pill">Event {{ ev.card_letter }}</span>
-                                    <span class="event-pts-lbl">{{ ev.points || 10 }} pts</span>
-                                </div>
-
-                                <p class="event-card-body">{{ ev.event_text }}</p>
-
-                                <!-- Quick 1-Tap Zone Assign Buttons (Accessible without dragging!) -->
-                                <div class="event-quick-zone-row" @click.stop>
-                                    <button
-                                        v-for="zone in activeQuiz.zones"
-                                        :key="zone.id || zone.conflict_type"
-                                        type="button"
-                                        class="quick-zone-chip"
-                                        :class="{
-                                            'is-active': mapAssignments[ev.id] === zone.conflict_type,
-                                        }"
-                                        @click="assignEventToZone(ev.id, zone.conflict_type)"
-                                    >
-                                        {{ zone.label }}
-                                    </button>
-                                </div>
-
-                                <p
-                                    v-if="mapChecked && mapAssignments[ev.id]"
-                                    class="event-map-feedback"
-                                    :class="
-                                        mapAssignments[ev.id] === ev.target_conflict_type
-                                            ? 'text-emerald'
-                                            : 'text-rose'
-                                    "
-                                >
-                                    {{
-                                        mapAssignments[ev.id] === ev.target_conflict_type
-                                            ? `✓ Correct! ${ev.explanation || ''}`
-                                            : `✕ Hint: ${ev.hint || 'Try placing this event in another bucket.'}`
-                                    }}
-                                </p>
-                            </div>
+                    <!-- 1. TOP HORIZONTALLY ALIGNED DROP ZONES AREA -->
+                    <div class="conflict-drop-zone-top-section">
+                        <div class="drop-zones-section-header">
+                            <h3 class="map-col-title-compact">
+                                <span class="header-icon">🎯</span>
+                                <span>Conflict Zone Buckets</span>
+                            </h3>
+                            <span class="drop-zones-sub-lbl">
+                                {{ selectedMapEventId ? 'Card selected! Tap a bucket to place' : 'Drop cards here' }}
+                            </span>
                         </div>
 
-                        <!-- RIGHT: DROP-ZONE BUCKETS -->
-                        <div class="map-zones-column">
-                            <h3 class="map-col-title">Conflict Zone Buckets</h3>
-
+                        <div class="map-zones-horizontal-row">
                             <div
                                 v-for="zone in activeQuiz.zones"
                                 :key="zone.id || zone.conflict_type"
                                 class="clay-map-zone-bucket"
+                                :class="{
+                                    'is-drag-over': dragHoverZoneType === zone.conflict_type,
+                                    'is-tap-target': Boolean(selectedMapEventId),
+                                }"
+                                :data-zone-type="zone.conflict_type"
                                 :style="{
                                     backgroundColor: getZoneTheme(zone.color_theme).bg,
-                                    borderColor: getZoneTheme(zone.color_theme).border,
+                                    borderColor: dragHoverZoneType === zone.conflict_type ? '#2563eb' : getZoneTheme(zone.color_theme).border,
                                 }"
-                                @dragover.prevent
+                                @dragover.prevent="dragHoverZoneType = zone.conflict_type"
+                                @dragleave="dragHoverZoneType === zone.conflict_type ? dragHoverZoneType = null : null"
                                 @drop.prevent="handleZoneDrop(zone.conflict_type)"
                                 @click="handleZoneTap(zone.conflict_type)"
                             >
                                 <div class="zone-bucket-header">
-                                    <div>
-                                        <strong
-                                            class="zone-bucket-title"
-                                            :style="{ color: getZoneTheme(zone.color_theme).text }"
+                                    <div class="zone-header-top-row">
+                                        <span class="zone-type-emoji-pill" aria-hidden="true">
+                                            {{ getConflictEmoji(zone.conflict_type) }}
+                                        </span>
+                                        <span
+                                            class="zone-count-badge"
+                                            :style="{ backgroundColor: getZoneTheme(zone.color_theme).header }"
                                         >
-                                            {{ zone.label }}
-                                        </strong>
-                                        <span v-if="zone.subtitle" class="zone-bucket-sub">
-                                            {{ zone.subtitle }}
+                                            {{ getZoneEvents(zone.conflict_type).length }}
                                         </span>
                                     </div>
-                                    <span
-                                        class="zone-count-badge"
-                                        :style="{ backgroundColor: getZoneTheme(zone.color_theme).header }"
+                                    <strong
+                                        class="zone-bucket-title"
+                                        :style="{ color: getZoneTheme(zone.color_theme).text }"
+                                        :title="zone.label + (zone.subtitle ? ' — ' + zone.subtitle : '')"
                                     >
-                                        {{ getZoneEvents(zone.conflict_type).length }} Placed
-                                    </span>
+                                        {{ zone.label }}
+                                    </strong>
                                 </div>
 
                                 <div class="zone-placed-list">
@@ -1863,22 +1698,110 @@ onBeforeUnmount(() => {
                                         v-if="getZoneEvents(zone.conflict_type).length === 0"
                                         class="zone-empty-placeholder"
                                     >
-                                        Drop Event Card here or tap a zone button on any card
+                                        Drop here 🎯
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
+                    <!-- 2. BOTTOM EVENT CARDS AREA (WITHOUT event-quick-zone-row) -->
+                    <div class="conflict-events-bottom-section">
+                        <div class="events-section-header">
+                            <h3 class="map-col-title-compact">
+                                <span class="header-icon">📜</span>
+                                <span>Story Event Cards</span>
+                            </h3>
+                            <span class="events-status-lbl">
+                                Grab & drag any card up into a bucket
+                            </span>
+                        </div>
+
+                        <div class="map-events-cards-grid">
+                            <div
+                                v-for="ev in activeQuiz.events"
+                                :key="ev.id"
+                                class="clay-map-event-card"
+                                :class="{
+                                    'is-selected-for-tap': selectedMapEventId === ev.id,
+                                    'is-assigned': Boolean(mapAssignments[ev.id]),
+                                    'is-touch-dragging': touchDraggingEventId === ev.id,
+                                    'is-correct':
+                                        mapChecked && mapAssignments[ev.id] === ev.target_conflict_type,
+                                    'is-wrong':
+                                        mapChecked &&
+                                        mapAssignments[ev.id] &&
+                                        mapAssignments[ev.id] !== ev.target_conflict_type,
+                                }"
+                                draggable="true"
+                                @dragstart="handleEventDragStart(ev.id)"
+                                @dragend="draggedEventId = null"
+                                @touchstart.passive="handleTouchStart(ev.id)"
+                                @touchmove.prevent="handleTouchMove($event)"
+                                @touchend="handleTouchEnd"
+                                @touchcancel="handleTouchEnd"
+                                @click="selectedMapEventId = selectedMapEventId === ev.id ? null : ev.id"
+                            >
+                                <div class="event-card-top">
+                                    <div class="event-card-badge-row">
+                                        <span class="event-letter-pill">Event {{ ev.card_letter }}</span>
+                                        <span class="event-drag-handle-hint" title="Grab & Drag">⠿ Drag</span>
+                                    </div>
+                                    <span class="event-pts-lbl">{{ ev.points || 10 }} pts</span>
+                                </div>
+
+                                <p class="event-card-body">{{ ev.event_text }}</p>
+
+                                <!-- Card Assignment Status Bar (Replaces event-quick-zone-row) -->
+                                <div class="event-card-status-bar">
+                                    <div v-if="mapAssignments[ev.id]" class="event-assigned-indicator">
+                                        <span class="assigned-dot">●</span>
+                                        <span class="assigned-text">
+                                            Placed in <strong>{{ getZoneByConflictType(mapAssignments[ev.id])?.label || 'Bucket' }}</strong>
+                                        </span>
+                                        <button
+                                            type="button"
+                                            class="event-card-unassign-btn"
+                                            title="Remove from bucket"
+                                            @click.stop="unassignEvent(ev.id)"
+                                        >
+                                            Remove ✕
+                                        </button>
+                                    </div>
+                                    <div v-else class="event-unassigned-hint">
+                                        <span class="drag-icon-hand">✋</span>
+                                        <span>Grab & drag up to bucket</span>
+                                    </div>
+                                </div>
+
+                                <p
+                                    v-if="mapChecked && mapAssignments[ev.id]"
+                                    class="event-map-feedback"
+                                    :class="
+                                        mapAssignments[ev.id] === ev.target_conflict_type
+                                            ? 'text-emerald'
+                                            : 'text-rose'
+                                    "
+                                >
+                                    {{
+                                        mapAssignments[ev.id] === ev.target_conflict_type
+                                            ? `✓ Correct! ${ev.explanation || ''}`
+                                            : `✕ Hint: ${ev.hint || 'Try placing this event in another bucket.'}`
+                                    }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="card-check-row">
-                        <button
+                        <!-- <button
                             type="button"
                             class="clay-check-answer-btn"
                             :disabled="answeredItemsCount === 0"
                             @click="checkConflictMap"
                         >
                             Check Conflict Map ✓
-                        </button>
+                        </button> -->
                     </div>
                 </div>
             </section>
@@ -1887,110 +1810,132 @@ onBeforeUnmount(() => {
                  FORMAT 4: MATCHING TYPE (COLUMN A DESCRIPTIONS ↔ COLUMN B CHOICES)
                  ===================================================================== -->
             <section v-else-if="quizType === 'matching_type'" class="quiz-format-stage">
-                <div class="clay-interactive-card">
+                <div class="clay-interactive-card matching-interactive-card">
                     <div class="card-top-meta">
                         <span class="item-step-pill">
-                            Matching Challenge • {{ answeredItemsCount }}/{{ (activeQuiz.matching_items || []).length }} Matched
+                            Matching Table • {{ answeredItemsCount }}/{{ (activeQuiz.matching_items || []).length }} Connected
                         </span>
                         <span class="selection-mode-tag">
-                            Tap an item in Column A and tap its letter in Column B
+                            Tap an answer on the right, then tap its clue on the left — or vice versa!
                         </span>
                     </div>
 
-                    <div class="matching-arena-grid">
-                        <!-- COLUMN A: NUMBERED DESCRIPTIONS -->
-                        <div class="matching-col">
-                            <h3 class="map-col-title">Column A: Clues & Descriptions</h3>
-
-                            <div
-                                v-for="item in activeQuiz.matching_items"
-                                :key="item.id"
-                                class="clay-matching-item-card"
-                                :class="{
-                                    'is-active-item': activeMatchingItemId === item.id,
-                                    'is-correct':
-                                        matchingChecked &&
-                                        matchingSelected[item.id] === item.correct_choice_letter,
-                                    'is-wrong':
-                                        matchingChecked &&
-                                        matchingSelected[item.id] &&
-                                        matchingSelected[item.id] !== item.correct_choice_letter,
-                                }"
-                                @click="activeMatchingItemId = activeMatchingItemId === item.id ? null : item.id"
-                            >
-                                <div class="matching-item-top">
-                                    <span class="item-number-badge">#{{ item.item_number }}</span>
-                                    <span class="item-points-tag">{{ item.points || 10 }} pts</span>
-                                </div>
-
-                                <p class="matching-item-desc">{{ item.description }}</p>
-
-                                <!-- Quick Letter Picker Pills -->
-                                <div class="matching-letter-pills" @click.stop>
-                                    <span class="letter-picker-lbl">Match with:</span>
-                                    <button
-                                        v-for="choice in activeQuiz.choices"
-                                        :key="choice.id || choice.choice_letter"
-                                        type="button"
-                                        class="clay-letter-pill"
-                                        :class="{
-                                            'is-selected':
-                                                matchingSelected[item.id] === choice.choice_letter,
-                                        }"
-                                        @click="assignMatchingChoice(item.id, choice.choice_letter)"
-                                    >
-                                        {{ choice.choice_letter }}
-                                    </button>
-                                </div>
-
-                                <div v-if="matchingSelected[item.id]" class="matched-preview-chip">
-                                    Matched: <strong>{{ getChoiceTextByLetter(matchingSelected[item.id]) }}</strong>
-                                </div>
-
-                                <p
-                                    v-if="matchingChecked && matchingSelected[item.id]"
-                                    class="event-map-feedback"
-                                    :class="
-                                        matchingSelected[item.id] === item.correct_choice_letter
-                                            ? 'text-emerald'
-                                            : 'text-rose'
-                                    "
-                                >
-                                    {{
-                                        matchingSelected[item.id] === item.correct_choice_letter
-                                            ? `✓ Correct! ${item.explanation || ''}`
-                                            : `✕ Hint: ${item.hint || 'Try another letter from Column B.'}`
-                                    }}
-                                </p>
-                            </div>
-                        </div>
-
-                        <!-- COLUMN B: LETTERED CHOICES POOL -->
-                        <div class="matching-col">
-                            <h3 class="map-col-title">Column B: Answer Choices</h3>
-
-                            <button
-                                v-for="choice in activeQuiz.choices"
-                                :key="choice.id || choice.choice_letter"
-                                type="button"
-                                class="clay-matching-choice-card"
-                                @click="handleChoiceColumnTap(choice.choice_letter)"
-                            >
-                                <span class="choice-letter-circle">{{ choice.choice_letter }}</span>
-                                <span class="choice-card-text">{{ choice.choice_text }}</span>
-                            </button>
-                        </div>
+                    <!-- Dynamic Match Instruction Strip -->
+                    <div class="matching-instruction-strip">
+                        <span class="matching-guide-step">
+                            <template v-if="activeMatchingChoiceLetter">
+                                👉 Option <strong>[{{ activeMatchingChoiceLetter }}]</strong> selected! Now tap its matching clue in Column A.
+                            </template>
+                            <template v-else-if="activeMatchingItemId">
+                                👉 Clue <strong>#{{ getClueNumberById(activeMatchingItemId) }}</strong> selected! Now tap its answer in Column B.
+                            </template>
+                            <template v-else>
+                                💡 Tap an option in Column B then tap its clue in Column A (or tap Column A first)!
+                            </template>
+                        </span>
+                        <button
+                            v-if="activeMatchingItemId || activeMatchingChoiceLetter"
+                            type="button"
+                            class="matching-cancel-selection-btn"
+                            @click="clearMatchingSelection"
+                        >
+                            Cancel Selection ✕
+                        </button>
                     </div>
 
-                    <div class="card-check-row">
-                        <button
-                            type="button"
-                            class="clay-check-answer-btn"
-                            :disabled="answeredItemsCount === 0"
-                            @click="checkMatchingQuiz"
-                        >
-                            Check All Matches ✓
-                        </button>
+                    <!-- Structured Dual-Column Matching Table -->
+                    <div class="matching-table-wrap">
+                        <div class="matching-table-grid">
+                            <!-- Table Header -->
+                            <div class="matching-table-header col-a-header">
+                                <span class="table-col-badge">Column A</span>
+                                <span class="table-col-title">Clues & Descriptions</span>
+                            </div>
+                            <div class="matching-table-header col-b-header">
+                                <span class="table-col-badge">Column B</span>
+                                <span class="table-col-title">Answer Options</span>
+                            </div>
+
+                            <!-- Column A: Clues Lane -->
+                            <div class="matching-col-lane lane-clues">
+                                <div
+                                    v-for="item in activeQuiz.matching_items"
+                                    :key="item.id"
+                                    class="clay-matching-table-row clue-row"
+                                    :class="{
+                                        'is-active-item': activeMatchingItemId === item.id,
+                                        'is-matched': Boolean(matchingSelected[item.id]),
+                                        'is-target-ready': Boolean(activeMatchingChoiceLetter),
+                                        'is-correct': matchingChecked && matchingSelected[item.id] === item.correct_choice_letter,
+                                        'is-wrong': matchingChecked && matchingSelected[item.id] && matchingSelected[item.id] !== item.correct_choice_letter,
+                                    }"
+                                    :style="getClueRowStyle(item.id)"
+                                    @click="handleClueTap(item.id)"
+                                >
+                                    <div class="clue-row-top">
+                                        <span class="clue-num-pill">#{{ item.item_number }}</span>
+                                        <div
+                                            v-if="matchingSelected[item.id]"
+                                            class="clue-matched-badge-pill"
+                                            :style="getMatchedBadgeStyle(matchingSelected[item.id])"
+                                        >
+                                            <span>Matched <strong>[{{ matchingSelected[item.id] }}]</strong></span>
+                                            <button
+                                                type="button"
+                                                class="clue-unmatch-btn"
+                                                title="Clear match"
+                                                aria-label="Clear match"
+                                                @click.stop="unmatchClue(item.id)"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                        <span v-else class="clue-unmatched-status">
+                                            {{ activeMatchingChoiceLetter ? 'Tap to connect 👈' : 'Unmatched' }}
+                                        </span>
+                                    </div>
+
+                                    <p class="clue-text">{{ item.description }}</p>
+
+                                    <p
+                                        v-if="matchingChecked && matchingSelected[item.id]"
+                                        class="event-map-feedback"
+                                        :class="matchingSelected[item.id] === item.correct_choice_letter ? 'text-emerald' : 'text-rose'"
+                                    >
+                                        {{ matchingSelected[item.id] === item.correct_choice_letter ? `✓ Correct! ${item.explanation || ''}` : `✕ Hint: ${item.hint || 'Try another answer.'}` }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Column B: Colored Answer Options Lane -->
+                            <div class="matching-col-lane lane-options">
+                                <div
+                                    v-for="(choice, cIdx) in activeQuiz.choices"
+                                    :key="choice.id || choice.choice_letter"
+                                    class="clay-matching-table-row option-row"
+                                    :class="{
+                                        'is-active-choice': activeMatchingChoiceLetter === choice.choice_letter,
+                                        'is-used-by-clue': isChoiceMatched(choice.choice_letter),
+                                        'is-target-ready': Boolean(activeMatchingItemId),
+                                    }"
+                                    :style="getOptionRowStyle(choice.choice_letter, cIdx)"
+                                    @click="handleOptionTap(choice.choice_letter)"
+                                >
+                                    <div class="option-row-header">
+                                        <span class="option-letter-circle" :style="getOptionLetterCircleStyle(cIdx)">
+                                            {{ choice.choice_letter }}
+                                        </span>
+                                        <span v-if="isChoiceMatched(choice.choice_letter)" class="option-used-indicator">
+                                            ✓ On Clue #{{ getClueNumberByAssignedChoice(choice.choice_letter) }}
+                                        </span>
+                                        <span v-else-if="activeMatchingItemId" class="option-tap-prompt">
+                                            Tap to connect 👉
+                                        </span>
+                                    </div>
+                                    <span class="option-text">{{ choice.choice_text }}</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -1998,15 +1943,15 @@ onBeforeUnmount(() => {
             <!-- =====================================================================
                  FORMAT 5: EVALUATION (WORD HELPERS + STEP 1 STANCE + STEP 2 BLANKS)
                  ===================================================================== -->
-            <section v-else-if="quizType === 'evaluation'" class="quiz-format-stage">
+            <section v-else-if="quizType === 'evaluation'" class="quiz-format-stage eval-quiz-stage">
                 <!-- Shared Word Helpers Bank -->
                 <div
                     v-if="activeQuiz.word_helpers && activeQuiz.word_helpers.length > 0"
                     class="clay-word-helpers-bar"
                 >
                     <div class="word-helpers-head">
-                        <span class="helpers-kicker">WORD HELPERS BANK</span>
-                        <span class="helpers-sub">Tap any word chip to insert it into your Step 2 sentence blank!</span>
+                        <span class="helpers-kicker">💡 WORD BANK</span>
+                        <span class="helpers-sub">Tap word to insert into active blank</span>
                     </div>
                     <div class="word-helpers-chips">
                         <button
@@ -2024,7 +1969,7 @@ onBeforeUnmount(() => {
                 <div
                     v-for="(item, eIdx) in viewAllMode ? activeQuiz.evaluation_items : [currentItem]"
                     :key="item?.id || eIdx"
-                    class="clay-interactive-card"
+                    class="clay-interactive-card eval-interactive-card"
                 >
                     <div v-if="item">
                         <div class="card-top-meta">
@@ -2032,25 +1977,31 @@ onBeforeUnmount(() => {
                             <span class="item-points-tag">{{ item.points || 20 }} pts</span>
                         </div>
 
-                        <h2 class="question-main-prompt">{{ item.question_prompt }}</h2>
+                        <h2 class="question-main-prompt eval-main-prompt">{{ item.question_prompt }}</h2>
 
                         <!-- Step 1: Pick Stance Option -->
-                        <div class="eval-step-box">
-                            <span class="eval-step-kicker">{{ item.step1_prompt || 'Step 1: Pick one option:' }}</span>
+                        <div class="eval-step-box eval-step-one">
+                            <div class="eval-step-head">
+                                <span class="eval-step-badge step-1-badge">STEP 1</span>
+                                <span class="eval-step-kicker">{{ item.step1_prompt || 'Pick your stance:' }}</span>
+                            </div>
 
-                            <div class="mcq-options-grid">
+                            <div class="eval-options-grid">
                                 <button
                                     v-for="(opt, oIdx) in item.options"
                                     :key="opt.id || oIdx"
                                     type="button"
-                                    class="clay-mcq-option-btn"
+                                    class="clay-eval-option-btn"
                                     :class="{
                                         'is-selected': ensureEvaluationState(item).optionId === opt.id,
                                     }"
                                     @click="selectEvaluationOption(item, opt.id)"
                                 >
-                                    <span class="mcq-letter-badge">{{ String.fromCharCode(65 + oIdx) }}</span>
-                                    <span class="mcq-option-text">{{ opt.option_text }}</span>
+                                    <span class="eval-letter-badge">{{ String.fromCharCode(65 + oIdx) }}</span>
+                                    <span class="eval-option-text">{{ opt.option_text }}</span>
+                                    <span class="eval-option-indicator" aria-hidden="true">
+                                        <span v-if="ensureEvaluationState(item).optionId === opt.id" class="eval-indicator-check">✓</span>
+                                    </span>
                                 </button>
                             </div>
                         </div>
@@ -2058,77 +2009,80 @@ onBeforeUnmount(() => {
                         <!-- Step 2: Interactive Sentence Template with Auto-Filled Stance & Inline Blanks -->
                         <div class="eval-step-box eval-step-two">
                             <div class="eval-step-header-row">
-                                <span class="eval-step-kicker">
-                                    Step 2: Complete the reasoning sentence:
-                                </span>
+                                <div class="eval-step-head">
+                                    <span class="eval-step-badge step-2-badge">STEP 2</span>
+                                    <span class="eval-step-kicker">Complete reasoning:</span>
+                                </div>
                                 <span class="eval-step-guide-pill">
                                     <span class="guide-dot" aria-hidden="true"></span>
-                                    <span>Stance auto-fills from Step 1 • Type answer in blanks</span>
+                                    <span>Stance auto-fills • Fill blanks</span>
                                 </span>
                             </div>
 
-                            <div class="sentence-template-builder">
-                                <template
-                                    v-for="(segment, sIdx) in parseSentenceTemplate(item)"
-                                    :key="sIdx"
-                                >
-                                    <!-- 1. Static Text Segment -->
-                                    <span v-if="segment.type === 'text'" class="sentence-static-text">{{ segment.content }}</span>
-
-                                    <!-- 2. Auto-Filled Stance Token (Filled from Step 1 Option Selection) -->
-                                    <span
-                                        v-else-if="segment.type === 'stance'"
-                                        class="clay-stance-token-slot"
+                            <div class="sentence-template-canvas">
+                                <div class="sentence-template-builder">
+                                    <template
+                                        v-for="(segment, sIdx) in parseSentenceTemplate(item)"
+                                        :key="sIdx"
                                     >
-                                        <span
-                                            v-if="getSelectedStanceOption(item)"
-                                            class="clay-stance-filled-pill"
-                                            :title="`Selected Stance: ${getSelectedStanceOption(item).option_text}`"
-                                        >
-                                            <span class="stance-check-badge" aria-hidden="true">✓</span>
-                                            <strong class="stance-filled-text">{{ getSelectedStanceOption(item).option_text }}</strong>
-                                        </span>
-                                        <span
-                                            v-else
-                                            class="clay-stance-empty-pill"
-                                            title="Pick your stance in Step 1 above to fill this part"
-                                        >
-                                            <span class="stance-empty-icon" aria-hidden="true">👆</span>
-                                            <span class="stance-empty-text">[Pick Stance in Step 1]</span>
-                                        </span>
-                                    </span>
+                                        <!-- 1. Static Text Segment -->
+                                        <span v-if="segment.type === 'text'" class="sentence-static-text">{{ segment.content }}</span>
 
-                                    <!-- 3. Interactive Blank Input (Where student writes their answer) -->
-                                    <span
-                                        v-else-if="segment.type === 'blank'"
-                                        class="clay-blank-input-slot"
-                                    >
-                                        <input
-                                            type="text"
-                                            class="clay-inline-blank-input"
-                                            :class="{
-                                                'is-active-focus': focusedBlankInfo.itemId === item.id && focusedBlankInfo.blankIdx === segment.blankIdx,
-                                                'is-blank-filled': (ensureEvaluationState(item).blanks[segment.blankIdx] || '').trim().length > 0,
-                                            }"
-                                            :placeholder="`Write your answer here...`"
-                                            :aria-label="`Answer blank ${segment.blankIdx + 1}`"
-                                            :value="ensureEvaluationState(item).blanks[segment.blankIdx] || ''"
-                                            @focus="focusedBlankInfo = { itemId: item.id, blankIdx: segment.blankIdx }"
-                                            @input="updateEvaluationBlank(item, segment.blankIdx, $event.target.value)"
-                                        />
-                                    </span>
-                                </template>
+                                        <!-- 2. Auto-Filled Stance Token (Filled from Step 1 Option Selection) -->
+                                        <span
+                                            v-else-if="segment.type === 'stance'"
+                                            class="clay-stance-token-slot"
+                                        >
+                                            <span
+                                                v-if="getSelectedStanceOption(item)"
+                                                class="clay-stance-filled-pill"
+                                                :title="`Selected Stance: ${getSelectedStanceOption(item).option_text}`"
+                                            >
+                                                <span class="stance-check-badge" aria-hidden="true">✓</span>
+                                                <strong class="stance-filled-text">{{ getSelectedStanceOption(item).option_text }}</strong>
+                                            </span>
+                                            <span
+                                                v-else
+                                                class="clay-stance-empty-pill"
+                                                title="Pick your stance in Step 1 above to fill this part"
+                                            >
+                                                <span class="stance-empty-icon" aria-hidden="true">👆</span>
+                                                <span class="stance-empty-text">[Pick Stance in Step 1]</span>
+                                            </span>
+                                        </span>
+
+                                        <!-- 3. Interactive Blank Input (Where student writes their answer) -->
+                                        <span
+                                            v-else-if="segment.type === 'blank'"
+                                            class="clay-blank-input-slot"
+                                        >
+                                            <input
+                                                type="text"
+                                                class="clay-inline-blank-input"
+                                                :class="{
+                                                    'is-active-focus': focusedBlankInfo.itemId === item.id && focusedBlankInfo.blankIdx === segment.blankIdx,
+                                                    'is-blank-filled': (ensureEvaluationState(item).blanks[segment.blankIdx] || '').trim().length > 0,
+                                                }"
+                                                :placeholder="`Type answer...`"
+                                                :aria-label="`Answer blank ${segment.blankIdx + 1}`"
+                                                :value="ensureEvaluationState(item).blanks[segment.blankIdx] || ''"
+                                                @focus="focusedBlankInfo = { itemId: item.id, blankIdx: segment.blankIdx }"
+                                                @input="updateEvaluationBlank(item, segment.blankIdx, $event.target.value)"
+                                            />
+                                        </span>
+                                    </template>
+                                </div>
                             </div>
                         </div>
 
                         <div class="card-check-row">
-                            <button
+                            <!-- <button
                                 type="button"
                                 class="clay-check-answer-btn"
                                 @click="checkEvaluationItem(item)"
                             >
                                 Check Evaluation ✓
-                            </button>
+                            </button> -->
 
                             <div
                                 v-if="evaluationChecked[item.id]"
@@ -2226,13 +2180,13 @@ onBeforeUnmount(() => {
                         </div>
 
                         <div class="card-check-row">
-                            <button
+                            <!-- <button
                                 type="button"
                                 class="clay-check-answer-btn"
                                 @click="checkReflectionPrompt(prompt)"
                             >
                                 Save & Verify Reflection ✓
-                            </button>
+                            </button> -->
 
                             <div
                                 v-if="reflectionChecked[prompt.id]"
@@ -2312,6 +2266,7 @@ onBeforeUnmount(() => {
                     View Result ★
                 </button>
             </nav>
+            </template>
         </template>
     </main>
 
@@ -2444,17 +2399,17 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800;900&display=swap');
-
 .clay-student-quiz-shell {
     min-height: 100vh;
+    min-height: 100dvh;
     background:
-        radial-gradient(circle at 12% 10%, rgba(56, 189, 248, 0.18), transparent 40%),
-        radial-gradient(circle at 88% 15%, rgba(250, 204, 21, 0.18), transparent 40%),
-        linear-gradient(180deg, #eff6ff 0%, #f8fafc 60%, #fefce8 100%);
-    font-family: 'Nunito', sans-serif;
-    color: #0f172a;
+        radial-gradient(ellipse 60% 52% at 20% 14%, var(--px-sun-bloom, rgba(56, 189, 248, 0.18)) 0%, transparent 68%),
+        radial-gradient(ellipse 52% 48% at 82% 24%, var(--px-secondary-bloom, rgba(250, 204, 21, 0.18)) 0%, transparent 70%),
+        linear-gradient(166deg, var(--px-sky-top, #eff6ff) 0%, var(--px-sky-mid, #f8fafc) 54%, var(--px-sky-bottom, #fefce8) 100%);
+    font-family: var(--px-font-body, 'Nunito', sans-serif);
+    color: var(--px-ink, #0f172a);
     padding-bottom: 4rem;
+    transition: background 380ms var(--px-ease-settle, ease);
 }
 
 /* ==========================================================================
@@ -2604,10 +2559,10 @@ onBeforeUnmount(() => {
     position: sticky;
     top: 0;
     z-index: 40;
-    background: rgba(255, 255, 255, 0.94);
+    background: linear-gradient(180deg, var(--px-surface-card, rgba(255, 255, 255, 0.94)) 0%, var(--px-surface-card-bottom, rgba(248, 250, 252, 0.94)) 100%);
     backdrop-filter: blur(12px);
-    border-bottom: 3px solid #cbd5e1;
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    border-bottom: 3px solid var(--px-card-border, #cbd5e1);
+    box-shadow: 0 8px 24px rgba(var(--px-shadow-rgb, 15, 23, 42), 0.12);
     padding: 0.75rem 1.25rem;
 }
 
@@ -2632,20 +2587,20 @@ onBeforeUnmount(() => {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    background: #ffffff;
-    border: 2.5px solid #94a3b8;
+    background: var(--px-surface-elevated, #ffffff);
+    border: 2.5px solid var(--px-card-border, #94a3b8);
     border-bottom-width: 4.5px;
     border-radius: 14px;
     padding: 0.45rem 0.85rem;
     font-weight: 900;
     font-size: 0.86rem;
-    color: #1e293b;
+    color: var(--px-ink, #1e293b);
     cursor: pointer;
     transition: transform 0.15s ease, background-color 0.15s ease;
 }
 
 .clay-hud-back-btn:hover {
-    background: #f1f5f9;
+    background: var(--px-surface-well, #f1f5f9);
     transform: translateY(-1px);
 }
 
@@ -2680,14 +2635,14 @@ onBeforeUnmount(() => {
 .quiz-module-kicker {
     font-size: 0.75rem;
     font-weight: 800;
-    color: #64748b;
+    color: var(--px-ink-muted, #64748b);
 }
 
 .quiz-hud-main-title {
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--px-font-display, 'Fredoka', sans-serif);
     font-size: 1.2rem;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--px-ink, #0f172a);
     margin: 0.1rem 0 0;
     white-space: nowrap;
     overflow: hidden;
@@ -2706,7 +2661,7 @@ onBeforeUnmount(() => {
     justify-content: space-between;
     font-size: 0.76rem;
     font-weight: 900;
-    color: #475569;
+    color: var(--px-ink-muted, #475569);
     margin-bottom: 0.25rem;
 }
 
@@ -2817,7 +2772,7 @@ onBeforeUnmount(() => {
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #64748b;
+    color: var(--px-ink-subtle, #64748b);
 }
 
 .format-pills-scroll {
@@ -2830,9 +2785,9 @@ onBeforeUnmount(() => {
 }
 
 .clay-format-pill {
-    background: #f1f5f9;
-    color: #475569;
-    border: 2px solid #cbd5e1;
+    background: var(--px-surface-well, #f1f5f9);
+    color: var(--px-ink-muted, #475569);
+    border: 2px solid var(--px-card-border, #cbd5e1);
     border-radius: 999px;
     padding: 0.28rem 0.75rem;
     font-size: 0.76rem;
@@ -2843,15 +2798,15 @@ onBeforeUnmount(() => {
 }
 
 .clay-format-pill:hover {
-    background: #e2e8f0;
-    color: #0f172a;
+    background: var(--px-surface-elevated, #e2e8f0);
+    color: var(--px-ink, #0f172a);
 }
 
 .clay-format-pill.is-active {
-    background: #2563eb;
-    color: #ffffff;
-    border-color: #1d4ed8;
-    box-shadow: 0 3px 10px rgba(37, 99, 235, 0.25);
+    background: linear-gradient(180deg, var(--px-secondary-lit, #3b82f6) 0%, var(--px-secondary, #2563eb) 100%);
+    color: var(--px-secondary-ink, #ffffff);
+    border-color: var(--px-card-border, #1d4ed8);
+    box-shadow: 0 3px 10px var(--px-secondary-glow, rgba(37, 99, 235, 0.25));
 }
 
 .clay-view-mode-btn {
@@ -3245,62 +3200,249 @@ onBeforeUnmount(() => {
 }
 
 /* ==========================================================================
-   3. THE CONFLICT MAP & 4. MATCHING TYPE BOARDS
+   3. THE CONFLICT MAP (TOP HORIZONTAL DROP ZONE & BOTTOM EVENT CARDS)
    ========================================================================== */
-.conflict-map-board,
-.matching-arena-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.25rem;
+.conflict-drop-zone-top-section {
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 20px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 1.25rem;
 }
 
-@media (max-width: 820px) {
-    .conflict-map-board,
-    .matching-arena-grid {
-        grid-template-columns: 1fr;
-    }
+.drop-zones-section-header,
+.events-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.65rem;
+    flex-wrap: wrap;
+    gap: 0.4rem;
 }
 
-.map-col-title {
+.map-col-title-compact {
     font-family: 'Fredoka', sans-serif;
-    font-size: 1.05rem;
+    font-size: 0.98rem;
     color: #1e293b;
-    margin: 0 0 0.75rem;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
 }
 
-.map-events-column,
-.map-zones-column,
-.matching-col {
+.drop-zones-sub-lbl,
+.events-status-lbl {
+    font-size: 0.74rem;
+    font-weight: 800;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.map-zones-horizontal-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.75rem;
+}
+
+.clay-map-zone-bucket {
+    border: 2.5px dashed #93c5fd;
+    border-radius: 16px;
+    padding: 0.75rem 0.85rem;
+    min-height: 95px;
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
+    justify-content: space-between;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
 }
 
-.clay-map-event-card,
-.clay-matching-item-card {
+.clay-map-zone-bucket.is-drag-over {
+    border-style: solid !important;
+    border-color: #2563eb !important;
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 22px rgba(37, 99, 235, 0.22);
+    filter: brightness(1.04);
+}
+
+.clay-map-zone-bucket.is-tap-target {
+    cursor: pointer;
+    box-shadow: 0 0 0 2px #3b82f6;
+}
+
+.zone-bucket-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 0.45rem;
+}
+
+.zone-header-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.zone-type-emoji-pill {
+    font-size: 0.95rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+}
+
+.zone-bucket-title {
+    display: block;
+    font-family: 'Fredoka', sans-serif;
+    font-size: clamp(0.78rem, 2vw, 0.92rem);
+    line-height: 1.25;
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: break-word;
+}
+
+.zone-count-badge {
+    color: #ffffff;
+    font-size: 0.66rem;
+    font-weight: 900;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    flex-shrink: 0;
+}
+
+.zone-placed-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.placed-event-chip {
+    background: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 0.3rem 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.76rem;
+    font-weight: 800;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.placed-letter {
+    background: #2563eb;
+    color: #ffffff;
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.68rem;
+    font-weight: 900;
+    flex-shrink: 0;
+}
+
+.placed-excerpt {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.74rem;
+    color: #1e293b;
+}
+
+.placed-remove-btn {
+    background: #fee2e2;
+    color: #b91c1c;
+    border: none;
+    border-radius: 5px;
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-weight: 900;
+    font-size: 0.7rem;
+    transition: transform 0.1s ease;
+}
+
+.placed-remove-btn:hover {
+    transform: scale(1.15);
+}
+
+.zone-empty-placeholder {
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #94a3b8;
+    text-align: center;
+    padding: 0.55rem 0.35rem;
+    border: 1.5px dashed rgba(148, 163, 184, 0.45);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Conflict Events Bottom Grid */
+.conflict-events-bottom-section {
+    margin-top: 0.25rem;
+}
+
+.map-events-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 0.85rem;
+}
+
+.clay-map-event-card {
     background: #f8fafc;
     border: 2.5px solid #cbd5e1;
     border-bottom-width: 5px;
     border-radius: 18px;
-    padding: 0.95rem 1.1rem;
-    cursor: pointer;
+    padding: 0.85rem 1rem;
+    cursor: grab;
     transition: all 0.15s ease;
+    user-select: none;
+    touch-action: none;
 }
 
-.clay-map-event-card.is-selected-for-tap,
-.clay-matching-item-card.is-active-item {
+.clay-map-event-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+    border-color: #94a3b8;
+}
+
+.clay-map-event-card:active {
+    cursor: grabbing;
+}
+
+.clay-map-event-card.is-selected-for-tap {
     border-color: #2563eb;
     background: #eff6ff;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
 }
 
-.clay-map-event-card.is-correct,
-.clay-matching-item-card.is-correct {
+.clay-map-event-card.is-assigned {
+    border-color: #93c5fd;
+    background: #f0f7ff;
+}
+
+.clay-map-event-card.is-touch-dragging {
+    opacity: 0.9;
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.25);
+    border-color: #2563eb;
+    z-index: 30;
+}
+
+.clay-map-event-card.is-correct {
     border-color: #10b981;
     background: #ecfdf5;
 }
 
-.clay-map-event-card.is-wrong,
-.clay-matching-item-card.is-wrong {
+.clay-map-event-card.is-wrong {
     border-color: #ef4444;
     background: #fef2f2;
 }
@@ -3311,6 +3453,22 @@ onBeforeUnmount(() => {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 0.45rem;
+}
+
+.event-card-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.event-drag-handle-hint {
+    font-size: 0.68rem;
+    font-weight: 900;
+    color: #64748b;
+    background: #e2e8f0;
+    padding: 0.15rem 0.45rem;
+    border-radius: 6px;
+    letter-spacing: 0.03em;
 }
 
 .event-letter-pill,
@@ -3324,183 +3482,346 @@ onBeforeUnmount(() => {
 }
 
 .event-pts-lbl {
-    font-size: 0.75rem;
+    font-size: 0.74rem;
     font-weight: 800;
     color: #64748b;
 }
 
 .event-card-body,
 .matching-item-desc {
-    font-size: 0.95rem;
+    font-size: 0.92rem;
     font-weight: 800;
     color: #0f172a;
-    margin: 0 0 0.7rem;
-    line-height: 1.5;
+    margin: 0 0 0.65rem;
+    line-height: 1.45;
 }
 
-.event-quick-zone-row,
-.matching-letter-pills {
+.event-card-status-bar {
+    padding-top: 0.5rem;
+    border-top: 1.5px dashed #e2e8f0;
+}
+
+.event-assigned-indicator {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 0.4rem;
+    font-size: 0.76rem;
+    color: #1e40af;
+    background: #dbeafe;
+    padding: 0.3rem 0.6rem;
+    border-radius: 8px;
+    font-weight: 700;
+}
+
+.assigned-dot {
+    color: #2563eb;
+    font-size: 0.7rem;
+}
+
+.assigned-text {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.event-card-unassign-btn {
+    background: #ffffff;
+    color: #b91c1c;
+    border: 1px solid #fca5a5;
+    border-radius: 6px;
+    padding: 0.15rem 0.45rem;
+    font-size: 0.68rem;
+    font-weight: 900;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.event-unassigned-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.74rem;
+    font-weight: 800;
+    color: #64748b;
+}
+
+.drag-icon-hand {
+    font-size: 0.85rem;
+}
+
+/* ==========================================================================
+   4. MATCHING TYPE TABLE ARENA (SIDE-BY-SIDE COLOR CONNECT)
+   ========================================================================== */
+.matching-interactive-card {
+    padding: 1.1rem 1.25rem;
+}
+
+.matching-instruction-strip {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #eff6ff;
+    border: 2px solid #bfdbfe;
+    border-radius: 14px;
+    padding: 0.6rem 0.85rem;
+    margin-bottom: 0.95rem;
+    gap: 0.5rem;
     flex-wrap: wrap;
 }
 
-.quick-zone-chip,
-.clay-letter-pill {
-    background: #ffffff;
-    border: 2px solid #cbd5e1;
-    border-radius: 10px;
-    padding: 0.24rem 0.6rem;
-    font-size: 0.74rem;
-    font-weight: 900;
-    color: #334155;
-    cursor: pointer;
-}
-
-.quick-zone-chip.is-active,
-.clay-letter-pill.is-selected {
-    background: #2563eb;
-    border-color: #1d4ed8;
-    color: #ffffff;
-}
-
-.clay-map-zone-bucket {
-    border: 3px dashed #93c5fd;
-    border-radius: 20px;
-    padding: 1rem;
-    min-height: 130px;
-}
-
-.zone-bucket-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 0.5rem;
-    margin-bottom: 0.65rem;
-}
-
-.zone-bucket-title {
-    display: block;
-    font-family: 'Fredoka', sans-serif;
-    font-size: 1rem;
-}
-
-.zone-bucket-sub {
-    font-size: 0.76rem;
-    font-weight: 700;
-    color: #475569;
-}
-
-.zone-count-badge {
-    color: #ffffff;
-    font-size: 0.7rem;
-    font-weight: 900;
-    padding: 0.2rem 0.55rem;
-    border-radius: 999px;
-}
-
-.zone-placed-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.45rem;
-}
-
-.placed-event-chip {
-    background: #ffffff;
-    border: 2px solid #cbd5e1;
-    border-radius: 12px;
-    padding: 0.45rem 0.65rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.82rem;
+.matching-guide-step {
+    font-size: 0.84rem;
     font-weight: 800;
+    color: #1e40af;
+    line-height: 1.35;
 }
 
-.placed-letter {
-    background: #2563eb;
-    color: #ffffff;
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 900;
-    flex-shrink: 0;
-}
-
-.placed-excerpt {
-    flex: 1;
-}
-
-.placed-remove-btn {
+.matching-cancel-selection-btn {
     background: #fee2e2;
     color: #b91c1c;
-    border: none;
-    border-radius: 6px;
-    width: 22px;
-    height: 22px;
-    cursor: pointer;
+    border: 1px solid #fca5a5;
+    border-radius: 8px;
+    padding: 0.22rem 0.55rem;
+    font-size: 0.72rem;
     font-weight: 900;
+    cursor: pointer;
+    transition: all 0.15s ease;
 }
 
-.zone-empty-placeholder {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: #64748b;
-    text-align: center;
-    padding: 0.85rem 0.5rem;
+.matching-cancel-selection-btn:hover {
+    background: #fecaca;
+    transform: translateY(-1px);
 }
 
-.clay-matching-choice-card {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    width: 100%;
-    text-align: left;
+/* Matching Table Wrapper */
+.matching-table-wrap {
     background: #ffffff;
     border: 2.5px solid #cbd5e1;
-    border-bottom-width: 5px;
-    border-radius: 16px;
-    padding: 0.85rem 1rem;
-    cursor: pointer;
-    transition: transform 0.15s ease;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
 }
 
-.clay-matching-choice-card:hover {
-    transform: translateY(-1px);
-    border-color: #60a5fa;
+.matching-table-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-collapse: collapse;
 }
 
-.choice-letter-circle {
-    width: 32px;
-    height: 32px;
-    border-radius: 10px;
-    background: #dbeafe;
-    color: #1d4ed8;
-    font-family: 'Fredoka', sans-serif;
-    font-weight: 700;
-    display: inline-flex;
+.matching-table-header {
+    background: #f1f5f9;
+    padding: 0.65rem 0.9rem;
+    display: flex;
     align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
+    gap: 0.5rem;
+    border-bottom: 2px solid #cbd5e1;
 }
 
-.choice-card-text {
-    font-size: 0.94rem;
-    font-weight: 800;
+.matching-table-header.col-a-header {
+    border-right: 2px solid #cbd5e1;
+}
+
+.table-col-badge {
+    background: #1e293b;
+    color: #ffffff;
+    font-size: 0.72rem;
+    font-weight: 900;
+    padding: 0.18rem 0.55rem;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.table-col-title {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
     color: #1e293b;
 }
 
-.matched-preview-chip {
-    margin-top: 0.55rem;
-    background: #eff6ff;
-    color: #1d4ed8;
-    padding: 0.35rem 0.65rem;
-    border-radius: 10px;
-    font-size: 0.8rem;
+/* Matching Column Lanes */
+.matching-col-lane {
+    display: flex;
+    flex-direction: column;
+    padding: 0.65rem;
+    gap: 0.55rem;
+}
+
+.matching-col-lane.lane-clues {
+    border-right: 2px solid #cbd5e1;
+    background: #f8fafc;
+}
+
+.matching-col-lane.lane-options {
+    background: #ffffff;
+}
+
+/* Interactive Clue & Option Table Rows */
+.clay-matching-table-row {
+    border-radius: 14px;
+    padding: 0.65rem 0.8rem;
+    border: 2px solid #e2e8f0;
+    cursor: pointer;
+    transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    user-select: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.clay-matching-table-row:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* Clue Row (Column A) */
+.clue-row {
+    background: #ffffff;
+    border-color: #cbd5e1;
+    border-bottom-width: 3.5px;
+}
+
+.clue-row.is-active-item {
+    border-color: #2563eb !important;
+    background: #eff6ff !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25) !important;
+    transform: translateY(-2px);
+}
+
+.clue-row.is-target-ready:not(.is-matched) {
+    animation: targetPulse 1.8s infinite;
+}
+
+@keyframes targetPulse {
+    0%, 100% { border-color: #93c5fd; }
+    50% { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2); }
+}
+
+.clue-row-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+    margin-bottom: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.clue-num-pill {
+    background: #334155;
+    color: #ffffff;
+    font-size: 0.72rem;
+    font-weight: 900;
+    padding: 0.15rem 0.45rem;
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+
+.clue-matched-badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.clue-unmatch-btn {
+    background: rgba(0, 0, 0, 0.18);
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    width: 15px;
+    height: 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.62rem;
+    font-weight: 900;
+    margin-left: 0.15rem;
+    transition: transform 0.1s ease;
+}
+
+.clue-unmatch-btn:hover {
+    transform: scale(1.2);
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.clue-unmatched-status {
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.clue-text {
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+    line-height: 1.35;
+}
+
+/* Option Row (Column B) */
+.option-row {
+    border-bottom-width: 3.5px;
+}
+
+.option-row.is-active-choice {
+    transform: translateY(-2px) scale(1.02);
+    border-width: 2.5px !important;
+}
+
+.option-row-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+    margin-bottom: 0.3rem;
+}
+
+.option-letter-circle {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 0.82rem;
+    flex-shrink: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.option-used-indicator {
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: #059669;
+    background: #d1fae5;
+    padding: 0.15rem 0.45rem;
+    border-radius: 6px;
+}
+
+.option-tap-prompt {
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: #2563eb;
+    background: #dbeafe;
+    padding: 0.12rem 0.4rem;
+    border-radius: 6px;
+}
+
+.option-text {
+    font-size: 0.86rem;
+    font-weight: 800;
+    line-height: 1.35;
+    color: #0f172a;
 }
 
 .event-map-feedback {
@@ -3524,11 +3845,19 @@ onBeforeUnmount(() => {
 /* ==========================================================================
    5. EVALUATION & 6. REFLECTION STYLES
    ========================================================================== */
+.eval-quiz-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
 .clay-word-helpers-bar {
     background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
-    border: 3px solid #a78bfa;
-    border-radius: 22px;
-    padding: 1rem 1.25rem;
+    border: 2.5px solid #a78bfa;
+    border-bottom: 4px solid #8b5cf6;
+    border-radius: 18px;
+    padding: 0.75rem 1rem;
+    box-shadow: 0 3px 8px rgba(139, 92, 246, 0.12);
 }
 
 .word-helpers-head {
@@ -3536,21 +3865,25 @@ onBeforeUnmount(() => {
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-bottom: 0.6rem;
+    gap: 0.4rem;
+    margin-bottom: 0.45rem;
 }
 
 .helpers-kicker {
     background: #7c3aed;
     color: #ffffff;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 900;
-    padding: 0.2rem 0.6rem;
+    padding: 0.18rem 0.55rem;
     border-radius: 999px;
+    letter-spacing: 0.04em;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
 }
 
 .helpers-sub {
-    font-size: 0.8rem;
+    font-size: 0.76rem;
     font-weight: 800;
     color: #5b21b6;
 }
@@ -3558,20 +3891,22 @@ onBeforeUnmount(() => {
 .word-helpers-chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.4rem;
 }
 
 .clay-word-helper-chip {
     background: #ffffff;
     color: #5b21b6;
     border: 2px solid #8b5cf6;
-    border-bottom-width: 4px;
+    border-bottom-width: 3.5px;
     border-radius: 999px;
-    padding: 0.32rem 0.8rem;
+    padding: 0.28rem 0.75rem;
     font-weight: 900;
-    font-size: 0.84rem;
+    font-size: 0.82rem;
     cursor: pointer;
-    transition: transform 0.14s ease;
+    transition: transform 0.14s ease, background-color 0.14s ease;
+    display: inline-flex;
+    align-items: center;
 }
 
 .clay-word-helper-chip:hover {
@@ -3579,12 +3914,74 @@ onBeforeUnmount(() => {
     background: #f5f3ff;
 }
 
+.clay-word-helper-chip:active {
+    transform: translateY(1px);
+}
+
+.eval-interactive-card {
+    padding: 1.15rem 1.35rem;
+}
+
+.eval-main-prompt {
+    font-size: 1.12rem;
+    font-weight: 900;
+    line-height: 1.35;
+    color: #0f172a;
+    margin: 0.4rem 0 0.85rem;
+}
+
 .eval-step-box {
     background: #f8fafc;
     border: 2px solid #e2e8f0;
-    border-radius: 18px;
-    padding: 1rem 1.15rem;
-    margin-bottom: 1rem;
+    border-radius: 16px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.8rem;
+}
+
+.eval-step-box.eval-step-one {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+}
+
+.eval-step-box.eval-step-two {
+    background: #ffffff;
+    border-color: #cbd5e1;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
+}
+
+.eval-step-head {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.eval-step-badge {
+    font-size: 0.66rem;
+    font-weight: 900;
+    padding: 0.16rem 0.5rem;
+    border-radius: 7px;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+}
+
+.step-1-badge {
+    background: #3b82f6;
+    color: #ffffff;
+}
+
+.step-2-badge {
+    background: #8b5cf6;
+    color: #ffffff;
+}
+
+.eval-step-kicker {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #334155;
+    margin: 0;
 }
 
 .eval-step-header-row {
@@ -3593,17 +3990,7 @@ onBeforeUnmount(() => {
     justify-content: space-between;
     gap: 0.5rem;
     flex-wrap: wrap;
-    margin-bottom: 0.75rem;
-}
-
-.eval-step-kicker {
-    display: block;
-    font-size: 0.8rem;
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #475569;
-    margin: 0;
+    margin-bottom: 0.65rem;
 }
 
 .eval-step-guide-pill {
@@ -3614,23 +4001,133 @@ onBeforeUnmount(() => {
     color: #1e40af;
     border: 1.5px solid #bfdbfe;
     border-radius: 999px;
-    padding: 0.2rem 0.6rem;
-    font-size: 0.74rem;
+    padding: 0.18rem 0.55rem;
+    font-size: 0.72rem;
     font-weight: 800;
 }
 
 .guide-dot {
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: #3b82f6;
+    flex-shrink: 0;
+}
+
+/* Step 1 Options Grid & Clay Option Button */
+.eval-options-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.55rem;
+    margin-top: 0.6rem;
+}
+
+.clay-eval-option-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    width: 100%;
+    text-align: left;
+    background: #ffffff;
+    border: 2px solid #cbd5e1;
+    border-bottom: 4px solid #94a3b8;
+    border-radius: 13px;
+    padding: 0.55rem 0.75rem;
+    min-height: 44px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.clay-eval-option-btn:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    transform: translateY(-1px);
+}
+
+.clay-eval-option-btn.is-selected {
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border-color: #3b82f6;
+    border-bottom-color: #1d4ed8;
+    box-shadow: 0 3px 8px rgba(37, 99, 235, 0.16);
+}
+
+.eval-letter-badge {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    font-size: 0.76rem;
+    font-weight: 900;
+    background: #f1f5f9;
+    color: #475569;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.clay-eval-option-btn.is-selected .eval-letter-badge {
+    background: #2563eb;
+    color: #ffffff;
+}
+
+.eval-option-text {
+    font-size: 0.86rem;
+    font-weight: 800;
+    line-height: 1.25;
+    color: #1e293b;
+    flex: 1;
+}
+
+.clay-eval-option-btn.is-selected .eval-option-text {
+    color: #1e40af;
+}
+
+.eval-option-indicator {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid #cbd5e1;
+    background: #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.clay-eval-option-btn.is-selected .eval-option-indicator {
+    border-color: #2563eb;
+    background: #2563eb;
+    color: #ffffff;
+}
+
+.eval-indicator-check {
+    font-size: 0.72rem;
+    font-weight: 900;
+    line-height: 1;
+}
+
+/* Step 2 Sentence Template Canvas & Builder */
+.sentence-template-canvas {
+    background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+    border: 2px solid #cbd5e1;
+    border-radius: 14px;
+    padding: 0.85rem 1rem;
+    box-shadow: inset 0 2px 4px rgba(15, 23, 42, 0.03);
 }
 
 .sentence-template-builder {
-    font-size: 1.08rem;
-    font-weight: 800;
-    line-height: 2.3;
-    color: #0f172a;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 2.15;
+    color: #1e293b;
+}
+
+.sentence-static-text {
+    color: #334155;
+    font-weight: 700;
 }
 
 /* Dynamic Stance Token Slot */
@@ -3638,28 +4135,28 @@ onBeforeUnmount(() => {
     display: inline-flex;
     align-items: center;
     vertical-align: middle;
-    margin: 0.15rem 0.35rem;
+    margin: 0.12rem 0.25rem;
 }
 
 .clay-stance-filled-pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.35rem;
     background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
     color: #166534;
     border: 2px solid #22c55e;
-    border-bottom-width: 4.5px;
-    border-radius: 12px;
-    padding: 0.25rem 0.75rem;
+    border-bottom: 3.5px solid #16a34a;
+    border-radius: 10px;
+    padding: 0.18rem 0.6rem;
     font-family: 'Fredoka', sans-serif;
-    font-size: 0.98rem;
+    font-size: 0.86rem;
     font-weight: 700;
-    box-shadow: 0 3px 6px rgba(34, 197, 94, 0.25);
-    animation: stancePopIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 2px 5px rgba(34, 197, 94, 0.22);
+    animation: stancePopIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @keyframes stancePopIn {
-    0% { transform: scale(0.85); opacity: 0; }
+    0% { transform: scale(0.88); opacity: 0; }
     100% { transform: scale(1); opacity: 1; }
 }
 
@@ -3667,37 +4164,37 @@ onBeforeUnmount(() => {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     background: #16a34a;
     color: #ffffff;
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     font-weight: 900;
 }
 
 .stance-filled-text {
     font-weight: 700;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
 }
 
 .clay-stance-empty-pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.3rem;
     background: #fef3c7;
     color: #92400e;
-    border: 2px dashed #f59e0b;
-    border-radius: 12px;
-    padding: 0.25rem 0.65rem;
+    border: 1.5px dashed #f59e0b;
+    border-radius: 10px;
+    padding: 0.18rem 0.55rem;
     font-family: 'Fredoka', sans-serif;
-    font-size: 0.88rem;
+    font-size: 0.8rem;
     font-weight: 700;
     cursor: default;
 }
 
 .stance-empty-icon {
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     animation: bounceFinger 1.6s ease-in-out infinite alternate;
 }
 
@@ -3711,31 +4208,34 @@ onBeforeUnmount(() => {
     display: inline-flex;
     align-items: center;
     vertical-align: middle;
-    margin: 0.15rem 0.35rem;
+    margin: 0.12rem 0.25rem;
+    max-width: 100%;
 }
 
 .clay-inline-blank-input {
-    min-width: 190px;
-    max-width: 360px;
-    padding: 0.32rem 0.75rem;
-    border: 2.5px solid #3b82f6;
-    border-bottom-width: 4.5px;
-    border-radius: 12px;
+    min-width: 130px;
+    max-width: 100%;
+    width: auto;
+    height: 36px;
+    padding: 0.2rem 0.65rem;
+    border: 2px solid #3b82f6;
+    border-bottom: 3.5px solid #2563eb;
+    border-radius: 10px;
     background: #ffffff;
     font-family: 'Nunito', sans-serif;
-    font-size: 1rem;
+    font-size: 1rem; /* 16px prevents iOS Safari auto-zoom */
     font-weight: 800;
     color: #1e3a8a;
     outline: none;
-    transition: all 0.18s ease;
-    box-shadow: inset 0 2px 4px rgba(30, 58, 138, 0.06);
+    transition: all 0.16s ease;
+    box-shadow: inset 0 2px 4px rgba(30, 58, 138, 0.05);
 }
 
 .clay-inline-blank-input:focus,
 .clay-inline-blank-input.is-active-focus {
     border-color: #1d4ed8;
     background: #eff6ff;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.32), inset 0 2px 4px rgba(30, 58, 138, 0.08);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.28), inset 0 2px 4px rgba(30, 58, 138, 0.08);
 }
 
 .clay-inline-blank-input.is-blank-filled {
@@ -4486,96 +4986,321 @@ onBeforeUnmount(() => {
     }
 
     /* 5. CONFLICT MAP & MATCHING ARENA */
-    .clay-map-event-card,
-    .clay-matching-item-card {
-        padding: 0.8rem 0.85rem;
+    .conflict-drop-zone-top-section {
+        padding: 0.65rem 0.75rem;
         border-radius: 16px;
+        margin-bottom: 0.9rem;
     }
 
-    .event-card-body,
-    .matching-item-desc {
-        font-size: 0.9rem;
-        line-height: 1.45;
-    }
-
-    .event-quick-zone-row,
-    .matching-letter-pills {
+    .map-zones-horizontal-row {
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
         gap: 0.45rem;
     }
 
-    .quick-zone-chip {
-        min-height: 38px;
-        padding: 0.38rem 0.75rem;
-        font-size: 0.8rem;
-        border-radius: 12px;
-    }
-
-    .clay-letter-pill {
-        min-width: 44px;
-        min-height: 44px;
-        padding: 0.4rem;
-        font-size: 0.95rem;
-        border-radius: 12px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .clay-matching-choice-card {
-        padding: 0.75rem 0.85rem;
-        gap: 0.65rem;
+    .clay-map-zone-bucket {
+        padding: 0.55rem 0.6rem;
+        min-height: 90px;
         border-radius: 14px;
+        border-width: 2px;
     }
 
-    .choice-letter-circle {
-        width: 28px;
-        height: 28px;
+    .zone-type-emoji-pill {
         font-size: 0.85rem;
     }
 
-    .choice-card-text {
+    .zone-bucket-title {
+        font-size: 0.76rem;
+        line-height: 1.2;
+        white-space: normal;
+        word-break: normal;
+        overflow-wrap: break-word;
+    }
+
+    .zone-count-badge {
+        font-size: 0.62rem;
+        padding: 0.1rem 0.35rem;
+    }
+
+    .placed-event-chip {
+        padding: 0.22rem 0.35rem;
+        font-size: 0.68rem;
+        gap: 0.3rem;
+    }
+
+    .placed-letter {
+        width: 16px;
+        height: 16px;
+        font-size: 0.62rem;
+    }
+
+    .placed-excerpt {
+        max-width: 70px;
+        font-size: 0.68rem;
+    }
+
+    .zone-empty-placeholder {
+        font-size: 0.68rem;
+        padding: 0.45rem 0.2rem;
+    }
+
+    .map-events-cards-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    .clay-map-event-card {
+        padding: 0.75rem 0.85rem;
+        border-radius: 16px;
+    }
+
+    .event-card-body {
         font-size: 0.88rem;
+        line-height: 1.45;
     }
 
-    .clay-map-zone-bucket {
-        padding: 0.85rem;
-        min-height: 100px;
-    }
-
-    /* 6. EVALUATION ARENA */
-    .clay-word-helpers-bar {
-        padding: 0.85rem 1rem;
+    /* Matching Table on Mobile */
+    .matching-interactive-card {
+        padding: 0.65rem 0.5rem;
         border-radius: 18px;
     }
 
+    .matching-instruction-strip {
+        padding: 0.45rem 0.65rem;
+        gap: 0.35rem;
+    }
+
+    .matching-guide-step {
+        font-size: 0.74rem;
+    }
+
+    .matching-table-wrap {
+        border-radius: 14px;
+        border-width: 2px;
+    }
+
+    .matching-table-header {
+        padding: 0.45rem 0.55rem;
+        gap: 0.35rem;
+    }
+
+    .table-col-badge {
+        font-size: 0.62rem;
+        padding: 0.12rem 0.35rem;
+    }
+
+    .table-col-title {
+        font-size: 0.78rem;
+    }
+
+    .matching-col-lane {
+        padding: 0.35rem;
+        gap: 0.4rem;
+    }
+
+    .clay-matching-table-row {
+        padding: 0.45rem 0.5rem;
+        border-radius: 10px;
+    }
+
+    .clue-num-pill {
+        font-size: 0.65rem;
+        padding: 0.1rem 0.35rem;
+    }
+
+    .clue-matched-badge-pill {
+        font-size: 0.64rem;
+        padding: 0.1rem 0.35rem;
+    }
+
+    .clue-text,
+    .option-text {
+        font-size: 0.78rem;
+        line-height: 1.3;
+    }
+
+    .option-letter-circle {
+        width: 22px;
+        height: 22px;
+        font-size: 0.72rem;
+        border-radius: 6px;
+    }
+
+    .option-used-indicator,
+    .option-tap-prompt {
+        font-size: 0.62rem;
+        padding: 0.1rem 0.3rem;
+    }
+
+    /* 6. EVALUATION ARENA */
+    .eval-quiz-stage {
+        gap: 0.65rem;
+    }
+
+    .clay-word-helpers-bar {
+        padding: 0.5rem 0.75rem;
+        border-radius: 15px;
+        border-width: 2px;
+        border-bottom-width: 3.5px;
+    }
+
+    .word-helpers-head {
+        margin-bottom: 0.35rem;
+        gap: 0.35rem;
+    }
+
+    .helpers-kicker {
+        font-size: 0.64rem;
+        padding: 0.14rem 0.45rem;
+    }
+
+    .helpers-sub {
+        font-size: 0.72rem;
+    }
+
+    .word-helpers-chips {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 0.2rem;
+        gap: 0.35rem;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .word-helpers-chips::-webkit-scrollbar {
+        display: none;
+    }
+
     .clay-word-helper-chip {
-        min-height: 38px;
-        padding: 0.4rem 0.85rem;
-        font-size: 0.84rem;
-        display: inline-flex;
-        align-items: center;
+        min-height: 32px;
+        padding: 0.25rem 0.65rem;
+        font-size: 0.76rem;
+        white-space: nowrap;
+        flex-shrink: 0;
+        border-width: 1.5px;
+        border-bottom-width: 3px;
+    }
+
+    .eval-interactive-card {
+        padding: 0.85rem 0.95rem;
+        border-radius: 18px;
+    }
+
+    .eval-main-prompt {
+        font-size: 1rem;
+        line-height: 1.35;
+        margin: 0.35rem 0 0.65rem;
+    }
+
+    .eval-step-box {
+        padding: 0.65rem 0.75rem;
+        border-radius: 14px;
+        margin-bottom: 0.65rem;
+    }
+
+    .eval-step-head {
+        gap: 0.35rem;
+        margin-bottom: 0.45rem;
+    }
+
+    .eval-step-badge {
+        font-size: 0.62rem;
+        padding: 0.12rem 0.4rem;
+    }
+
+    .eval-step-kicker {
+        font-size: 0.75rem;
+    }
+
+    .eval-step-header-row {
+        gap: 0.35rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .eval-step-guide-pill {
+        font-size: 0.68rem;
+        padding: 0.14rem 0.45rem;
+    }
+
+    .eval-options-grid {
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 0.45rem;
+        margin-top: 0.45rem;
+    }
+
+    .clay-eval-option-btn {
+        padding: 0.45rem 0.65rem;
+        min-height: 42px;
+        border-radius: 11px;
+        gap: 0.45rem;
+    }
+
+    .eval-letter-badge {
+        width: 24px;
+        height: 24px;
+        font-size: 0.72rem;
+        border-radius: 7px;
+    }
+
+    .eval-option-text {
+        font-size: 0.8rem;
+        line-height: 1.25;
+    }
+
+    .eval-option-indicator {
+        width: 18px;
+        height: 18px;
+    }
+
+    .eval-indicator-check {
+        font-size: 0.65rem;
+    }
+
+    .sentence-template-canvas {
+        padding: 0.65rem 0.75rem;
+        border-radius: 12px;
     }
 
     .sentence-template-builder {
-        font-size: 0.98rem;
-        line-height: 2.3;
+        font-size: 0.92rem;
+        line-height: 2.0;
+    }
+
+    .clay-stance-token-slot {
+        margin: 0.1rem 0.2rem;
     }
 
     .clay-stance-filled-pill {
-        font-size: 0.88rem;
-        padding: 0.2rem 0.55rem;
+        font-size: 0.8rem;
+        padding: 0.16rem 0.5rem;
+        border-radius: 8px;
+        border-bottom-width: 3px;
+        gap: 0.25rem;
+    }
+
+    .stance-check-badge {
+        width: 14px;
+        height: 14px;
+        font-size: 0.6rem;
     }
 
     .clay-stance-empty-pill {
-        font-size: 0.8rem;
-        padding: 0.2rem 0.5rem;
+        font-size: 0.75rem;
+        padding: 0.15rem 0.45rem;
+        border-radius: 8px;
+    }
+
+    .clay-blank-input-slot {
+        margin: 0.1rem 0.2rem;
     }
 
     .clay-inline-blank-input {
-        min-width: 140px;
+        min-width: 110px;
         max-width: 100%;
+        height: 34px;
         font-size: 1rem; /* 16px prevents iOS Safari auto-zoom */
-        padding: 0.35rem 0.6rem;
+        padding: 0.25rem 0.55rem;
+        border-radius: 8px;
+        border-bottom-width: 3px;
     }
 
     /* 7. REFLECTION ARENA */
@@ -4710,6 +5435,41 @@ onBeforeUnmount(() => {
         animation-duration: 0.01ms !important;
         transition-duration: 0.01ms !important;
     }
+}
+
+/* Empty Quiz State */
+.clay-empty-quiz-card {
+    background: #FFFFFF;
+    border: 3px dashed #CBD5E1;
+    border-radius: 28px;
+    padding: 3.5rem 2rem;
+    text-align: center;
+    max-width: 540px;
+    margin: 2rem auto;
+    width: 100%;
+    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.06);
+}
+
+.empty-quiz-icon {
+    font-size: 3.5rem;
+    display: block;
+    margin-bottom: 1rem;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+}
+
+.empty-quiz-title {
+    font-family: var(--font-heading, 'Fredoka', sans-serif);
+    font-size: 1.6rem;
+    color: #1E293B;
+    margin: 0 0 0.75rem 0;
+    font-weight: 800;
+}
+
+.empty-quiz-desc {
+    font-size: 0.95rem;
+    color: #64748B;
+    line-height: 1.6;
+    margin: 0 0 1.75rem 0;
 }
 </style>
 

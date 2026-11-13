@@ -100,8 +100,16 @@ return [
         'failover' => [
             'driver' => 'failover',
             'stores' => [
-                'database',
+                env('CACHE_FAILOVER_PRIMARY', 'database'),
                 'array',
+            ],
+        ],
+
+        'redis_failover' => [
+            'driver' => 'failover',
+            'stores' => [
+                'redis',
+                'database',
             ],
         ],
 

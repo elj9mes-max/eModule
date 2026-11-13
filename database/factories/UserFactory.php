@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\PixarWorldTheme;
 use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -32,6 +33,7 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
             'role' => UserRole::Student,
+            'ui_theme' => PixarWorldTheme::Toybox,
         ];
     }
 
@@ -62,6 +64,30 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'role' => UserRole::Student,
+        ]);
+    }
+
+    /**
+     * Configure the model factory.
+     */
+    public function configure(): static
+    {
+        return $this->afterCreating(function (User $user): void {
+            if ($user->role === UserRole::Student) {
+                $user->studentProfile()->firstOrCreate([
+                    'user_id' => $user->id,
+                ]);
+            }
+        });
+    }
+
+    /**
+     * Indicate the user's preferred Pixar color world theme.
+     */
+    public function withTheme(PixarWorldTheme $theme): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'ui_theme' => $theme,
         ]);
     }
 }

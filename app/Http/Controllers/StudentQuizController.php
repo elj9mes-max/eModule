@@ -7,6 +7,8 @@ use App\Models\Module;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Models\QuizAttemptAnswer;
+use App\Services\Cache\EModuleCacheService;
+use App\Services\Gamification\LevelProgressionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,6 +16,11 @@ use Illuminate\Support\Facades\DB;
 
 class StudentQuizController extends Controller
 {
+    public function __construct(
+        private readonly EModuleCacheService $cache,
+        private readonly LevelProgressionService $progressionService,
+    ) {}
+
     /**
      * Submit a student's quiz answers, evaluate server-side, save attempt and return results.
      */
@@ -111,6 +118,20 @@ class StudentQuizController extends Controller
             return $quizAttempt;
         });
 
+        $progression = null;
+        if ($attempt->status === 'completed') {
+            $progression = $this->progressionService->recordQuizAttempt(
+                $user,
+                $quiz,
+                (int) $attempt->stars,
+                (int) $attempt->xp_earned,
+                (bool) $attempt->is_passed,
+                excludeAttemptId: $attempt->id,
+            );
+        }
+
+        $this->cache->invalidateAttemptProgress($user->id, $module->id, (int) $module->user_id, $quiz->id);
+
         if ($request->wantsJson()) {
             $isPending = $attempt->status === 'pending_review';
 
@@ -121,6 +142,7 @@ class StudentQuizController extends Controller
                 'message' => $isPending
                     ? 'Your response has been submitted! Your teacher will review and grade your work.'
                     : 'Quiz completed successfully!',
+                'progression' => $progression,
                 'attempt' => [
                     'id' => $attempt->id,
                     'attempt_number' => $attempt->attempt_number,

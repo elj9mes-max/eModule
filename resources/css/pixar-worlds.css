@@ -1,0 +1,399 @@
+/* ==========================================================================
+   PIXAR COLOR WORLDS — GLOBAL SHARED DESIGN TOKENS & ATMOSPHERIC PLANES
+   Provides the 4 curated WCAG AA worlds across all Student Portal pages.
+   ========================================================================== */
+
+:root,
+[data-pixar-theme="toybox"] {
+    color-scheme: light;
+    --px-sky-top: #42BAFF;
+    --px-sky-mid: #7EE0FF;
+    --px-sky-bottom: #FFF0A8;
+    --px-sun-bloom: rgba(255, 214, 66, 0.72);
+    --px-secondary-bloom: rgba(255, 110, 150, 0.34);
+
+    --px-hill-far-1: #8B96FF;
+    --px-hill-far-2: #5D6DF5;
+    --px-hill-mid-1: #29E0BF;
+    --px-hill-mid-2: #0DB596;
+    --px-hill-near-1: #4BE364;
+    --px-hill-near-2: #11A349;
+    --px-hill-rim: rgba(212, 255, 173, 0.88);
+    --px-cloud-opacity: 0.9;
+    --px-sparkle-color: #FFF7B2;
+    --px-wing-glow: rgba(255, 232, 130, 0.48);
+    --px-card-aura: rgba(255, 200, 56, 0.42);
+    --px-trail-color: rgba(255, 232, 128, 0.88);
+
+    --px-card-bg-top: rgba(255, 253, 249, 0.97);
+    --px-card-bg-bottom: rgba(244, 237, 255, 0.94);
+    --px-surface-card: #FFFDF9;
+    --px-surface-card-bottom: #F3ECFF;
+    --px-surface-well: #EAE4FC;
+    --px-surface-well-focus: #FFFFFF;
+    --px-surface-elevated: #FFFFFF;
+    --px-surface-glass: rgba(255, 253, 249, 0.88);
+    --px-backdrop-scrim: rgba(28, 22, 62, 0.56);
+
+    --px-ink: #18143B;
+    --px-ink-muted: #4C4670;
+    --px-ink-subtle: #625C88;
+    --px-stage-ink: #18143B;
+    --px-stage-ink-muted: #2B245C;
+    --px-link-ink: #146CE8;
+
+    --px-primary-lit: #FF7866;
+    --px-primary: #DE2B1E;
+    --px-primary-belly: #B51B10;
+    --px-primary-pedestal: #821008;
+    --px-primary-ink: #FFFFFF;
+    --px-primary-glow: rgba(230, 65, 51, 0.42);
+
+    --px-secondary-lit: #52ADFF;
+    --px-secondary: #146CE8;
+    --px-secondary-belly: #0E50B5;
+    --px-secondary-pedestal: #08347D;
+    --px-secondary-ink: #FFFFFF;
+    --px-secondary-glow: rgba(20, 108, 232, 0.4);
+
+    --px-accent-lit: #FFE661;
+    --px-accent: #FFBF0F;
+    --px-accent-belly: #E39900;
+    --px-accent-pedestal: #AB6D00;
+    --px-accent-ink: #261800;
+    --px-accent-glow: rgba(255, 191, 15, 0.42);
+
+    --px-explore-lit: #2EE8B5;
+    --px-explore: #078562;
+    --px-explore-belly: #05664B;
+    --px-explore-pedestal: #034532;
+    --px-explore-ink: #FFFFFF;
+    --px-explore-glow: rgba(7, 133, 98, 0.42);
+
+    --px-hero-banner-grad: linear-gradient(135deg, #146CE8 0%, #6D28D9 52%, #DE2B1E 100%);
+    --px-hero-banner-ledge: #1E1B4B;
+    --px-hud-ledge: #B8C4F8;
+    --px-xp-track-bg: #E0E7FF;
+    --px-xp-fill-grad: linear-gradient(90deg, #10B981 0%, #06B6D4 50%, #146CE8 100%);
+
+    --px-success-lit: #3DE094;
+    --px-success: #117E4D;
+    --px-success-pedestal: #095432;
+    --px-success-glow: rgba(17, 126, 77, 0.36);
+
+    --px-danger-lit: #FF6B76;
+    --px-danger: #CF2935;
+    --px-danger-pedestal: #911720;
+    --px-danger-glow: rgba(207, 41, 53, 0.36);
+
+    --px-orb-1: #FF627A;
+    --px-orb-2: #3DB2FF;
+    --px-orb-3: #FFD028;
+    --px-orb-4: #3CE6A6;
+    --px-orb-5: #A77BFF;
+    --px-orb-6: #FF9447;
+
+    --px-shadow-rgb: 28, 22, 62;
+    --px-rim-top: rgba(255, 255, 255, 0.95);
+    --px-card-border: rgba(255, 255, 255, 0.9);
+    --px-well-shadow: inset 0 4px 8px rgba(var(--px-shadow-rgb), 0.12),
+        inset 0 1px 2px rgba(var(--px-shadow-rgb), 0.08),
+        0 2px 0 rgba(255, 255, 255, 0.88);
+    --px-card-shadow:
+        0 24px 48px -14px rgba(var(--px-shadow-rgb), 0.22),
+        0 10px 20px -6px rgba(var(--px-shadow-rgb), 0.13),
+        0 3px 6px rgba(var(--px-shadow-rgb), 0.08),
+        inset 0 2px 2px var(--px-rim-top),
+        inset 0 -10px 22px -8px rgba(var(--px-shadow-rgb), 0.06);
+    --px-focus-ring: rgba(20, 108, 232, 0.34);
+    --px-focus-stroke: #146CE8;
+
+    --px-font-display: 'Fredoka', ui-rounded, 'SF Pro Rounded', 'Nunito', system-ui, sans-serif;
+    --px-font-body: 'Nunito', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --px-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --px-ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
+    --px-noise-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+}
+
+[data-pixar-theme="luca-coast"] {
+    color-scheme: light;
+    --px-sky-top: #FF955C;
+    --px-sky-mid: #FFD675;
+    --px-sky-bottom: #38E4DF;
+    --px-sun-bloom: rgba(255, 118, 92, 0.62);
+    --px-secondary-bloom: rgba(46, 229, 219, 0.42);
+
+    --px-hill-far-1: #B482FF;
+    --px-hill-far-2: #7D52E6;
+    --px-hill-mid-1: #2CE6D2;
+    --px-hill-mid-2: #0AB09E;
+    --px-hill-near-1: #12C7AE;
+    --px-hill-near-2: #067D6E;
+    --px-hill-rim: rgba(180, 255, 245, 0.85);
+    --px-cloud-opacity: 0.9;
+    --px-sparkle-color: #FFF3B0;
+    --px-wing-glow: rgba(255, 184, 108, 0.48);
+    --px-card-aura: rgba(20, 212, 192, 0.38);
+    --px-trail-color: rgba(255, 243, 176, 0.88);
+
+    --px-card-bg-top: rgba(255, 253, 247, 0.97);
+    --px-card-bg-bottom: rgba(255, 240, 220, 0.94);
+    --px-surface-card: #FFFDF7;
+    --px-surface-card-bottom: #FFF0DC;
+    --px-surface-well: #F7EBDA;
+    --px-surface-well-focus: #FFFFFF;
+    --px-surface-elevated: #FFFFFF;
+    --px-surface-glass: rgba(255, 253, 247, 0.88);
+    --px-backdrop-scrim: rgba(26, 40, 66, 0.56);
+
+    --px-ink: #182940;
+    --px-ink-muted: #435773;
+    --px-ink-subtle: #5B6F8C;
+    --px-stage-ink: #182940;
+    --px-stage-ink-muted: #354761;
+    --px-link-ink: #D44711;
+
+    --px-primary-lit: #3AE8D2;
+    --px-primary: #078578;
+    --px-primary-belly: #05665C;
+    --px-primary-pedestal: #03453E;
+    --px-primary-ink: #FFFFFF;
+    --px-primary-glow: rgba(7, 133, 120, 0.42);
+
+    --px-secondary-lit: #FF9357;
+    --px-secondary: #D44711;
+    --px-secondary-belly: #A83307;
+    --px-secondary-pedestal: #782002;
+    --px-secondary-ink: #FFFFFF;
+    --px-secondary-glow: rgba(212, 71, 17, 0.38);
+
+    --px-accent-lit: #FFE86B;
+    --px-accent: #FFB814;
+    --px-accent-belly: #D99500;
+    --px-accent-pedestal: #9E6A00;
+    --px-accent-ink: #241700;
+    --px-accent-glow: rgba(255, 184, 20, 0.4);
+
+    --px-explore-lit: #3AE8D2;
+    --px-explore: #078578;
+    --px-explore-belly: #05665C;
+    --px-explore-pedestal: #03453E;
+    --px-explore-ink: #FFFFFF;
+    --px-explore-glow: rgba(7, 133, 120, 0.42);
+
+    --px-hero-banner-grad: linear-gradient(135deg, #078578 0%, #0EA5E9 54%, #D44711 100%);
+    --px-hero-banner-ledge: #043D38;
+    --px-hud-ledge: #9EDAD2;
+    --px-xp-track-bg: #CCFBF1;
+    --px-xp-fill-grad: linear-gradient(90deg, #078578 0%, #0EA5E9 52%, #FF9357 100%);
+
+    --px-orb-1: #2CE6D2;
+    --px-orb-2: #FF884D;
+    --px-orb-3: #FFE054;
+    --px-orb-4: #4CD4FF;
+    --px-orb-5: #FF6B8B;
+    --px-orb-6: #A5F36B;
+
+    --px-shadow-rgb: 26, 40, 66;
+    --px-rim-top: rgba(255, 255, 255, 0.95);
+    --px-card-border: rgba(255, 255, 255, 0.9);
+    --px-well-shadow: inset 0 4px 8px rgba(var(--px-shadow-rgb), 0.11),
+        inset 0 1px 2px rgba(var(--px-shadow-rgb), 0.08),
+        0 2px 0 rgba(255, 255, 255, 0.9);
+    --px-card-shadow:
+        0 24px 48px -14px rgba(var(--px-shadow-rgb), 0.2),
+        0 10px 20px -6px rgba(var(--px-shadow-rgb), 0.12),
+        inset 0 2px 2px var(--px-rim-top),
+        inset 0 -10px 20px -8px rgba(201, 120, 40, 0.08);
+    --px-focus-ring: rgba(7, 133, 120, 0.32);
+    --px-focus-stroke: #078578;
+}
+
+[data-pixar-theme="memory-orb"] {
+    color-scheme: dark;
+    --px-sky-top: #1E124A;
+    --px-sky-mid: #3A1F80;
+    --px-sky-bottom: #672BA8;
+    --px-sun-bloom: rgba(255, 92, 178, 0.44);
+    --px-secondary-bloom: rgba(56, 208, 255, 0.36);
+
+    --px-hill-far-1: #7B4DFF;
+    --px-hill-far-2: #4B28A8;
+    --px-hill-mid-1: #4F46E5;
+    --px-hill-mid-2: #2D268A;
+    --px-hill-near-1: #2C2266;
+    --px-hill-near-2: #16103A;
+    --px-hill-rim: rgba(105, 215, 255, 0.65);
+    --px-cloud-opacity: 0.22;
+    --px-sparkle-color: #8BE9FF;
+    --px-wing-glow: rgba(105, 215, 255, 0.34);
+    --px-card-aura: rgba(167, 123, 255, 0.42);
+    --px-trail-color: rgba(108, 224, 255, 0.68);
+
+    --px-card-bg-top: rgba(44, 34, 92, 0.95);
+    --px-card-bg-bottom: rgba(28, 21, 64, 0.95);
+    --px-surface-card: #2C225C;
+    --px-surface-card-bottom: #1C1540;
+    --px-surface-well: #161033;
+    --px-surface-well-focus: #221A4C;
+    --px-surface-elevated: #362B6E;
+    --px-surface-glass: rgba(39, 31, 82, 0.86);
+    --px-backdrop-scrim: rgba(9, 6, 24, 0.72);
+
+    --px-ink: #FFF9F2;
+    --px-ink-muted: #D4CEFA;
+    --px-ink-subtle: #B3AAE6;
+    --px-stage-ink: #FFF9F2;
+    --px-stage-ink-muted: #D4CEFA;
+    --px-link-ink: #6CE0FF;
+
+    --px-primary-lit: #FFE76B;
+    --px-primary: #FFC421;
+    --px-primary-belly: #E09B00;
+    --px-primary-pedestal: #A36B00;
+    --px-primary-ink: #241800;
+    --px-primary-glow: rgba(255, 196, 33, 0.45);
+
+    --px-secondary-lit: #6CE0FF;
+    --px-secondary: #0E84C9;
+    --px-secondary-belly: #0A5F94;
+    --px-secondary-pedestal: #063F66;
+    --px-secondary-ink: #FFFFFF;
+    --px-secondary-glow: rgba(14, 132, 201, 0.46);
+
+    --px-accent-lit: #FF82BA;
+    --px-accent: #D42874;
+    --px-accent-belly: #A81856;
+    --px-accent-pedestal: #780D3B;
+    --px-accent-ink: #FFFFFF;
+    --px-accent-glow: rgba(212, 40, 116, 0.44);
+
+    --px-explore-lit: #FFE76B;
+    --px-explore: #FFC421;
+    --px-explore-belly: #E09B00;
+    --px-explore-pedestal: #A36B00;
+    --px-explore-ink: #241800;
+    --px-explore-glow: rgba(255, 196, 33, 0.48);
+
+    --px-hero-banner-grad: linear-gradient(135deg, #312E81 0%, #6D28D9 52%, #BE185D 100%);
+    --px-hero-banner-ledge: #0E0929;
+    --px-hud-ledge: #130D36;
+    --px-xp-track-bg: #161033;
+    --px-xp-fill-grad: linear-gradient(90deg, #FFC421 0%, #FF6B9E 52%, #38D6FF 100%);
+
+    --px-orb-1: #FFD447;
+    --px-orb-2: #48C9FF;
+    --px-orb-3: #FF6B9E;
+    --px-orb-4: #A77BFF;
+    --px-orb-5: #45E69F;
+    --px-orb-6: #FF9E42;
+
+    --px-shadow-rgb: 9, 6, 24;
+    --px-rim-top: rgba(255, 255, 255, 0.28);
+    --px-card-border: rgba(167, 139, 250, 0.34);
+    --px-well-shadow: inset 0 4px 10px rgba(4, 2, 16, 0.58),
+        inset 0 1px 2px rgba(4, 2, 16, 0.44),
+        0 1px 0 rgba(255, 255, 255, 0.16);
+    --px-card-shadow:
+        0 28px 56px -12px rgba(4, 2, 18, 0.62),
+        0 10px 24px -4px rgba(4, 2, 18, 0.42),
+        inset 0 1.5px 1px var(--px-rim-top),
+        inset 0 -12px 24px -8px rgba(126, 94, 255, 0.22);
+    --px-focus-ring: rgba(108, 224, 255, 0.4);
+    --px-focus-stroke: #6CE0FF;
+}
+
+[data-pixar-theme="marigold"] {
+    color-scheme: dark;
+    --px-sky-top: #29103D;
+    --px-sky-mid: #571963;
+    --px-sky-bottom: #8C2260;
+    --px-sun-bloom: rgba(255, 174, 48, 0.48);
+    --px-secondary-bloom: rgba(55, 222, 198, 0.28);
+
+    --px-hill-far-1: #C43B96;
+    --px-hill-far-2: #7D1F68;
+    --px-hill-mid-1: #D93D6B;
+    --px-hill-mid-2: #8C1B4A;
+    --px-hill-near-1: #4A1754;
+    --px-hill-near-2: #240B2E;
+    --px-hill-rim: rgba(255, 198, 92, 0.68);
+    --px-cloud-opacity: 0.2;
+    --px-sparkle-color: #FFD269;
+    --px-wing-glow: rgba(255, 174, 48, 0.36);
+    --px-card-aura: rgba(245, 134, 22, 0.42);
+    --px-trail-color: rgba(255, 200, 87, 0.72);
+
+    --px-card-bg-top: rgba(54, 27, 72, 0.95);
+    --px-card-bg-bottom: rgba(36, 17, 50, 0.95);
+    --px-surface-card: #361B48;
+    --px-surface-card-bottom: #241132;
+    --px-surface-well: #1E0D2B;
+    --px-surface-well-focus: #2D1540;
+    --px-surface-elevated: #45235C;
+    --px-surface-glass: rgba(54, 27, 72, 0.88);
+    --px-backdrop-scrim: rgba(18, 6, 26, 0.72);
+
+    --px-ink: #FFF8F0;
+    --px-ink-muted: #EBCEF0;
+    --px-ink-subtle: #C9A3CF;
+    --px-stage-ink: #FFF8F0;
+    --px-stage-ink-muted: #EBCEF0;
+    --px-link-ink: #87FFEE;
+
+    --px-primary-lit: #FFC054;
+    --px-primary: #F58414;
+    --px-primary-belly: #CC6000;
+    --px-primary-pedestal: #944100;
+    --px-primary-ink: #261100;
+    --px-primary-glow: rgba(245, 132, 20, 0.46);
+
+    --px-secondary-lit: #FF70A8;
+    --px-secondary: #D4246C;
+    --px-secondary-belly: #A81651;
+    --px-secondary-pedestal: #780A37;
+    --px-secondary-ink: #FFFFFF;
+    --px-secondary-glow: rgba(212, 36, 108, 0.44);
+
+    --px-accent-lit: #87FFEE;
+    --px-accent: #37DEC6;
+    --px-accent-belly: #1AB39D;
+    --px-accent-pedestal: #0D8070;
+    --px-accent-ink: #042923;
+    --px-accent-glow: rgba(55, 222, 198, 0.4);
+
+    --px-explore-lit: #87FFEE;
+    --px-explore: #37DEC6;
+    --px-explore-belly: #1AB39D;
+    --px-explore-pedestal: #0D8070;
+    --px-explore-ink: #042923;
+    --px-explore-glow: rgba(55, 222, 198, 0.45);
+
+    --px-hero-banner-grad: linear-gradient(135deg, #581C87 0%, #BE185D 52%, #EA580C 100%);
+    --px-hero-banner-ledge: #1D0628;
+    --px-hud-ledge: #1E0B2C;
+    --px-xp-track-bg: #1E0D2B;
+    --px-xp-fill-grad: linear-gradient(90deg, #FFC054 0%, #FF639B 52%, #37DEC6 100%);
+
+    --px-orb-1: #FFAC38;
+    --px-orb-2: #FF639B;
+    --px-orb-3: #49E6CE;
+    --px-orb-4: #FFD66E;
+    --px-orb-5: #C47DFF;
+    --px-orb-6: #FF785A;
+
+    --px-shadow-rgb: 18, 6, 26;
+    --px-rim-top: rgba(255, 214, 153, 0.28);
+    --px-card-border: rgba(255, 186, 112, 0.3);
+    --px-well-shadow: inset 0 4px 10px rgba(10, 2, 18, 0.58),
+        inset 0 1px 2px rgba(10, 2, 18, 0.44),
+        0 1px 0 rgba(255, 214, 153, 0.16);
+    --px-card-shadow:
+        0 28px 56px -12px rgba(10, 2, 18, 0.62),
+        0 10px 24px -4px rgba(10, 2, 18, 0.42),
+        inset 0 1.5px 1px var(--px-rim-top),
+        inset 0 -12px 24px -8px rgba(245, 134, 22, 0.2);
+    --px-focus-ring: rgba(255, 192, 84, 0.4);
+    --px-focus-stroke: #FFC054;
+}
+

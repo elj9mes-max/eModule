@@ -6,6 +6,7 @@ use App\Enums\QuizType;
 use App\Http\Requests\StoreMultipleChoiceQuizRequest;
 use App\Models\Module;
 use App\Models\Quiz;
+use App\Services\Cache\EModuleCacheService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -130,6 +131,8 @@ class TeacherMultipleChoiceQuizController extends Controller
             }
         });
 
+        app(EModuleCacheService::class)->invalidateModule($module->id, bumpCatalog: true);
+
         return redirect()->route('teachers.modules.show', $module->slug);
     }
 
@@ -138,6 +141,6 @@ class TeacherMultipleChoiceQuizController extends Controller
      */
     public function show(Request $request, Module $module, Quiz $quiz): Response|RedirectResponse
     {
-        return (new TeacherQuizResultController)->show($request, $module, $quiz);
+        return app(TeacherQuizResultController::class)->show($request, $module, $quiz);
     }
 }

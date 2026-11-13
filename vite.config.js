@@ -12,6 +12,15 @@ export default defineConfig({
             fonts: [
                 bunny('Instrument Sans', {
                     weights: [400, 500, 600],
+                    optimizedFallbacks: false,
+                }),
+                bunny('Fredoka', {
+                    weights: [400, 500, 600, 700],
+                    optimizedFallbacks: false,
+                }),
+                bunny('Nunito', {
+                    weights: [600, 700, 800, 900],
+                    optimizedFallbacks: false,
                 }),
             ],
         }),

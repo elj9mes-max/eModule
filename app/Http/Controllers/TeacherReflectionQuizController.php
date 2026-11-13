@@ -6,6 +6,7 @@ use App\Enums\QuizType;
 use App\Http\Requests\StoreReflectionQuizRequest;
 use App\Models\Module;
 use App\Models\Quiz;
+use App\Services\Cache\EModuleCacheService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -111,6 +112,10 @@ class TeacherReflectionQuizController extends Controller
                 ]);
             }
         });
+
+        app(EModuleCacheService::class)->invalidateModule($module->id, bumpCatalog: true);
+
+        app(EModuleCacheService::class)->invalidateModule($module->id, bumpCatalog: true);
 
         return redirect()->route('teachers.modules.show', $module->slug)
             ->with('status', 'Reflection activity created successfully!');

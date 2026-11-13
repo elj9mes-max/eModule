@@ -1,7 +1,8 @@
 <script setup>
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, useRemember } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import StudentLayout from '../../Components/StudentLayout.vue';
+import { prefetchRoute, useIdlePrefetch } from '@/Composables/usePrefetch';
 
 const props = defineProps({
     user: {
@@ -19,7 +20,7 @@ const props = defineProps({
     },
 });
 
-const selectedBiome = ref('all');
+const selectedBiome = useRemember('all', 'student.dashboard.biome');
 const activeRealmPreview = ref(null);
 const pressedCardId = ref(null);
 
@@ -60,6 +61,18 @@ const featuredModule = computed(() => {
 
     return props.modules[0];
 });
+
+useIdlePrefetch(
+    () => (featuredModule.value?.slug ? `/students/modules/${featuredModule.value.slug}` : null),
+    ['student-modules', featuredModule.value?.slug ? `module-${featuredModule.value.slug}` : ''],
+    ['20s', '90s'],
+);
+
+const prefetchModule = (mod) => {
+    if (mod?.slug) {
+        prefetchRoute(`/students/modules/${mod.slug}`, ['student-modules', `module-${mod.slug}`], ['20s', '90s']);
+    }
+};
 
 const totalQuestsCount = computed(() => {
     return (props.modules || []).reduce(
@@ -123,6 +136,49 @@ const launchModuleQuest = (mod) => {
 
     router.visit('/students/progress');
 };
+
+const joinCode = ref('');
+const isJoining = ref(false);
+const joinError = ref(null);
+const joinSuccess = ref(null);
+
+const onCodeInput = (e) => {
+    joinCode.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+    joinError.value = null;
+    joinSuccess.value = null;
+};
+
+const submitJoinCode = () => {
+    const code = joinCode.value.trim();
+    if (!/^\d{6}$/.test(code)) {
+        joinError.value = 'Please enter a 6-digit number (e.g. 482910).';
+        return;
+    }
+
+    isJoining.value = true;
+    joinError.value = null;
+    joinSuccess.value = null;
+
+    router.post(
+        '/students/modules/join',
+        { join_code: code },
+        {
+            preserveScroll: true,
+            onSuccess: (page) => {
+                isJoining.value = false;
+                joinCode.value = '';
+                joinSuccess.value = page.props.flash?.success || 'Adventure unlocked! Welcome to your new reading world!';
+                window.setTimeout(() => {
+                    joinSuccess.value = null;
+                }, 6000);
+            },
+            onError: (errors) => {
+                isJoining.value = false;
+                joinError.value = errors.join_code || 'Unable to join adventure. Please check the code and try again.';
+            },
+        },
+    );
+};
 </script>
 
 <template>
@@ -139,114 +195,118 @@ const launchModuleQuest = (mod) => {
         active-nav="modules"
     >
         <section class="clay-adventure-dashboard" aria-labelledby="modules-heading">
-            <!-- 1. LEVEL 1 HIERARCHY: 3D CARTOON CLAY HERO QUEST BANNER -->
-            <div class="clay-hero-banner">
-                <!-- Specular Top Bubble Gloss & Floating 3D Clouds -->
-                <span class="hero-bubble-gloss" aria-hidden="true"></span>
-                <div class="hero-ambient-orb orb-1" aria-hidden="true"></div>
-                <div class="hero-ambient-orb orb-2" aria-hidden="true"></div>
+            <!-- 0. LEVEL 0 HIERARCHY: 3D CLAY QUEST CODE JOIN CARD -->
+            <div class="clay-join-quest-card">
+                <span class="join-bubble-gloss" aria-hidden="true"></span>
+                <div class="join-card-decor-orb join-orb-1" aria-hidden="true"></div>
+                <div class="join-card-decor-orb join-orb-2" aria-hidden="true"></div>
 
-                <div class="hero-top-row">
-                    <span class="clay-quest-kicker">
-                        <span class="kicker-spark-dot" aria-hidden="true"></span>
-                        FEATURED ADVENTURE
-                    </span>
+                <div class="join-card-body">
 
-                    <span class="clay-xp-burst-pill">
-                        <svg viewBox="0 0 16 16" class="bolt-svg" aria-hidden="true">
-                            <path d="M9.5 1L3 9h4.5L6.5 15L13 7H8.5L9.5 1z" fill="currentColor" />
-                        </svg>
-                        +{{ featuredModule?.xp_bonus || 250 }} XP BONUS
-                    </span>
-                </div>
-
-                <div class="hero-main-row">
-                    <div class="hero-copy-col">
-                        <h1 id="modules-heading" class="hero-title">
-                            {{ featuredModule ? featuredModule.title : 'Explore Reading Realms!' }}
-                        </h1>
-                        <p class="hero-subtitle">
-                            {{
-                                featuredModule?.description ||
-                                'Jump into colorful 3D story worlds, complete reading quests, and collect golden stars!'
-                            }}
+                    <div class="join-copy-block">
+                        <div class="join-badge-row">
+                            <span class="join-quest-kicker">
+                                <span class="kicker-key-dot" aria-hidden="true"></span>
+                                QUEST ACCESS
+                            </span>
+                            <span class="join-subbadge">6-Digit Code</span>
+                        </div>
+                        <h2 class="join-headline">Unlock Your Classroom Adventure!</h2>
+                        <p class="join-description">
+                            Have a secret 6-digit code from your teacher? Enter it below to join the quest and unlock your reading world!
                         </p>
                     </div>
 
-                    <!-- 3D Cartoon Floating Treasure Shield Mascot Badge -->
-                    <div class="hero-mascot-pod" aria-hidden="true">
-                        <svg viewBox="0 0 72 72" class="hero-mascot-svg">
-                            <defs>
-                                <linearGradient id="shieldClayBody" x1="0%" y1="0%" x2="100%" y2="100%">
-                                    <stop offset="0%" stop-color="#FDE047" />
-                                    <stop offset="50%" stop-color="#F59E0B" />
-                                    <stop offset="100%" stop-color="#D97706" />
-                                </linearGradient>
-                                <linearGradient id="shieldInnerGem" x1="0%" y1="0%" x2="100%" y2="100%">
-                                    <stop offset="0%" stop-color="#38BDF8" />
-                                    <stop offset="100%" stop-color="#2563EB" />
-                                </linearGradient>
-                            </defs>
-                            <path
-                                d="M36 6L60 16V34C60 50.5 49.5 62.2 36 67C22.5 62.2 12 50.5 12 34V16L36 6Z"
-                                fill="url(#shieldClayBody)"
-                                stroke="#FFFFFF"
-                                stroke-width="3"
+                    <form class="join-action-pod" @submit.prevent="submitJoinCode">
+                        <div class="join-input-group">
+                            <input
+                                :value="joinCode"
+                                type="text"
+                                inputmode="numeric"
+                                pattern="[0-9]*"
+                                maxlength="6"
+                                placeholder="000000"
+                                class="clay-code-input"
+                                :disabled="isJoining"
+                                aria-label="Enter 6-digit module quest code"
+                                @input="onCodeInput"
                             />
-                            <path
-                                d="M36 12L54 19.5V33.5C54 46.5 45.8 55.8 36 59.8C26.2 55.8 18 46.5 18 33.5V19.5L36 12Z"
-                                fill="url(#shieldInnerGem)"
-                            />
-                            <path
-                                d="M36 20L39.6 27.8L48 28.9L41.8 34.6L43.5 43L36 38.8L28.5 43L30.2 34.6L24 28.9L32.4 27.8L36 20Z"
-                                fill="#FEF08A"
-                            />
-                            <ellipse cx="28" cy="19" rx="5" ry="2.2" transform="rotate(-25 28 19)" fill="#FFFFFF" fill-opacity="0.75" />
-                        </svg>
-                    </div>
+                            <span v-if="joinCode.length > 0" class="input-counter-pill">
+                                {{ joinCode.length }}/6
+                            </span>
+                        </div>
+
+                        <button
+                            type="submit"
+                            class="clay-join-submit-btn"
+                            :disabled="isJoining || joinCode.length !== 6"
+                        >
+                            <span class="cta-btn-shine" aria-hidden="true"></span>
+                            <span v-if="isJoining" class="join-loader-icon" aria-hidden="true">🌀</span>
+                            <span>{{ isJoining ? 'UNLOCKING...' : '🚀 JOIN QUEST' }}</span>
+                        </button>
+                    </form>
                 </div>
 
-                <div class="hero-bottom-row">
-                    <div class="hero-stat-pills">
-                        <span class="hero-glass-pill">
-                            <svg viewBox="0 0 18 18" class="pill-svg" aria-hidden="true">
-                                <path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h3.8a1.5 1.5 0 0 1 1.5 1.5v10.2a1.2 1.2 0 0 0-1.2-1.2H4.5A1.5 1.5 0 0 1 3 12V4.5z" fill="#FDE047" />
-                                <path d="M15 4.5A1.5 1.5 0 0 0 13.5 3H9.7a1.5 1.5 0 0 0-1.5 1.5v10.2a1.2 1.2 0 0 1 1.2-1.2h4.1A1.5 1.5 0 0 0 15 12V4.5z" fill="#FEF08A" />
-                            </svg>
-                            {{ modules.length }} {{ modules.length === 1 ? 'World' : 'Worlds' }}
-                        </span>
-
-                        <span class="hero-glass-pill">
-                            <svg viewBox="0 0 18 18" class="pill-svg" aria-hidden="true">
-                                <circle cx="9" cy="9" r="7" fill="none" stroke="#6EE7B7" stroke-width="2.2" />
-                                <circle cx="9" cy="9" r="3" fill="#6EE7B7" />
-                            </svg>
-                            {{ totalQuestsCount }} Quests
-                        </span>
+                <!-- Inline Alerts / Feedback -->
+                <transition name="alert-pop">
+                    <div v-if="joinError" class="join-feedback-banner feedback-error" role="alert">
+                        <span class="feedback-icon">⚠️</span>
+                        <span class="feedback-text">{{ joinError }}</span>
+                        <button type="button" class="feedback-dismiss-btn" aria-label="Dismiss error" @click="joinError = null">✕</button>
                     </div>
+                </transition>
 
-                    <button
-                        v-if="featuredModule"
-                        type="button"
-                        class="clay-hero-cta-btn"
-                        @click="openRealmPreview(featuredModule)"
-                    >
-                        <span class="cta-btn-shine" aria-hidden="true"></span>
-                        <span>START QUEST</span>
-                        <svg viewBox="0 0 20 20" class="cta-arrow-svg" aria-hidden="true">
-                            <path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" />
-                        </svg>
-                    </button>
-                </div>
+                <transition name="alert-pop">
+                    <div v-if="joinSuccess" class="join-feedback-banner feedback-success" role="status">
+                        <span class="feedback-icon">🎉</span>
+                        <span class="feedback-text">{{ joinSuccess }}</span>
+                        <button type="button" class="feedback-dismiss-btn" aria-label="Dismiss message" @click="joinSuccess = null">✕</button>
+                    </div>
+                </transition>
             </div>
 
 
+
+
+
+            <!-- Shared SVG Defs for fallback diorama cards (avoids duplicating gradient defs per card) -->
+            <svg width="0" height="0" style="position: absolute; pointer-events: none;" aria-hidden="true">
+                <defs>
+                    <linearGradient id="studentSkyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#38BDF8" />
+                        <stop offset="55%" stop-color="#BAE6FD" />
+                        <stop offset="100%" stop-color="#FEF9C3" />
+                    </linearGradient>
+                    <linearGradient id="studentPeakA" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#A78BFA" />
+                        <stop offset="100%" stop-color="#6366F1" />
+                    </linearGradient>
+                    <linearGradient id="studentPeakB" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#F472B6" />
+                        <stop offset="100%" stop-color="#DB2777" />
+                    </linearGradient>
+                    <linearGradient id="studentMeadowA" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#4ADE80" />
+                        <stop offset="100%" stop-color="#16A34A" />
+                    </linearGradient>
+                    <linearGradient id="studentMeadowB" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#34D399" />
+                        <stop offset="100%" stop-color="#059669" />
+                    </linearGradient>
+                    <linearGradient id="studentPathGold" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#FDE047" />
+                        <stop offset="100%" stop-color="#F59E0B" />
+                    </linearGradient>
+                </defs>
+            </svg>
 
             <!-- 3. LEVEL 3 HIERARCHY: 2-COLUMN 3D CARTOON CLAY REALM CARDS GRID -->
             <div v-if="filteredModules.length > 0" class="clay-realms-grid">
                 <article
                     v-for="(mod, idx) in filteredModules"
                     :key="mod.id"
+                    v-memo="[mod.id, mod.title, mod.theme, mod.status, mod.is_new, mod.lectures_count, mod.quizzes_count, mod.cover_image_url, pressedCardId === mod.id]"
                     class="clay-realm-card"
                     :class="[
                         `theme-${mod.theme || 'forest'}`,
@@ -255,6 +315,8 @@ const launchModuleQuest = (mod) => {
                     role="button"
                     tabindex="0"
                     :aria-label="'Open learning module: ' + mod.title"
+                    @mouseenter="prefetchModule(mod)"
+                    @focus="prefetchModule(mod)"
                     @click="openRealmPreview(mod)"
                     @keydown.enter="openRealmPreview(mod)"
                     @keydown.space.prevent="openRealmPreview(mod)"
@@ -285,39 +347,13 @@ const launchModuleQuest = (mod) => {
                                 :src="mod.cover_image_url"
                                 :alt="mod.title"
                                 class="diorama-img"
+                                loading="lazy"
+                                decoding="async"
                             />
                             <!-- Vibrant 3D Cartoon Vector World Illustration Fallback -->
                             <div v-else class="diorama-fallback-scene" aria-hidden="true">
                                 <svg viewBox="0 0 600 340" preserveAspectRatio="xMidYMid slice" class="fallback-world-svg">
-                                    <defs>
-                                        <linearGradient :id="`skyGrad-${mod.id}`" x1="0%" y1="0%" x2="0%" y2="100%">
-                                            <stop offset="0%" stop-color="#38BDF8" />
-                                            <stop offset="55%" stop-color="#BAE6FD" />
-                                            <stop offset="100%" stop-color="#FEF9C3" />
-                                        </linearGradient>
-                                        <linearGradient :id="`peakA-${mod.id}`" x1="0%" y1="0%" x2="0%" y2="100%">
-                                            <stop offset="0%" stop-color="#A78BFA" />
-                                            <stop offset="100%" stop-color="#6366F1" />
-                                        </linearGradient>
-                                        <linearGradient :id="`peakB-${mod.id}`" x1="0%" y1="0%" x2="0%" y2="100%">
-                                            <stop offset="0%" stop-color="#F472B6" />
-                                            <stop offset="100%" stop-color="#DB2777" />
-                                        </linearGradient>
-                                        <linearGradient :id="`meadowA-${mod.id}`" x1="0%" y1="0%" x2="0%" y2="100%">
-                                            <stop offset="0%" stop-color="#4ADE80" />
-                                            <stop offset="100%" stop-color="#16A34A" />
-                                        </linearGradient>
-                                        <linearGradient :id="`meadowB-${mod.id}`" x1="0%" y1="0%" x2="0%" y2="100%">
-                                            <stop offset="0%" stop-color="#34D399" />
-                                            <stop offset="100%" stop-color="#059669" />
-                                        </linearGradient>
-                                        <linearGradient :id="`pathGold-${mod.id}`" x1="0%" y1="0%" x2="100%" y2="0%">
-                                            <stop offset="0%" stop-color="#FDE047" />
-                                            <stop offset="100%" stop-color="#F59E0B" />
-                                        </linearGradient>
-                                    </defs>
-
-                                    <rect width="600" height="340" :fill="`url(#skyGrad-${mod.id})`" />
+                                    <rect width="600" height="340" fill="url(#studentSkyGrad)" />
 
                                     <!-- 3D Cartoon Sun -->
                                     <circle cx="495" cy="70" r="38" fill="#FDE047" />
@@ -328,18 +364,18 @@ const launchModuleQuest = (mod) => {
                                     <path d="M340 82 C340 66 358 54 380 54 C398 54 414 64 420 76 C430 72 442 78 446 86 C454 88 460 94 460 102 C460 110 450 116 438 116 L345 116 C332 116 326 106 329 96 C329 90 334 85 340 82 Z" fill="#FFFFFF" />
 
                                     <!-- Candy Mountains with Snow Caps -->
-                                    <path d="M80 255 L180 105 L280 255 Z" :fill="`url(#peakA-${mod.id})`" />
+                                    <path d="M80 255 L180 105 L280 255 Z" fill="url(#studentPeakA)" />
                                     <path d="M180 105 L155 148 C168 156 192 156 205 148 Z" fill="#FFFFFF" />
 
-                                    <path d="M230 265 L350 85 L470 265 Z" :fill="`url(#peakB-${mod.id})`" />
+                                    <path d="M230 265 L350 85 L470 265 Z" fill="url(#studentPeakB)" />
                                     <path d="M350 85 L315 145 C335 156 365 156 385 145 Z" fill="#FFFFFF" />
 
                                     <!-- Rolling Toy Hills -->
-                                    <path d="M-20 250 Q120 185 270 235 T620 215 L620 340 L-20 340 Z" :fill="`url(#meadowA-${mod.id})`" />
-                                    <path d="M-20 278 Q180 225 350 268 T620 250 L620 340 L-20 340 Z" :fill="`url(#meadowB-${mod.id})`" />
+                                    <path d="M-20 250 Q120 185 270 235 T620 215 L620 340 L-20 340 Z" fill="url(#studentMeadowA)" />
+                                    <path d="M-20 278 Q180 225 350 268 T620 250 L620 340 L-20 340 Z" fill="url(#studentMeadowB)" />
 
                                     <!-- Golden Quest Trail -->
-                                    <path d="M250 340 Q282 282 296 244 Q306 225 316 220 L338 223 Q328 230 322 250 Q314 288 354 340 Z" :fill="`url(#pathGold-${mod.id})`" />
+                                    <path d="M250 340 Q282 282 296 244 Q306 225 316 220 L338 223 Q328 230 322 250 Q314 288 354 340 Z" fill="url(#studentPathGold)" />
 
                                     <!-- Bubble Cartoon Trees -->
                                     <rect x="82" y="212" width="10" height="34" rx="3" fill="#92400E" />
@@ -434,17 +470,16 @@ const launchModuleQuest = (mod) => {
             <!-- 4. EMPTY REALMS STATE -->
             <div v-else class="clay-empty-card">
                 <div class="clay-empty-badge" aria-hidden="true">
-                    <svg viewBox="0 0 48 48" class="empty-svg">
-                        <circle cx="24" cy="24" r="18" fill="none" stroke="#6366F1" stroke-width="3" stroke-dasharray="6 6" />
-                        <path d="M24 14v12l8 4" fill="none" stroke="#10B981" stroke-width="3" stroke-linecap="round" />
-                    </svg>
+                    <span class="empty-badge-emoji">{{ modules.length === 0 ? '🗺️' : '🔍' }}</span>
                 </div>
-                <h2 class="empty-title">No Worlds Found Here Yet!</h2>
+                <h2 class="empty-title">{{ modules.length === 0 ? 'No Reading Adventures Joined Yet!' : 'No Worlds Found Here Yet!' }}</h2>
                 <p class="empty-desc">
                     {{
-                        selectedBiome === 'all'
-                            ? 'Your teacher is crafting new reading worlds and story quests. Check back soon!'
-                            : 'No worlds match this biome filter yet. Tap below to see all available worlds.'
+                        modules.length === 0
+                            ? 'Enter the 6-digit Quest Code from your teacher above to unlock and start your reading adventure!'
+                            : (selectedBiome === 'all'
+                                ? 'Your teacher is crafting new reading worlds and story quests. Check back soon!'
+                                : 'No worlds match this biome filter yet. Tap below to see all available worlds.')
                     }}
                 </p>
                 <button
@@ -551,6 +586,354 @@ const launchModuleQuest = (mod) => {
 }
 
 /* ==========================================================================
+   0. LEVEL 0 HIERARCHY: 3D CLAY QUEST CODE JOIN CARD
+   ========================================================================== */
+.clay-join-quest-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 26px;
+    padding: 1.15rem 1.35rem;
+    background: linear-gradient(135deg, #312E81 0%, #3730A3 45%, #4F46E5 100%);
+    border: 2.5px solid rgba(255, 255, 255, 0.9);
+    box-shadow:
+        0 8px 0 #1E1B4B,
+        0 14px 28px rgba(30, 27, 75, 0.35),
+        inset 0 3px 6px rgba(255, 255, 255, 0.35);
+    color: #FFFFFF;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    transition: transform 0.25s var(--spring-bounce);
+}
+
+.join-bubble-gloss {
+    position: absolute;
+    top: 5px;
+    left: 20px;
+    right: 20px;
+    height: 12px;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+}
+
+.join-card-decor-orb {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.join-orb-1 {
+    width: 110px;
+    height: 110px;
+    top: -30px;
+    right: -20px;
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.3) 0%, transparent 70%);
+}
+
+.join-orb-2 {
+    width: 90px;
+    height: 90px;
+    bottom: -35px;
+    left: 15%;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.4) 0%, transparent 70%);
+}
+
+.join-card-body {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+    flex-wrap: wrap;
+}
+
+.join-icon-pod {
+    position: relative;
+    width: 58px;
+    height: 58px;
+    border-radius: 20px;
+    background: linear-gradient(145deg, #F59E0B 0%, #D97706 100%);
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    box-shadow:
+        0 5px 0 #92400E,
+        0 10px 18px rgba(180, 83, 9, 0.4),
+        inset 0 2px 4px rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.join-icon-emoji {
+    font-size: 1.75rem;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+}
+
+.join-icon-sparkle {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    font-size: 0.95rem;
+    animation: sparkle-float 2.4s ease-in-out infinite;
+}
+
+@keyframes sparkle-float {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-3px) scale(1.15); }
+}
+
+.join-copy-block {
+    flex: 1 1 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.join-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.join-quest-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.18rem 0.55rem;
+    border-radius: 9999px;
+    background: rgba(245, 158, 11, 0.25);
+    border: 1.2px solid rgba(251, 191, 36, 0.6);
+    font-family: var(--font-display);
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: #FDE68A;
+}
+
+.kicker-key-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #FBBF24;
+    box-shadow: 0 0 6px #F59E0B;
+}
+
+.join-subbadge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.7);
+    font-family: var(--font-display);
+}
+
+.join-headline {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    color: #FFFFFF;
+    margin: 0;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+.join-description {
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.82);
+    margin: 0;
+}
+
+.join-action-pod {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex: 1 1 300px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.join-input-group {
+    position: relative;
+    flex: 1 1 140px;
+    min-width: 140px;
+    max-width: 220px;
+}
+
+.clay-code-input {
+    width: 100%;
+    height: 48px;
+    padding: 0 0.85rem;
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: 0.28em;
+    text-align: center;
+    color: #1E1B4B;
+    background: #FFFFFF;
+    border: 2.5px solid #C7D2FE;
+    border-radius: 16px;
+    box-shadow:
+        inset 0 3px 5px rgba(30, 27, 75, 0.15),
+        0 4px 0 #A5B4FC;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.clay-code-input::placeholder {
+    color: #A5B4FC;
+    letter-spacing: 0.18em;
+    opacity: 0.75;
+}
+
+.clay-code-input:focus {
+    border-color: #F59E0B;
+    box-shadow:
+        inset 0 2px 4px rgba(245, 158, 11, 0.2),
+        0 4px 0 #D97706,
+        0 0 0 3px rgba(245, 158, 11, 0.35);
+}
+
+.clay-code-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.input-counter-pill {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.6rem;
+    font-weight: 800;
+    font-family: var(--font-display);
+    background: #4F46E5;
+    color: #FFFFFF;
+    padding: 0.1rem 0.35rem;
+    border-radius: 6px;
+    pointer-events: none;
+}
+
+.clay-join-submit-btn {
+    position: relative;
+    overflow: hidden;
+    height: 48px;
+    padding: 0 1.25rem;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    border-radius: 16px;
+    background: linear-gradient(145deg, #10B981 0%, #059669 100%);
+    color: #FFFFFF;
+    font-family: var(--font-display);
+    font-size: 0.88rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    cursor: pointer;
+    box-shadow:
+        0 5px 0 #065F46,
+        0 8px 16px rgba(5, 150, 105, 0.35),
+        inset 0 2px 3px rgba(255, 255, 255, 0.4);
+    transition: transform 0.15s var(--spring-bounce), box-shadow 0.15s ease;
+    white-space: nowrap;
+}
+
+.clay-join-submit-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow:
+        0 7px 0 #065F46,
+        0 12px 20px rgba(5, 150, 105, 0.45),
+        inset 0 2px 4px rgba(255, 255, 255, 0.5);
+}
+
+.clay-join-submit-btn:active:not(:disabled) {
+    transform: translateY(3px);
+    box-shadow:
+        0 2px 0 #065F46,
+        0 3px 6px rgba(5, 150, 105, 0.3);
+}
+
+.clay-join-submit-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: linear-gradient(145deg, #6B7280 0%, #4B5563 100%);
+    box-shadow: 0 4px 0 #374151;
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.join-loader-icon {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.join-feedback-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.55rem 0.85rem;
+    border-radius: 14px;
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.feedback-error {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1.5px solid rgba(248, 113, 113, 0.6);
+    color: #FEE2E2;
+}
+
+.feedback-success {
+    background: rgba(16, 185, 129, 0.25);
+    border: 1.5px solid rgba(52, 211, 153, 0.7);
+    color: #D1FAE5;
+}
+
+.feedback-icon {
+    font-size: 1.05rem;
+}
+
+.feedback-text {
+    flex: 1;
+}
+
+.feedback-dismiss-btn {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-size: 0.85rem;
+    font-weight: 800;
+    cursor: pointer;
+    padding: 0.15rem 0.35rem;
+    border-radius: 6px;
+    opacity: 0.75;
+}
+
+.feedback-dismiss-btn:hover {
+    opacity: 1;
+}
+
+.alert-pop-enter-active,
+.alert-pop-leave-active {
+    transition: all 0.25s var(--spring-bounce);
+}
+
+.alert-pop-enter-from,
+.alert-pop-leave-to {
+    opacity: 0;
+    transform: translateY(-6px);
+}
+
+/* ==========================================================================
    1. LEVEL 1 HIERARCHY: 3D CLAY HERO QUEST BANNER
    ========================================================================== */
 .clay-hero-banner {
@@ -558,13 +941,12 @@ const launchModuleQuest = (mod) => {
     overflow: hidden;
     border-radius: 30px;
     padding: 1.1rem 1.15rem;
-    background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 52%, #EC4899 100%);
-    border: 3px solid rgba(255, 255, 255, 0.92);
+    background: var(--px-hero-banner-grad, linear-gradient(135deg, #4F46E5 0%, #7C3AED 52%, #EC4899 100%));
+    border: 2.5px solid var(--px-card-border, rgba(255, 255, 255, 0.92));
     box-shadow:
-        0 8px 0 #3730A3,
-        0 18px 34px rgba(79, 70, 229, 0.32),
-        inset 0 4px 8px rgba(255, 255, 255, 0.45),
-        inset 0 -6px 10px rgba(49, 46, 129, 0.4);
+        0 8px 0 var(--px-hero-banner-ledge, #3730A3),
+        0 18px 34px rgba(var(--px-shadow-rgb, 79, 70, 229), 0.3),
+        inset 0 4px 8px rgba(255, 255, 255, 0.45);
     color: #FFFFFF;
     display: flex;
     flex-direction: column;
@@ -863,7 +1245,7 @@ const launchModuleQuest = (mod) => {
     font-family: var(--font-display);
     font-size: 1.16rem;
     font-weight: 800;
-    color: #1E1B4B;
+    color: var(--px-stage-ink, #1E1B4B);
     line-height: 1.15;
 }
 
@@ -871,22 +1253,22 @@ const launchModuleQuest = (mod) => {
     margin: 0.08rem 0 0;
     font-size: 0.73rem;
     font-weight: 700;
-    color: #475569;
+    color: var(--px-stage-ink-muted, #475569);
 }
 
 .clay-world-counter {
     padding: 0.28rem 0.72rem;
     border-radius: 9999px;
-    background: linear-gradient(180deg, #FFFFFF 0%, #EDE9FE 100%);
-    border: 2px solid #FFFFFF;
+    background: var(--px-surface-elevated, #FFFFFF);
+    border: 2px solid var(--px-card-border, #FFFFFF);
     box-shadow:
-        0 3px 0 #C4B5FD,
-        0 4px 10px rgba(124, 58, 237, 0.12);
+        0 3px 0 rgba(var(--px-shadow-rgb, 124, 58, 237), 0.22),
+        0 4px 10px rgba(var(--px-shadow-rgb, 124, 58, 237), 0.14);
     font-family: var(--font-display);
     font-size: 0.65rem;
     font-weight: 800;
     letter-spacing: 0.05em;
-    color: #5B21B6;
+    color: var(--px-ink, #5B21B6);
     white-space: nowrap;
     flex-shrink: 0;
 }
@@ -907,7 +1289,7 @@ const launchModuleQuest = (mod) => {
 }
 
 .clay-filter-pill {
-    --pill-ledge: #CBD5E1;
+    --pill-ledge: rgba(var(--px-shadow-rgb, 148, 163, 184), 0.26);
 
     display: inline-flex;
     align-items: center;
@@ -915,16 +1297,16 @@ const launchModuleQuest = (mod) => {
     min-height: 40px;
     padding: 0.35rem 0.88rem;
     border-radius: 9999px;
-    background: linear-gradient(180deg, #FFFFFF 0%, #F1F5F9 100%);
-    border: 2px solid #FFFFFF;
+    background: var(--px-surface-elevated, #FFFFFF);
+    border: 2px solid var(--px-card-border, #FFFFFF);
     box-shadow:
         0 4px 0 var(--pill-ledge),
-        0 6px 12px rgba(15, 23, 42, 0.08),
-        inset 0 2px 2px rgba(255, 255, 255, 0.9);
+        0 6px 12px rgba(var(--px-shadow-rgb, 15, 23, 42), 0.12),
+        inset 0 2px 2px var(--px-rim-top, rgba(255, 255, 255, 0.9));
     font-family: var(--font-display);
     font-size: 0.75rem;
     font-weight: 700;
-    color: #334155;
+    color: var(--px-ink-muted, #334155);
     white-space: nowrap;
     cursor: pointer;
     transition: transform 160ms var(--spring-bounce), box-shadow 160ms ease, background 160ms ease, color 160ms ease;
@@ -994,6 +1376,8 @@ const launchModuleQuest = (mod) => {
     cursor: pointer;
     user-select: none;
     outline: none;
+    content-visibility: auto;
+    contain-intrinsic-size: 360px;
     transition: transform 220ms var(--spring-bounce), box-shadow 220ms ease;
 }
 

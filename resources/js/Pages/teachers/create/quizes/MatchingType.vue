@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
+import { generateQuizAssist } from '@/Services/geminiAi.js';
 
 const props = defineProps({
     user: {
@@ -32,13 +33,12 @@ const passPresets = [60, 70, 75, 80, 90];
 // Helper to letter choices (0 -> A, 1 -> B, ...)
 const getLetter = (index) => String.fromCharCode(65 + (index % 26));
 
-// Initial default choices for Column B matching typical literary conflict quizzes
+// Initial default blank choices for Column B
 const defaultChoices = [
-    { choice_letter: 'A', choice_text: 'Character vs. Character' },
-    { choice_letter: 'B', choice_text: 'Character vs. Nature' },
-    { choice_letter: 'C', choice_text: 'Character vs. Society' },
-    { choice_letter: 'D', choice_text: 'San Luis' },
-    { choice_letter: 'E', choice_text: 'Aling Marta' },
+    { choice_letter: 'A', choice_text: '' },
+    { choice_letter: 'B', choice_text: '' },
+    { choice_letter: 'C', choice_text: '' },
+    { choice_letter: 'D', choice_text: '' },
 ];
 
 // Helper to create a single default item for Column A
@@ -52,10 +52,10 @@ const createDefaultItem = (number = 1, defaultChoiceLetter = 'A') => ({
     sort_order: number,
 });
 
-// Setup form with 1 default item
+// Setup form with clean empty inputs
 const form = useForm({
-    title: 'Matching Type: Characters, Settings & Conflicts',
-    description: 'Directions: Read the descriptions in Column A (what happened in the story) and match them with the correct character, place, or conflict type in Column B.',
+    title: '',
+    description: '',
     xp_reward: 220,
     passing_percentage: 70,
     time_limit_seconds: null,
@@ -68,7 +68,7 @@ const form = useForm({
     ],
     choices: JSON.parse(JSON.stringify(defaultChoices)),
     items: [
-        createDefaultItem(1, 'D'),
+        createDefaultItem(1, 'A'),
     ],
 });
 
@@ -110,6 +110,55 @@ const removeChoice = (index) => {
                 item.correct_choice_letter = form.choices[0].choice_letter;
             }
         });
+    }
+};
+
+// Gemini AI Matching Quiz Assistant
+const isGeneratingAiPairs = ref(false);
+const aiMatchingError = ref('');
+
+const generateMatchingWithAi = async () => {
+    isGeneratingAiPairs.value = true;
+    aiMatchingError.value = '';
+
+    try {
+        const result = await generateQuizAssist({
+            quizType: 'matching_type',
+            topicOrPassage: form.description || form.title || props.module.title,
+            questionCount: 4,
+            gradeLevel: props.module.grade_level,
+        });
+
+        if (result) {
+            if (result.title) {
+                form.title = result.title;
+            }
+            if (result.description) {
+                form.description = result.description;
+            }
+            if (Array.isArray(result.choices) && result.choices.length > 0) {
+                form.choices = result.choices.map((c, idx) => ({
+                    choice_letter: c.choice_letter || getLetter(idx),
+                    choice_text: c.choice_text || '',
+                }));
+            }
+            if (Array.isArray(result.items) && result.items.length > 0) {
+                form.items = result.items.map((item, idx) => ({
+                    item_number: idx + 1,
+                    description: item.description || '',
+                    correct_choice_letter: item.correct_choice_letter || (form.choices[0]?.choice_letter || 'A'),
+                    hint: item.hint || '',
+                    explanation: item.explanation || '',
+                    points: Number(item.points) || 10,
+                    sort_order: idx + 1,
+                }));
+            }
+        }
+    } catch (err) {
+        aiMatchingError.value = err.message || 'Gemini generation failed.';
+        alert(aiMatchingError.value);
+    } finally {
+        isGeneratingAiPairs.value = false;
     }
 };
 
@@ -174,11 +223,6 @@ const submitQuiz = () => {
     <Head :title="`Create Matching Type • ${module.title}`" />
 
     <div class="matching-type-page">
-        <!-- Google Fonts: Fredoka & Nunito -->
-        <component :is="'style'">
-            @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700;800;900&family=Nunito:wght@600;700;800;900&display=swap');
-        </component>
-
         <!-- Top Header Navigation -->
         <header class="studio-header">
             <div class="header-left">
@@ -432,13 +476,24 @@ const submitQuiz = () => {
                             Each item describes an event from the story. Select the correct matching option from Column B.
                         </p>
                     </div>
-                    <button
-                        type="button"
-                        class="neu-btn add-item-btn"
-                        @click="addItem"
-                    >
-                        ➕ Add Matching Item
-                    </button>
+                    <div class="items-actions-row">
+                        <button
+                            type="button"
+                            class="neu-btn add-item-btn"
+                            @click="addItem"
+                        >
+                            ➕ Add Matching Item
+                        </button>
+                        <button
+                            type="button"
+                            class="neu-btn ai-matching-btn"
+                            :disabled="isGeneratingAiPairs"
+                            @click="generateMatchingWithAi"
+                        >
+                            <span v-if="isGeneratingAiPairs">⏳ Generating...</span>
+                            <span v-else>✨ AI Auto-Generate Pairs</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Items List -->
@@ -1441,6 +1496,37 @@ const submitQuiz = () => {
 .check-answers-btn {
     background: #8b5cf6;
     color: #ffffff;
+}
+
+/* Gemini AI Matching Assistant Styles */
+.items-actions-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.ai-matching-btn {
+    background: linear-gradient(180deg, #6366F1 0%, #4F46E5 100%) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 12px !important;
+    font-family: var(--font-heading);
+    font-weight: 800;
+    box-shadow: 0 3px 0 #3730A3 !important;
+    padding: 0.55rem 0.95rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.ai-matching-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 0 #3730A3 !important;
+}
+
+.ai-matching-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 </style>
 

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
+import { generateQuizAssist } from '@/Services/geminiAi.js';
 
 const props = defineProps({
     user: {
@@ -82,6 +83,80 @@ const removeContext = (index) => {
     } else {
         form.contexts[0].scenario = '';
         form.contexts[0].hint = '';
+    }
+};
+
+// Gemini AI Quiz Assistant
+const showAiQuizModal = ref(false);
+const aiPassagePrompt = ref('');
+const aiQuestionCount = ref(3);
+const isGeneratingQuizAi = ref(false);
+const aiQuizError = ref('');
+
+const generateQuestionsWithAi = async () => {
+    const prompt = aiPassagePrompt.value.trim() || form.reading_passage.trim() || form.title.trim() || props.module.title;
+    if (!prompt) {
+        aiQuizError.value = 'Please provide a story passage, reading excerpt, or topic.';
+        return;
+    }
+
+    isGeneratingQuizAi.value = true;
+    aiQuizError.value = '';
+
+    try {
+        const result = await generateQuizAssist({
+            quizType: 'multiple_choice',
+            topicOrPassage: prompt,
+            questionCount: aiQuestionCount.value,
+            gradeLevel: props.module.grade_level,
+        });
+
+        if (result) {
+            if (result.title && !form.title) {
+                form.title = result.title;
+            }
+            if (result.description && !form.description) {
+                form.description = result.description;
+            }
+            if (result.reading_passage && !form.reading_passage) {
+                form.reading_passage = result.reading_passage;
+            }
+
+            if (Array.isArray(result.questions) && result.questions.length > 0) {
+                const isOnlyFirstQuestionEmpty = form.questions.length === 1 && !form.questions[0].question_text.trim();
+                if (isOnlyFirstQuestionEmpty) {
+                    form.questions = [];
+                }
+
+                result.questions.forEach((q) => {
+                    form.questions.push({
+                        question_text: q.question_text || '',
+                        selection_type: q.selection_type || 'single',
+                        passage_context: q.passage_context || '',
+                        hint: q.hint || '',
+                        explanation: q.explanation || '',
+                        points: Number(q.points) || 10,
+                        options: Array.isArray(q.options) && q.options.length > 0
+                            ? q.options.map((opt) => ({
+                                option_text: opt.option_text || '',
+                                is_correct: Boolean(opt.is_correct),
+                                feedback: opt.feedback || '',
+                            }))
+                            : [
+                                { option_text: '', is_correct: true, feedback: '' },
+                                { option_text: '', is_correct: false, feedback: '' },
+                                { option_text: '', is_correct: false, feedback: '' },
+                                { option_text: '', is_correct: false, feedback: '' },
+                            ],
+                    });
+                });
+            }
+            showAiQuizModal.value = false;
+        }
+    } catch (err) {
+        aiQuizError.value = err.message || 'Gemini quiz generation failed.';
+    } finally {
+        isGeneratingQuizAi.value = false;
     }
 };
 
@@ -230,11 +305,6 @@ const toggleSimOption = (qIdx, oIdx) => {
     <Head :title="`Create Multiple Choice Quiz • ${module.title}`" />
 
     <div class="multiple-choice-page">
-        <!-- Google Fonts: Fredoka & Nunito -->
-        <component :is="'style'">
-            @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700;800;900&family=Nunito:wght@600;700;800;900&display=swap');
-        </component>
-
         <!-- Top Header Navigation -->
         <header class="studio-header">
             <div class="header-left">
@@ -480,6 +550,13 @@ const toggleSimOption = (qIdx, oIdx) => {
                         >
                             ➕ Add Question
                         </button>
+                        <button
+                            type="button"
+                            class="neu-btn small-btn ai-action-btn"
+                            @click="showAiQuizModal = true"
+                        >
+                            ✨ AI Generate Questions
+                        </button>
                     </div>
                 </div>
 
@@ -693,6 +770,80 @@ const toggleSimOption = (qIdx, oIdx) => {
                 </div>
             </div>
         </form>
+
+        <!-- Gemini AI Quiz Generator Modal -->
+        <div v-if="showAiQuizModal" class="modal-backdrop" @click.self="showAiQuizModal = false">
+            <div class="simulation-modal neu-card ai-quiz-modal-card">
+                <div class="sim-header">
+                    <div>
+                        <span class="sim-badge ai-badge-gemini">✨ GOOGLE GEMINI AI</span>
+                        <h2 class="sim-title">Auto-Generate Reading Comprehension Questions</h2>
+                    </div>
+                    <button type="button" class="neu-btn close-modal-btn" @click="showAiQuizModal = false">
+                        ✕ Close
+                    </button>
+                </div>
+
+                <div class="ai-modal-body">
+                    <p class="ai-modal-intro">
+                        Paste a story passage, reading excerpt, or lecture concept. Gemini AI will generate questions, 4 plausible options, the correct answer, hints, and explanations tailored for <strong>{{ module.grade_level }}</strong>!
+                    </p>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            <span>Story Passage or Reading Topic</span>
+                        </label>
+                        <textarea
+                            v-model="aiPassagePrompt"
+                            class="neu-textarea"
+                            rows="5"
+                            :placeholder="form.reading_passage ? 'Leave blank to use reading passage already on this quiz, or type a topic/excerpt...' : 'Paste story text, article paragraph, or topic here...'"
+                        ></textarea>
+                    </div>
+
+                    <div class="ai-options-row">
+                        <div class="form-group count-group">
+                            <label class="form-label">
+                                <span>Number of Questions</span>
+                            </label>
+                            <div class="ai-count-picker">
+                                <button
+                                    v-for="n in [1, 3, 5, 8]"
+                                    :key="n"
+                                    type="button"
+                                    class="ai-count-btn"
+                                    :class="{ 'active': aiQuestionCount === n }"
+                                    @click="aiQuestionCount = n"
+                                >
+                                    {{ n }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p v-if="aiQuizError" class="ai-error-notice">⚠️ {{ aiQuizError }}</p>
+                </div>
+
+                <div class="ai-modal-footer">
+                    <button
+                        type="button"
+                        class="neu-btn cancel-btn"
+                        @click="showAiQuizModal = false"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        class="neu-btn ai-confirm-btn"
+                        :disabled="isGeneratingQuizAi"
+                        @click="generateQuestionsWithAi"
+                    >
+                        <span v-if="isGeneratingQuizAi">⏳ Generating with Gemini...</span>
+                        <span v-else>✨ Generate & Add Questions</span>
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <!-- Student Simulation Modal -->
         <div v-if="showLivePreview" class="modal-backdrop" @click.self="closeLivePreview">
@@ -1648,5 +1799,85 @@ const toggleSimOption = (qIdx, oIdx) => {
     padding: 1rem 1.75rem;
     background: #f8fafc;
     border-top: 2px solid #e2e8f0;
+}
+
+/* Gemini AI Question Generator Styles */
+.ai-action-btn {
+    background: linear-gradient(180deg, #6366F1 0%, #4F46E5 100%) !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 3px 0 #3730A3 !important;
+}
+
+.ai-action-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 0 #3730A3 !important;
+}
+
+.ai-badge-gemini {
+    background: #EEF2FF !important;
+    color: #4F46E5 !important;
+    border: 1px solid #C7D2FE !important;
+}
+
+.ai-modal-intro {
+    font-size: 0.85rem;
+    color: #475569;
+    line-height: 1.5;
+    margin: 0 0 1rem 0;
+}
+
+.ai-options-row {
+    margin-top: 1rem;
+}
+
+.ai-count-picker {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.ai-count-btn {
+    width: 44px;
+    height: 40px;
+    border-radius: 10px;
+    border: 2px solid #CBD5E1;
+    background: #FFFFFF;
+    color: #334155;
+    font-family: var(--font-heading);
+    font-size: 0.9rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.ai-count-btn.active {
+    background: #4F46E5;
+    border-color: #4338CA;
+    color: #FFFFFF;
+    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3);
+}
+
+.ai-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1.25rem 1.75rem;
+    background: #F8FAFC;
+    border-top: 2px solid #E2E8F0;
+}
+
+.ai-confirm-btn {
+    background: linear-gradient(180deg, #4F46E5 0%, #4338CA 100%) !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 3px 0 #312E81 !important;
+}
+
+.ai-confirm-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.cancel-btn {
+    background: #F1F5F9;
+    color: #475569;
 }
 </style>

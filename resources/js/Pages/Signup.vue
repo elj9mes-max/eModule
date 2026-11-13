@@ -76,11 +76,6 @@ const handleSubmit = () => {
     <Head title="Create an Account • WEBREAD" />
 
     <div class="webread-page">
-        <!-- Google Fonts: Fredoka & Nunito -->
-        <component :is="'style'">
-            @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700;800;900&family=Nunito:wght@600;700;800;900&display=swap');
-        </component>
-
         <main class="signup-core">
             <!-- Header -->
             <header class="webread-header">

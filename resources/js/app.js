@@ -1,4 +1,5 @@
 import '../css/app.css';
+import '../css/pixar-worlds.css';
 
 import { createApp, h } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
@@ -19,6 +20,9 @@ createInertiaApp({
             .mount(el);
     },
     progress: {
-        color: '#4B5563',
+        delay: 180,
+        color: '#4F46E5',
+        includeCSS: true,
+        showSpinner: false,
     },
 });

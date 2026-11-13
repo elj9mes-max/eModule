@@ -200,11 +200,6 @@ const submitQuiz = () => {
     <Head :title="`Create The Conflict Map • ${module.title}`" />
 
     <div class="conflict-map-page">
-        <!-- Google Fonts: Fredoka & Nunito -->
-        <component :is="'style'">
-            @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700;800;900&family=Nunito:wght@600;700;800;900&display=swap');
-        </component>
-
         <!-- Top Header Navigation -->
         <header class="studio-header">
             <div class="header-left">

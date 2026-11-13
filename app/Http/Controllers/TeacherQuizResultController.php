@@ -3,7 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Enums\QuizType;
+use App\Models\ColorConflictCard;
+use App\Models\ConflictMapEvent;
+use App\Models\ConflictMapZone;
 use App\Models\EvaluationItem;
+use App\Models\EvaluationItemOption;
+use App\Models\MatchingChoice;
+use App\Models\MatchingItem;
 use App\Models\Module;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
@@ -12,6 +18,9 @@ use App\Models\QuizContext;
 use App\Models\QuizQuestion;
 use App\Models\QuizQuestionOption;
 use App\Models\ReflectionPrompt;
+use App\Services\Cache\EModuleCacheService;
+use App\Services\Gamification\LevelProgressionService;
+use App\Services\QuizAnswerContextBuilder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,6 +30,12 @@ use Inertia\Response;
 
 class TeacherQuizResultController extends Controller
 {
+    public function __construct(
+        private readonly EModuleCacheService $cache,
+        private readonly QuizAnswerContextBuilder $contextBuilder,
+        private readonly LevelProgressionService $progressionService,
+    ) {}
+
     /**
      * Display the quiz analytics, blueprint, student results, and grading interface.
      */
@@ -32,61 +47,29 @@ class TeacherQuizResultController extends Controller
             return redirect()->route('teachers.dashboard');
         }
 
-        $quiz->loadMissing([
-            'contexts',
-            'questions.options',
-            'conflictCards',
-            'mapZones',
-            'mapEvents',
-            'matchingChoices',
-            'matchingItems.correctChoice',
-            'evaluationWordHelpers',
-            'evaluationItems.options',
-            'reflectionPrompts',
-        ]);
+        $this->cache->loadRelationsForQuizType($quiz);
 
         $primaryContext = $quiz->contexts->first();
+        $analytics = $this->cache->getTeacherQuizAnalytics($quiz->id);
 
-        // Retrieve all student attempts for this quiz
+        // Retrieve student attempts for this quiz
         $attempts = QuizAttempt::query()
             ->where('quiz_id', $quiz->id)
-            ->with(['user', 'answers'])
+            ->with(['user:id,name,email', 'answers'])
             ->latest('id')
             ->get();
 
-        // Calculate analytics
-        $completedAttempts = $attempts->where('status', 'completed');
-        $pendingAttempts = $attempts->where('status', 'pending_review');
+        $dictionaries = $this->contextBuilder->dictionariesFromQuiz($quiz);
+        $mcqQuestions = $dictionaries['mcqQuestions'];
+        $conflictCards = $dictionaries['conflictCards'];
+        $mapZones = $quiz->relationLoaded('mapZones') ? $quiz->mapZones : collect();
+        $mapEvents = $dictionaries['mapEvents'];
+        $matchingChoices = $quiz->relationLoaded('matchingChoices') ? $quiz->matchingChoices : collect();
+        $matchingItems = $dictionaries['matchingItems'];
+        $evalItems = $dictionaries['evaluationItems'];
+        $refPrompts = $dictionaries['reflectionPrompts'];
 
-        $totalAttempts = $attempts->count();
-        $uniqueStudents = $attempts->pluck('user_id')->unique()->count();
-        $pendingCount = $pendingAttempts->count();
-        $completedCount = $completedAttempts->count();
-        $passedCount = $completedAttempts->where('is_passed', true)->count();
-
-        $avgScore = $completedCount > 0 ? round((float) $completedAttempts->avg('score'), 1) : 0;
-        $avgPct = $completedCount > 0 ? round((float) $completedAttempts->avg('percentage'), 1) : 0;
-        $passRate = $completedCount > 0 ? round(($passedCount / $completedCount) * 100, 1) : 0;
-        $highestScore = $completedCount > 0 ? (int) $completedAttempts->max('score') : 0;
-        $lowestScore = $completedCount > 0 ? (int) $completedAttempts->min('score') : 0;
-
-        // Context dictionaries for answer mapping
-        $quiz->loadMissing('evaluationItems.options');
-        $evalItems = $quiz->evaluationItems->keyBy('id');
-        $refPrompts = $quiz->reflectionPrompts->keyBy('id');
-        $mcqQuestions = $quiz->questions->keyBy('id');
-        $conflictCards = $quiz->conflictCards->keyBy('id');
-        $mapEvents = $quiz->mapEvents->keyBy('id');
-        $matchingItems = $quiz->matchingItems->keyBy('id');
-
-        $mappedSubmissions = $attempts->map(function (QuizAttempt $attempt) use (
-            $evalItems,
-            $refPrompts,
-            $mcqQuestions,
-            $conflictCards,
-            $mapEvents,
-            $matchingItems
-        ): array {
+        $mappedSubmissions = $attempts->map(function (QuizAttempt $attempt) use ($dictionaries): array {
             $isPending = $attempt->status === 'pending_review';
 
             return [
@@ -109,103 +92,9 @@ class TeacherQuizResultController extends Controller
                     'name' => $attempt->user->name,
                     'email' => $attempt->user->email,
                 ],
-                'answers' => $attempt->answers->map(function (QuizAttemptAnswer $ans) use (
-                    $evalItems,
-                    $refPrompts,
-                    $mcqQuestions,
-                    $conflictCards,
-                    $mapEvents,
-                    $matchingItems
-                ): array {
-                    $context = null;
-                    $answerData = $ans->answer_data ?? [];
-
-                    if ($ans->item_type === 'evaluation') {
-                        $item = $evalItems->get($ans->item_id);
-                        if ($item) {
-                            $context = [
-                                'section_title' => $item->section_title,
-                                'question_prompt' => $item->question_prompt,
-                                'step1_prompt' => $item->step1_prompt,
-                                'sentence_template' => $item->sentence_template,
-                                'options' => $item->options->map(fn ($opt): array => [
-                                    'id' => $opt->id,
-                                    'option_text' => $opt->option_text,
-                                    'stance_value' => $opt->stance_value,
-                                    'is_correct' => $opt->is_correct,
-                                ])->values()->all(),
-                            ];
-
-                            if (empty($answerData['stance']) && ! empty($answerData['option_id'])) {
-                                $selectedOpt = $item->options->firstWhere('id', (int) $answerData['option_id']);
-                                if ($selectedOpt) {
-                                    $answerData['stance'] = $selectedOpt->stance_value ?: $selectedOpt->option_text;
-                                }
-                            }
-                        }
-                    } elseif ($ans->item_type === 'reflection') {
-                        $prompt = $refPrompts->get($ans->item_id);
-                        if ($prompt) {
-                            $context = [
-                                'prompt_text' => $prompt->prompt_text,
-                                'min_words' => $prompt->min_words,
-                                'max_words' => $prompt->max_words,
-                            ];
-                        }
-                    } elseif ($ans->item_type === 'multiple_choice') {
-                        $q = $mcqQuestions->get($ans->item_id);
-                        if ($q) {
-                            $context = [
-                                'question_text' => $q->question_text,
-                                'selection_type' => $q->selection_type->value,
-                                'hint' => $q->hint,
-                                'explanation' => $q->explanation,
-                                'options' => $q->options->map(fn (QuizQuestionOption $opt): array => [
-                                    'id' => $opt->id,
-                                    'option_text' => $opt->option_text,
-                                    'is_correct' => $opt->is_correct,
-                                ])->values()->all(),
-                            ];
-                        }
-                    } elseif ($ans->item_type === 'color_conflict') {
-                        $card = $conflictCards->get($ans->item_id);
-                        if ($card) {
-                            $context = [
-                                'card_text' => $card->card_text,
-                                'conflict_type' => $card->conflict_type->value,
-                            ];
-                        }
-                    } elseif ($ans->item_type === 'conflict_map') {
-                        $event = $mapEvents->get($ans->item_id);
-                        if ($event) {
-                            $context = [
-                                'event_text' => $event->event_text,
-                                'target_conflict_type' => $event->target_conflict_type->value,
-                            ];
-                        }
-                    } elseif ($ans->item_type === 'matching') {
-                        $item = $matchingItems->get($ans->item_id);
-                        if ($item) {
-                            $context = [
-                                'prompt_text' => $item->prompt_text,
-                                'correct_letter' => $item->correctChoice?->choice_letter,
-                            ];
-                        }
-                    }
-
-                    return [
-                        'id' => $ans->id,
-                        'item_type' => $ans->item_type,
-                        'item_id' => $ans->item_id,
-                        'answer_data' => $answerData,
-                        'answer_text' => $ans->answer_text,
-                        'is_correct' => $ans->is_correct,
-                        'points_earned' => $ans->points_earned,
-                        'points_possible' => $ans->points_possible,
-                        'teacher_notes' => $ans->teacher_notes,
-                        'context' => $context,
-                    ];
-                })->values()->all(),
+                'answers' => $attempt->answers->map(
+                    fn (QuizAttemptAnswer $ans): array => $this->contextBuilder->formatAnswer($ans, $dictionaries)
+                )->values()->all(),
             ];
         })->values()->all();
 
@@ -242,14 +131,14 @@ class TeacherQuizResultController extends Controller
                 'sort_order' => $quiz->sort_order,
                 'is_published' => $quiz->is_published,
                 'questions_count' => match ($quiz->type) {
-                    QuizType::MultipleChoice => $quiz->questions->count(),
-                    QuizType::ColorTheConflict => $quiz->conflictCards->count(),
-                    QuizType::TheConflictMap => $quiz->mapEvents->count(),
-                    QuizType::MatchingType => $quiz->matchingItems->count(),
-                    QuizType::Evaluation => $quiz->evaluationItems->count(),
-                    QuizType::Reflection => $quiz->reflectionPrompts->count(),
+                    QuizType::MultipleChoice => $mcqQuestions->count(),
+                    QuizType::ColorTheConflict => $conflictCards->count(),
+                    QuizType::TheConflictMap => $mapEvents->count(),
+                    QuizType::MatchingType => $matchingItems->count(),
+                    QuizType::Evaluation => $evalItems->count(),
+                    QuizType::Reflection => $refPrompts->count(),
                 },
-                'questions' => $quiz->questions->map(fn (QuizQuestion $question): array => [
+                'questions' => $mcqQuestions->values()->map(fn (QuizQuestion $question): array => [
                     'id' => $question->id,
                     'question_text' => $question->question_text,
                     'selection_type' => $question->selection_type->value,
@@ -265,8 +154,54 @@ class TeacherQuizResultController extends Controller
                         'feedback' => $option->feedback,
                         'sort_order' => $option->sort_order,
                     ])->values()->all(),
-                ])->values()->all(),
-                'evaluation_items' => $quiz->evaluationItems->map(fn (EvaluationItem $item): array => [
+                ])->all(),
+                'conflict_cards' => $conflictCards->values()->map(fn (ColorConflictCard $card): array => [
+                    'id' => $card->id,
+                    'excerpt' => $card->excerpt,
+                    'conflict_type' => $card->conflict_type->value,
+                    'conflict_label' => $card->conflict_type->label(),
+                    'hint' => $card->hint,
+                    'explanation' => $card->explanation,
+                    'points' => $card->points,
+                    'sort_order' => $card->sort_order,
+                ])->all(),
+                'map_zones' => $mapZones->values()->map(fn (ConflictMapZone $zone): array => [
+                    'id' => $zone->id,
+                    'conflict_type' => $zone->conflict_type->value,
+                    'label' => $zone->label,
+                    'subtitle' => $zone->subtitle,
+                    'color_theme' => $zone->color_theme,
+                    'sort_order' => $zone->sort_order,
+                ])->all(),
+                'map_events' => $mapEvents->values()->map(fn (ConflictMapEvent $event): array => [
+                    'id' => $event->id,
+                    'card_letter' => $event->card_letter,
+                    'event_text' => $event->event_text,
+                    'target_conflict_type' => $event->target_conflict_type->value,
+                    'target_conflict_label' => $event->target_conflict_type->label(),
+                    'hint' => $event->hint,
+                    'explanation' => $event->explanation,
+                    'points' => $event->points,
+                    'sort_order' => $event->sort_order,
+                ])->all(),
+                'matching_choices' => $matchingChoices->values()->map(fn (MatchingChoice $choice): array => [
+                    'id' => $choice->id,
+                    'choice_letter' => $choice->choice_letter,
+                    'choice_text' => $choice->choice_text,
+                    'sort_order' => $choice->sort_order,
+                ])->all(),
+                'matching_items' => $matchingItems->values()->map(fn (MatchingItem $item): array => [
+                    'id' => $item->id,
+                    'item_number' => $item->item_number,
+                    'description' => $item->description,
+                    'correct_letter' => $item->correctChoice?->choice_letter,
+                    'correct_choice_text' => $item->correctChoice?->choice_text,
+                    'hint' => $item->hint,
+                    'explanation' => $item->explanation,
+                    'points' => $item->points,
+                    'sort_order' => $item->sort_order,
+                ])->all(),
+                'evaluation_items' => $evalItems->values()->map(fn (EvaluationItem $item): array => [
                     'id' => $item->id,
                     'section_title' => $item->section_title,
                     'conflict_type' => $item->conflict_type,
@@ -275,28 +210,23 @@ class TeacherQuizResultController extends Controller
                     'sentence_template' => $item->sentence_template,
                     'points' => $item->points,
                     'sort_order' => $item->sort_order,
-                ])->values()->all(),
-                'reflection_prompts' => $quiz->reflectionPrompts->map(fn (ReflectionPrompt $prompt): array => [
+                    'options' => $item->options->map(fn (EvaluationItemOption $opt): array => [
+                        'id' => $opt->id,
+                        'option_text' => $opt->option_text,
+                        'stance_value' => $opt->stance_value,
+                        'is_correct' => (bool) $opt->is_correct,
+                    ])->values()->all(),
+                ])->all(),
+                'reflection_prompts' => $refPrompts->values()->map(fn (ReflectionPrompt $prompt): array => [
                     'id' => $prompt->id,
                     'prompt_text' => $prompt->prompt_text,
                     'min_words' => $prompt->min_words,
                     'max_words' => $prompt->max_words,
                     'points' => $prompt->points,
                     'sort_order' => $prompt->sort_order,
-                ])->values()->all(),
+                ])->all(),
             ],
-            'analytics' => [
-                'total_attempts' => $totalAttempts,
-                'unique_students' => $uniqueStudents,
-                'pending_review_count' => $pendingCount,
-                'graded_count' => $completedCount,
-                'passed_count' => $passedCount,
-                'average_score' => $avgScore,
-                'average_percentage' => $avgPct,
-                'pass_rate' => $passRate,
-                'highest_score' => $highestScore,
-                'lowest_score' => $lowestScore,
-            ],
+            'analytics' => $analytics,
             'submissions' => $mappedSubmissions,
         ]);
     }
@@ -373,6 +303,15 @@ class TeacherQuizResultController extends Controller
                 'completed_at' => now(),
             ]);
         });
+
+        $this->progressionService->recalculateStudentProfile((int) $attempt->user_id);
+
+        $this->cache->invalidateAttemptProgress(
+            (int) $attempt->user_id,
+            (int) $module->id,
+            (int) $user->id,
+            (int) $quiz->id,
+        );
 
         if ($request->wantsJson()) {
             return response()->json([

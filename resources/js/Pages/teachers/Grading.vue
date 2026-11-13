@@ -1,6 +1,8 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
+import { flushCacheTags, prefetchRoute } from '@/Composables/usePrefetch';
+import QuizAnswerInspector from '@/Components/QuizAnswerInspector.vue';
 
 const props = defineProps({
     user: {
@@ -26,6 +28,7 @@ const props = defineProps({
             status: 'pending_review',
             module: null,
             type: 'all',
+            search: '',
         }),
     },
     stats: {
@@ -34,6 +37,17 @@ const props = defineProps({
             pending_count: 0,
             graded_count: 0,
             total_count: 0,
+        }),
+    },
+    pagination: {
+        type: Object,
+        default: () => ({
+            current_page: 1,
+            last_page: 1,
+            per_page: 25,
+            total: 0,
+            from: null,
+            to: null,
         }),
     },
 });
@@ -51,7 +65,43 @@ const goToStudents = () => {
 const currentStatusTab = ref(props.filters?.status || 'pending_review');
 const selectedModuleId = ref(props.filters?.module || 'all');
 const selectedType = ref(props.filters?.type || 'all');
-const searchQuery = ref('');
+const searchQuery = ref(props.filters?.search || '');
+
+const fetchFilteredPage = (page = 1) => {
+    const params = {
+        status: currentStatusTab.value,
+        type: selectedType.value,
+        page,
+    };
+
+    if (selectedModuleId.value && selectedModuleId.value !== 'all') {
+        params.module = selectedModuleId.value;
+    }
+
+    if (searchQuery.value.trim()) {
+        params.search = searchQuery.value.trim();
+    }
+
+    router.get('/teachers/grading', params, {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+};
+
+watch([currentStatusTab, selectedModuleId, selectedType], () => {
+    fetchFilteredPage(1);
+});
+
+let searchDebounceTimer = null;
+watch(searchQuery, () => {
+    if (searchDebounceTimer) {
+        window.clearTimeout(searchDebounceTimer);
+    }
+    searchDebounceTimer = window.setTimeout(() => {
+        fetchFilteredPage(1);
+    }, 260);
+});
 
 // Filtered Submissions
 const filteredSubmissions = computed(() => {
@@ -102,15 +152,65 @@ const teacherOverallFeedback = ref('');
 const isSubmittingGrade = ref(false);
 const showGradeSuccessToast = ref(false);
 
+const itemTypeLabels = {
+    multiple_choice: 'Multiple Choice',
+    color_conflict: 'Color the Conflict',
+    conflict_map: 'The Conflict Map',
+    matching: 'Matching Type',
+    evaluation: 'Opinion & Stance Evaluation',
+    reflection: 'Open-Ended Reflection',
+};
+
+const getAnswerItemLabel = (ans) => {
+    return itemTypeLabels[ans?.item_type] || 'Quiz Item';
+};
+
+const getAnswerResultMeta = (ans) => {
+    if (activeGradingAttempt.value?.status === 'pending_review') {
+        return {
+            cardClass: 'card-pending',
+            badgeClass: 'status-pill-pending',
+            label: `Pending Grade • ${ans.points_earned ?? 0} / ${ans.points_possible} pts`,
+        };
+    }
+
+    const earned = Number(ans.points_earned) || 0;
+    const possible = Number(ans.points_possible) || 0;
+
+    if (possible > 0 && earned >= possible) {
+        return {
+            cardClass: 'card-correct',
+            badgeClass: 'status-pill-correct',
+            label: `✓ Correct • ${earned} / ${possible} pts`,
+        };
+    }
+
+    if (earned > 0) {
+        return {
+            cardClass: 'card-partial',
+            badgeClass: 'status-pill-partial',
+            label: `◐ Partial • ${earned} / ${possible} pts`,
+        };
+    }
+
+    return {
+        cardClass: 'card-wrong',
+        badgeClass: 'status-pill-wrong',
+        label: `✕ Incorrect • 0 / ${possible} pts`,
+    };
+};
+
 const openGradingModal = (submission) => {
     activeGradingAttempt.value = submission;
     teacherOverallFeedback.value = submission.teacher_feedback || '';
     gradingAnswers.value = (submission.answers || []).map((ans) => ({
         id: ans.id,
-        points_earned: submission.status === 'completed' ? ans.points_earned : (ans.points_possible || 10),
-        points_possible: ans.points_possible || 10,
+        points_earned: submission.status === 'completed' ? ans.points_earned : (ans.points_possible ?? 10),
+        points_possible: ans.points_possible ?? 10,
         teacher_notes: ans.teacher_notes || '',
         item_type: ans.item_type,
+        item_id: ans.item_id,
+        is_correct: ans.is_correct,
         answer_data: ans.answer_data,
         answer_text: ans.answer_text,
         context: ans.context,
@@ -122,6 +222,20 @@ const closeGradingModal = () => {
     gradingAnswers.value = [];
     teacherOverallFeedback.value = '';
 };
+
+const handleModalKeydown = (event) => {
+    if (event.key === 'Escape' && activeGradingAttempt.value) {
+        closeGradingModal();
+    }
+};
+
+onMounted(() => {
+    window.addEventListener('keydown', handleModalKeydown);
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('keydown', handleModalKeydown);
+});
 
 // Quick Grade Buttons
 const setItemPoints = (index, points) => {
@@ -179,6 +293,7 @@ const submitGrade = () => {
         .then((res) => res.json())
         .then((data) => {
             if (data.success) {
+                flushCacheTags(['teacher-modules', 'teacher-grading', 'student-modules']);
                 // Update local state in submissions list
                 const sub = props.submissions.find((s) => s.id === activeGradingAttempt.value.id);
                 if (sub) {
@@ -190,6 +305,15 @@ const submitGrade = () => {
                     sub.is_passed = data.attempt.is_passed;
                     sub.xp_earned = data.attempt.xp_earned;
                     sub.teacher_feedback = data.attempt.teacher_feedback;
+
+                    gradingAnswers.value.forEach((ga) => {
+                        const targetAns = sub.answers?.find((a) => a.id === ga.id);
+                        if (targetAns) {
+                            targetAns.points_earned = ga.points_earned;
+                            targetAns.teacher_notes = ga.teacher_notes;
+                            targetAns.is_correct = ga.points_earned > 0;
+                        }
+                    });
                 }
                 closeGradingModal();
                 showGradeSuccessToast.value = true;
@@ -213,11 +337,6 @@ const submitGrade = () => {
     <Head title="Grade Student Submissions • WEBREAD" />
 
     <div class="grading-page">
-        <!-- Google Fonts: Fredoka & Nunito -->
-        <component :is="'style'">
-            @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700;800;900&family=Nunito:wght@600;700;800;900&display=swap');
-        </component>
-
         <!-- Ambient Background Assets -->
         <div class="game-bg-elements" aria-hidden="true">
             <div class="floating-sparkle sp-1">✨</div>
@@ -229,7 +348,7 @@ const submitGrade = () => {
         <!-- Top Game Header Bar -->
         <header class="grading-header-nav">
             <div class="nav-left">
-                <button type="button" class="btn-back-nav" @click="handleBack">
+                <button type="button" class="btn-back-nav" @mouseenter="prefetchRoute('/teachers/dashboard', ['teacher-modules'])" @focus="prefetchRoute('/teachers/dashboard', ['teacher-modules'])" @click="handleBack">
                     <span class="back-arrow">❮</span>
                     <span class="back-label">HQ Dashboard</span>
                 </button>
@@ -364,6 +483,7 @@ const submitGrade = () => {
                     <article
                         v-for="sub in filteredSubmissions"
                         :key="sub.id"
+                        v-memo="[sub.id, sub.status, sub.score, sub.stars, sub.teacher_feedback]"
                         class="submission-card"
                         :class="{ 'is-pending': sub.status === 'pending_review' }"
                     >
@@ -420,6 +540,34 @@ const submitGrade = () => {
                         </div>
                     </article>
                 </div>
+
+                <!-- Server-side Pagination Bar -->
+                <nav
+                    v-if="pagination && pagination.last_page > 1"
+                    class="grading-pagination-bar"
+                    aria-label="Grading submissions pagination"
+                >
+                    <button
+                        type="button"
+                        class="pagination-btn"
+                        :disabled="pagination.current_page <= 1"
+                        @click="fetchFilteredPage(pagination.current_page - 1)"
+                    >
+                        ← Previous
+                    </button>
+                    <span class="pagination-summary">
+                        Page <strong>{{ pagination.current_page }}</strong> of <strong>{{ pagination.last_page }}</strong>
+                        ({{ pagination.total }} total)
+                    </span>
+                    <button
+                        type="button"
+                        class="pagination-btn"
+                        :disabled="pagination.current_page >= pagination.last_page"
+                        @click="fetchFilteredPage(pagination.current_page + 1)"
+                    >
+                        Next →
+                    </button>
+                </nav>
             </section>
         </main>
 
@@ -466,71 +614,35 @@ const submitGrade = () => {
                                     v-for="(ans, idx) in gradingAnswers"
                                     :key="ans.id"
                                     class="grading-item-card"
+                                    :class="getAnswerResultMeta(ans).cardClass"
                                 >
                                     <div class="item-card-header">
-                                        <span class="item-number-pill">QUESTION {{ idx + 1 }}</span>
-                                        <span class="item-type-label">
-                                            {{ ans.item_type === 'evaluation' ? 'Opinion & Stance Evaluation' : 'Open-Ended Reflection' }}
-                                        </span>
-                                    </div>
-
-                                    <!-- EVALUATION VIEW -->
-                                    <div v-if="ans.item_type === 'evaluation'" class="item-answer-details">
-                                        <div v-if="ans.context?.question_prompt" class="eval-prompt-box">
-                                            <strong>Question Prompt:</strong> {{ ans.context.question_prompt }}
+                                        <div class="item-head-left">
+                                            <span class="item-number-pill">QUESTION {{ idx + 1 }}</span>
+                                            <span class="item-type-label">
+                                                {{ getAnswerItemLabel(ans) }}
+                                            </span>
                                         </div>
-
-                                        <!-- Step 1 Chosen Stance -->
-                                        <div class="eval-stance-row">
-                                            <span class="stance-lbl">Student Stance:</span>
+                                        <div class="item-head-right">
                                             <span
-                                                class="stance-val-badge"
-                                                :class="ans.answer_data?.stance === 'right' || ans.answer_data?.stance === 'support' ? 'stance-support' : 'stance-oppose'"
+                                                class="item-status-pill"
+                                                :class="getAnswerResultMeta(ans).badgeClass"
                                             >
-                                                {{ ans.answer_data?.stance ? ans.answer_data.stance.toUpperCase() : 'No stance selected' }}
+                                                {{ getAnswerResultMeta(ans).label }}
                                             </span>
                                         </div>
-
-                                        <!-- Step 2 Blanks Answer -->
-                                        <div class="eval-sentence-box">
-                                            <span class="sentence-lbl">Student Sentence & Explanation:</span>
-                                            <p class="student-written-quote">
-                                                "{{ ans.answer_text || (ans.answer_data?.blanks ? ans.answer_data.blanks.join(' | ') : 'No blank input') }}"
-                                            </p>
-                                        </div>
                                     </div>
 
-                                    <!-- REFLECTION VIEW -->
-                                    <div v-else-if="ans.item_type === 'reflection'" class="item-answer-details">
-                                        <div v-if="ans.context?.prompt_text" class="reflection-prompt-box">
-                                            <strong>Prompt:</strong> "{{ ans.context.prompt_text }}"
-                                        </div>
-
-                                        <div class="reflection-meta-row">
-                                            <span class="word-count-badge">
-                                                ✍️ {{ ans.answer_data?.word_count || 0 }} words
-                                                <small v-if="ans.context?.min_words">(Min required: {{ ans.context.min_words }})</small>
-                                            </span>
-                                        </div>
-
-                                        <div class="reflection-essay-box">
-                                            <p class="student-essay-quote">
-                                                "{{ ans.answer_text || ans.answer_data?.text || 'No response provided.' }}"
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <!-- OTHER VIEW (MCQ, ETC) -->
-                                    <div v-else class="item-answer-details">
-                                        <p class="generic-answer-quote">Student Answer: {{ ans.answer_text }}</p>
-                                    </div>
+                                    <!-- Full Question, Choices & Color-Coded Student Submission Inspector -->
+                                    <QuizAnswerInspector :answer="ans" />
 
                                     <!-- Teacher Scoring Controls for this item -->
                                     <div class="item-score-controls">
                                         <div class="score-input-col">
-                                            <label class="control-label">Score for this question:</label>
+                                            <label class="control-label" :for="`grading-score-${ans.id}`">Score for this question:</label>
                                             <div class="score-input-wrap">
                                                 <input
+                                                    :id="`grading-score-${ans.id}`"
                                                     v-model.number="ans.points_earned"
                                                     type="number"
                                                     min="0"
@@ -571,6 +683,7 @@ const submitGrade = () => {
                                                 type="text"
                                                 class="item-note-input"
                                                 placeholder="Optional question feedback..."
+                                                aria-label="Optional question feedback"
                                             />
                                         </div>
                                     </div>
@@ -984,6 +1097,8 @@ const submitGrade = () => {
     justify-content: space-between;
     gap: 1.5rem;
     box-shadow: 0 4px 0 #E2E8F0;
+    content-visibility: auto;
+    contain-intrinsic-size: 140px;
     transition: transform 0.15s, box-shadow 0.15s;
 }
 
@@ -1277,6 +1392,14 @@ const submitGrade = () => {
     color: #0F172A;
 }
 
+.btn-sheet-close:focus-visible,
+.pill-quick-score:focus-visible,
+.btn-cancel-grade:focus-visible,
+.btn-submit-grade:focus-visible {
+    outline: 2px solid #2563EB;
+    outline-offset: 2px;
+}
+
 .grading-sheet-body {
     flex: 1;
     overflow-y: auto;
@@ -1299,11 +1422,33 @@ const submitGrade = () => {
     padding: 1.25rem;
 }
 
+.grading-item-card.card-correct {
+    border-color: #86EFAC;
+}
+
+.grading-item-card.card-wrong {
+    border-color: #FCA5A5;
+}
+
+.grading-item-card.card-partial {
+    border-color: #FCD34D;
+}
+
 .item-card-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
     margin-bottom: 0.85rem;
+}
+
+.item-head-left,
+.item-head-right {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.45rem;
 }
 
 .item-number-pill {
@@ -1312,100 +1457,51 @@ const submitGrade = () => {
     font-family: 'Fredoka', sans-serif;
     font-weight: 800;
     font-size: 0.75rem;
-    padding: 0.2rem 0.6rem;
+    padding: 0.22rem 0.65rem;
     border-radius: 9999px;
 }
 
 .item-type-label {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: #64748B;
-}
-
-/* Evaluation Specific Inside Modal */
-.eval-prompt-box,
-.reflection-prompt-box {
-    background: #FFFFFF;
-    border: 1px solid #E2E8F0;
-    border-radius: 0.75rem;
-    padding: 0.75rem 1rem;
-    font-size: 0.92rem;
-    color: #1E293B;
-    margin-bottom: 0.75rem;
-}
-
-.eval-stance-row {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    margin-bottom: 0.75rem;
-}
-
-.stance-lbl {
-    font-weight: 800;
-    font-size: 0.85rem;
-    color: #475569;
-}
-
-.stance-val-badge {
-    padding: 0.25rem 0.85rem;
+    background: #EFF6FF;
+    color: #1D4ED8;
+    border: 1px solid #BFDBFE;
     border-radius: 9999px;
+    padding: 0.18rem 0.6rem;
+    font-family: 'Fredoka', sans-serif;
+    font-size: 0.74rem;
+    font-weight: 700;
+}
+
+.item-status-pill {
     font-family: 'Fredoka', sans-serif;
     font-weight: 800;
-    font-size: 0.85rem;
+    font-size: 0.76rem;
+    padding: 0.22rem 0.68rem;
+    border-radius: 9999px;
 }
 
-.stance-val-badge.stance-support {
+.item-status-pill.status-pill-correct {
     background: #DCFCE7;
     color: #166534;
-    border: 2px solid #22C55E;
+    border: 1.5px solid #22C55E;
 }
 
-.stance-val-badge.stance-oppose {
+.item-status-pill.status-pill-wrong {
     background: #FEE2E2;
     color: #991B1B;
-    border: 2px solid #EF4444;
+    border: 1.5px solid #EF4444;
 }
 
-.eval-sentence-box {
-    margin-bottom: 1rem;
-}
-
-.sentence-lbl {
-    display: block;
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: #64748B;
-    margin-bottom: 0.25rem;
-}
-
-.student-written-quote,
-.student-essay-quote {
-    background: #FFFFFF;
-    border-left: 4px solid #3B82F6;
-    border-radius: 0.5rem;
-    padding: 0.75rem 1rem;
-    font-family: 'Fredoka', sans-serif;
-    font-weight: 600;
-    font-size: 1rem;
-    color: #1E293B;
-    margin: 0;
-    white-space: pre-wrap;
-    line-height: 1.5;
-}
-
-.reflection-meta-row {
-    margin-bottom: 0.5rem;
-}
-
-.word-count-badge {
+.item-status-pill.status-pill-partial {
     background: #FEF3C7;
     color: #92400E;
-    border: 1px solid #FCD34D;
-    padding: 0.2rem 0.6rem;
-    border-radius: 9999px;
-    font-size: 0.8rem;
-    font-weight: 700;
+    border: 1.5px solid #F59E0B;
+}
+
+.item-status-pill.status-pill-pending {
+    background: #FEF3C7;
+    color: #B45309;
+    border: 1.5px solid #F59E0B;
 }
 
 /* Scoring Controls Strip */
@@ -1418,7 +1514,7 @@ const submitGrade = () => {
     border: 2px solid #E2E8F0;
     border-radius: 0.85rem;
     padding: 0.75rem 1rem;
-    margin-top: 0.75rem;
+    margin-top: 0.85rem;
 }
 
 .score-input-col {
@@ -1450,7 +1546,11 @@ const submitGrade = () => {
     font-weight: 800;
     text-align: center;
     color: #1E3A8A;
-    outline: none;
+}
+
+.item-points-input:focus-visible {
+    outline: 2px solid #2563EB;
+    outline-offset: 2px;
 }
 
 .points-max-tag {
@@ -1496,11 +1596,12 @@ const submitGrade = () => {
     padding: 0.35rem 0.65rem;
     font-size: 0.85rem;
     font-weight: 600;
-    outline: none;
 }
 
-.item-note-input:focus {
-    border-color: #3B82F6;
+.item-note-input:focus-visible {
+    border-color: #2563EB;
+    outline: 2px solid #2563EB;
+    outline-offset: 1px;
 }
 
 /* Overall Feedback */
@@ -1539,8 +1640,14 @@ const submitGrade = () => {
     font-weight: 600;
     font-size: 0.92rem;
     color: #1E293B;
-    outline: none;
     box-sizing: border-box;
+}
+
+.overall-feedback-textarea:focus-visible {
+    border-color: #F59E0B;
+    background: #FFFFFF;
+    outline: 2px solid #D97706;
+    outline-offset: 2px;
 }
 
 .overall-feedback-textarea:focus {
@@ -1682,9 +1789,47 @@ const submitGrade = () => {
         align-items: stretch;
     }
 
-    .footer-action-buttons {
+.footer-action-buttons {
         justify-content: flex-end;
     }
+}
+
+.grading-pagination-bar {
+    margin-top: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.pagination-btn {
+    padding: 0.55rem 1rem;
+    border-radius: 9999px;
+    border: 2px solid #CBD5E1;
+    background: #FFFFFF;
+    color: #1E293B;
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 700;
+    font-size: 0.88rem;
+    cursor: pointer;
+    box-shadow: 0 3px 0 #CBD5E1;
+    transition: transform 0.12s ease;
+}
+
+.pagination-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+}
+
+.pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pagination-summary {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #334155;
 }
 </style>
 

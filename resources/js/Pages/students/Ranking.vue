@@ -18,6 +18,14 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    classrooms: {
+        type: Array,
+        default: () => [],
+    },
+    active_classroom: {
+        type: Object,
+        default: null,
+    },
 });
 
 const { playPop, playSparkle, playBonus, playClick } = useSound();
@@ -30,142 +38,44 @@ const filterOptions = [
     { id: 'streaks', label: 'Reading Streaks', icon: '🔥' },
 ];
 
-// Rich gamified leaderboards data with current user integrated
+// Dynamic gamified leaderboards data sourced from database
 const leaderboardData = computed(() => {
-    const currentUserName = props.user?.name || 'You';
+    if (Array.isArray(props.classmates) && props.classmates.length > 0) {
+        return props.classmates.map((c, idx) => ({
+            id: c.id,
+            rank: c.rank || idx + 1,
+            name: c.name,
+            avatar: c.avatar || 'fox',
+            avatarBg: c.avatarBg || 'linear-gradient(145deg, #FFF7ED 0%, #FDBA74 100%)',
+            level: Number(c.level) || 1,
+            xp: Number(c.xp) || 0,
+            points: Number(c.points || c.xp) || 0,
+            stars: Number(c.stars) || 0,
+            streak: Number(c.streak) || 1,
+            title: c.title || `Explorer Tier ${c.level || 1}`,
+            badge: c.badge || (idx === 0 ? '🥇 Champion' : idx === 1 ? '🥈 Vanguard' : idx === 2 ? '🥉 Explorer' : '🌟 Pioneer'),
+            isCurrentUser: Boolean(c.is_current_user),
+        }));
+    }
 
-    const baseList = [
+    const g = props.user?.gamification || {};
+    return [
         {
-            id: 'c1',
+            id: props.user?.id || 1,
             rank: 1,
-            name: 'Sophia Chen',
-            avatar: 'fox',
-            avatarBg: 'linear-gradient(145deg, #FFF7ED 0%, #FDBA74 100%)',
-            level: 8,
-            xp: 3820,
-            points: 4650,
-            stars: 42,
-            streak: 12,
-            title: 'Master Storyweaver',
-            badge: '🥇 Champion',
-            isCurrentUser: false,
-        },
-        {
-            id: 'c2',
-            rank: 2,
-            name: 'Liam Martinez',
-            avatar: 'astro',
-            avatarBg: 'linear-gradient(145deg, #EFF6FF 0%, #93C5FD 100%)',
-            level: 7,
-            xp: 3410,
-            points: 4100,
-            stars: 37,
-            streak: 9,
-            title: 'Cosmic Navigator',
-            badge: '🥈 Vanguard',
-            isCurrentUser: false,
-        },
-        {
-            id: 'c-user',
-            rank: 3,
-            name: currentUserName,
+            name: props.user?.name || 'You',
             avatar: 'knight',
             avatarBg: 'linear-gradient(145deg, #ECFDF5 0%, #6EE7B7 100%)',
-            level: 6,
-            xp: 2980,
-            points: 3620,
-            stars: 32,
-            streak: 6,
-            title: 'Forest Wanderer',
-            badge: '🥉 Explorer',
+            level: Number(g.level) || 1,
+            xp: Number(g.total_xp) || 0,
+            points: Number(g.total_xp) || 0,
+            stars: Number(g.total_stars) || 0,
+            streak: 1,
+            title: g.level_title || 'Novice Reader',
+            badge: '🥇 Champion',
             isCurrentUser: true,
         },
-        {
-            id: 'c4',
-            rank: 4,
-            name: 'Aria Takahashi',
-            avatar: 'owl',
-            avatarBg: 'linear-gradient(145deg, #F5F3FF 0%, #C4B5FD 100%)',
-            level: 6,
-            xp: 2740,
-            points: 3300,
-            stars: 29,
-            streak: 8,
-            title: 'Rune Scholar',
-            badge: '⭐ Elite',
-            isCurrentUser: false,
-        },
-        {
-            id: 'c5',
-            rank: 5,
-            name: 'Noah Patel',
-            avatar: 'fox',
-            avatarBg: 'linear-gradient(145deg, #FFF7ED 0%, #FDBA74 100%)',
-            level: 5,
-            xp: 2450,
-            points: 2950,
-            stars: 26,
-            streak: 5,
-            title: 'Trailblazer',
-            badge: '⭐ Elite',
-            isCurrentUser: false,
-        },
-        {
-            id: 'c6',
-            rank: 6,
-            name: 'Emma Johnson',
-            avatar: 'astro',
-            avatarBg: 'linear-gradient(145deg, #EFF6FF 0%, #93C5FD 100%)',
-            level: 5,
-            xp: 2190,
-            points: 2600,
-            stars: 23,
-            streak: 4,
-            title: 'Book Adventurer',
-            badge: '🌟 Pioneer',
-            isCurrentUser: false,
-        },
-        {
-            id: 'c7',
-            rank: 7,
-            name: 'Lucas Kim',
-            avatar: 'knight',
-            avatarBg: 'linear-gradient(145deg, #ECFDF5 0%, #6EE7B7 100%)',
-            level: 4,
-            xp: 1920,
-            points: 2300,
-            stars: 19,
-            streak: 3,
-            title: 'Quest Seeker',
-            badge: '🌟 Pioneer',
-            isCurrentUser: false,
-        },
-        {
-            id: 'c8',
-            rank: 8,
-            name: 'Mia Davis',
-            avatar: 'owl',
-            avatarBg: 'linear-gradient(145deg, #F5F3FF 0%, #C4B5FD 100%)',
-            level: 4,
-            xp: 1680,
-            points: 1980,
-            stars: 17,
-            streak: 2,
-            title: 'Passage Hunter',
-            badge: '🌟 Pioneer',
-            isCurrentUser: false,
-        },
     ];
-
-    if (activeFilter.value === 'streaks') {
-        return [...baseList].sort((a, b) => b.streak - a.streak).map((item, idx) => ({ ...item, rank: idx + 1 }));
-    }
-
-    if (activeFilter.value === 'weekly') {
-        return [...baseList].sort((a, b) => b.points - a.points).map((item, idx) => ({ ...item, rank: idx + 1 }));
-    }
-
-    return baseList;
 });
 
 const topThree = computed(() => {
@@ -188,6 +98,11 @@ const setFilter = (id) => {
     activeFilter.value = id;
     playPop(1.15);
 };
+
+const switchClassroom = (classroomId) => {
+    playClick();
+    router.get('/students/ranking', { class_id: classroomId }, { preserveState: true, preserveScroll: true });
+};
 </script>
 
 <template>
@@ -204,6 +119,54 @@ const setFilter = (id) => {
         active-nav="ranking"
     >
         <section class="clay-ranking-page" aria-labelledby="ranking-heading">
+
+            <!-- CLASSROOM CONTEXT BANNER & ROOM SELECTOR -->
+            <div v-if="active_classroom || (classrooms && classrooms.length > 0)" class="clay-room-banner">
+                <div class="room-banner-main">
+                    <div class="room-icon-pod">
+                        <span>{{ active_classroom?.icon || '🏫' }}</span>
+                    </div>
+                    <div class="room-meta">
+                        <div class="room-kicker">CLASSROOM LEADERBOARD</div>
+                        <h2 class="room-heading">{{ active_classroom?.name || 'Classroom Room' }}</h2>
+                        <div class="room-badges">
+                            <span v-if="active_classroom?.grade_level" class="room-badge grade-badge">
+                                {{ active_classroom.grade_level }}
+                            </span>
+                            <span v-if="active_classroom?.teacher?.name" class="room-badge teacher-badge">
+                                👨‍🏫 {{ active_classroom.teacher.name }}
+                            </span>
+                            <span class="room-badge count-badge">
+                                👥 {{ leaderboardData.length }} {{ leaderboardData.length === 1 ? 'Classmate' : 'Classmates' }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Multi-classroom switch pills if enrolled in > 1 room -->
+                <div v-if="classrooms && classrooms.length > 1" class="room-switcher-row">
+                    <span class="switcher-label">Your Rooms:</span>
+                    <button
+                        v-for="c in classrooms"
+                        :key="c.id"
+                        type="button"
+                        class="room-switcher-pill"
+                        :class="{ 'is-active': c.id === active_classroom?.id }"
+                        @click="switchClassroom(c.id)"
+                    >
+                        <span>{{ c.icon || '🏫' }}</span>
+                        <span>{{ c.name }}</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Fallback notice if student has 0 classrooms -->
+            <div v-else class="clay-room-empty-banner">
+                <div class="empty-icon">🎒</div>
+                <div class="empty-text">
+                    <strong>Global Explorer Stage:</strong> You haven't joined a classroom yet. Ask your teacher for your 6-digit class code to join your room on your Dashboard!
+                </div>
+            </div>
 
             <!-- 2. PODIUM STAGE (TOP 3 EXPLORERS) -->
             <div class="clay-podium-section" aria-label="Top 3 Ranked Explorers">
@@ -636,7 +599,7 @@ const setFilter = (id) => {
     font-family: var(--font-display);
     font-size: 0.95rem;
     font-weight: 800;
-    color: var(--ink-primary);
+    color: var(--px-stage-ink, var(--ink-primary));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -826,12 +789,12 @@ const setFilter = (id) => {
 /* 4. FULL LEADERBOARD TABLE */
 .clay-leaderboard-container {
     border-radius: 24px;
-    background: #FFFFFF;
-    border: 3px solid #FFFFFF;
+    background: linear-gradient(176deg, var(--px-surface-card, #FFFFFF) 0%, var(--px-surface-card-bottom, #FFFFFF) 100%);
+    border: 2.5px solid var(--px-card-border, #FFFFFF);
     box-shadow:
-        0 8px 0 #C7D2FE,
-        0 18px 36px rgba(49, 46, 129, 0.14),
-        inset 0 3px 5px rgba(255, 255, 255, 0.95);
+        0 8px 0 var(--px-hud-ledge, #C7D2FE),
+        0 18px 36px rgba(var(--px-shadow-rgb, 49, 46, 129), 0.16),
+        inset 0 2px 4px var(--px-rim-top, rgba(255, 255, 255, 0.95));
     padding: 0.85rem 1rem;
 }
 
@@ -843,9 +806,9 @@ const setFilter = (id) => {
     font-family: var(--font-display);
     font-size: 0.68rem;
     font-weight: 800;
-    color: #64748B;
+    color: var(--px-ink-subtle, #64748B);
     letter-spacing: 0.05em;
-    border-bottom: 2px dashed #E2E8F0;
+    border-bottom: 2px dashed rgba(var(--px-shadow-rgb, 148, 163, 184), 0.18);
 }
 
 .leaderboard-rows-list {
@@ -862,20 +825,28 @@ const setFilter = (id) => {
     align-items: center;
     padding: 0.65rem 0.85rem;
     border-radius: 18px;
-    background: #F8FAFC;
-    border: 2px solid #F1F5F9;
+    background: var(--px-surface-well, #F8FAFC);
+    border: 2px solid var(--px-card-border, #F1F5F9);
     transition: transform 0.16s var(--spring-bounce), background 0.16s ease, border-color 0.16s ease;
 }
 
 .clay-leaderboard-row:hover {
     transform: translateY(-2px);
-    background: #F1F5F9;
+    background: var(--px-surface-elevated, #F1F5F9);
 }
 
 .clay-leaderboard-row.is-current-user {
     background: linear-gradient(145deg, #F0FDF4 0%, #DCFCE7 100%);
     border-color: #86EFAC;
     box-shadow: 0 4px 0 #4ADE80, 0 6px 14px rgba(34, 197, 94, 0.18);
+}
+
+.clay-leaderboard-row.is-current-user .player-name-text {
+    color: #064E3B;
+}
+
+.clay-leaderboard-row.is-current-user .player-title-text {
+    color: #047857;
 }
 
 .td-rank {
@@ -945,7 +916,7 @@ const setFilter = (id) => {
     font-family: var(--font-display);
     font-size: 0.92rem;
     font-weight: 800;
-    color: var(--ink-primary);
+    color: var(--px-ink, var(--ink-primary));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -966,7 +937,7 @@ const setFilter = (id) => {
     font-family: var(--font-ui);
     font-size: 0.72rem;
     font-weight: 600;
-    color: #64748B;
+    color: var(--px-ink-muted, #64748B);
 }
 
 .td-streak {
@@ -1023,6 +994,162 @@ const setFilter = (id) => {
     font-size: 0.65rem;
     font-weight: 800;
     color: #6366F1;
+}
+
+/* CLASSROOM CONTEXT BANNER */
+.clay-room-banner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%);
+    border: 2px solid #E2E8F0;
+    border-radius: 20px;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05), 0 2px 0 #CBD5E1;
+    margin-bottom: 0.75rem;
+}
+
+.room-banner-main {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.room-icon-pod {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    background: linear-gradient(145deg, #EEF2FF 0%, #C7D2FE 100%);
+    border: 2px solid #818CF8;
+    box-shadow: 0 4px 0 #6366F1, inset 0 2px 2px rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    flex-shrink: 0;
+}
+
+.room-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.room-kicker {
+    font-family: var(--font-display);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: #4F46E5;
+    text-transform: uppercase;
+}
+
+.room-heading {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 900;
+    color: #0F172A;
+    line-height: 1.2;
+}
+
+.room-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.2rem;
+}
+
+.room-badge {
+    font-family: var(--font-ui);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    border: 1.5px solid transparent;
+}
+
+.grade-badge {
+    background: #FEF3C7;
+    color: #92400E;
+    border-color: #FCD34D;
+}
+
+.teacher-badge {
+    background: #E0E7FF;
+    color: #3730A3;
+    border-color: #A5B4FC;
+}
+
+.count-badge {
+    background: #F1F5F9;
+    color: #475569;
+    border-color: #CBD5E1;
+}
+
+.room-switcher-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding-top: 0.6rem;
+    border-top: 1px dashed #E2E8F0;
+}
+
+.switcher-label {
+    font-family: var(--font-ui);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #64748B;
+}
+
+.room-switcher-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.75rem;
+    font-family: var(--font-display);
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: #334155;
+    background: #F8FAFC;
+    border: 1.5px solid #CBD5E1;
+    border-radius: 9999px;
+    cursor: pointer;
+    box-shadow: 0 2px 0 #94A3B8;
+    transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.room-switcher-pill:hover {
+    transform: translateY(-1px);
+    background: #FFFFFF;
+    border-color: #818CF8;
+}
+
+.room-switcher-pill.is-active {
+    background: #4F46E5;
+    color: #FFFFFF;
+    border-color: #3730A3;
+    box-shadow: 0 2px 0 #1E1B4B;
+}
+
+.clay-room-empty-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    background: #FFFBEB;
+    border: 2px dashed #FCD34D;
+    border-radius: 16px;
+    padding: 0.85rem 1.15rem;
+    margin-bottom: 0.75rem;
+    font-family: var(--font-ui);
+    font-size: 0.82rem;
+    color: #92400E;
+}
+
+.empty-icon {
+    font-size: 1.6rem;
+    flex-shrink: 0;
 }
 
 /* Responsive adjustments */

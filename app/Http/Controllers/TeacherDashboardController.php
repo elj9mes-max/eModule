@@ -2,9 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\ModuleStatus;
-use App\Models\Module;
-use App\Models\QuizAttempt;
+use App\Services\Cache\EModuleCacheService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -12,8 +10,12 @@ use Inertia\Response;
 
 class TeacherDashboardController extends Controller
 {
+    public function __construct(
+        private readonly EModuleCacheService $cache,
+    ) {}
+
     /**
-     * Display the teacher dashboard with modules fetched from the database.
+     * Display the teacher dashboard with modules fetched from the database, optionally filtered by classroom.
      */
     public function index(Request $request): Response|RedirectResponse
     {
@@ -23,39 +25,17 @@ class TeacherDashboardController extends Controller
             return redirect()->route('students.dashboard');
         }
 
-        $modules = $user->modules()
-            ->reorder()
-            ->latest('created_at')
-            ->latest('id')
-            ->withCount('lectures')
-            ->get()
-            ->map(fn (Module $module): array => [
-                'id' => $module->id,
-                'title' => $module->title,
-                'slug' => $module->slug,
-                'grade_level' => $module->grade_level ?? 'All Grades • Reading Quest',
-                'description' => $module->description,
-                'theme' => $module->theme->value,
-                'icon' => $module->icon,
-                'cover_image_url' => $module->coverImageUrl(),
-                'xp_bonus' => $module->xp_bonus,
-                'boss_name' => $module->boss_name ?? 'Chapter Guardian',
-                'max_students' => $module->max_students,
-                'lectures_count' => $module->lectures_count,
-                'status' => $module->status->value,
-                'status_label' => match ($module->status) {
-                    ModuleStatus::Published => 'Published',
-                    ModuleStatus::Draft => 'Draft Module',
-                    ModuleStatus::Archived => 'Archived',
-                },
-                'is_new' => $module->created_at?->isAfter(now()->subDays(2)) ?? false,
-                'created_at' => $module->created_at?->toIso8601String(),
-            ]);
+        $classroomId = $request->query('class_id') ? (int) $request->query('class_id') : null;
+        $classrooms = $this->cache->getTeacherClassrooms($user->id);
 
-        $pendingGradingCount = QuizAttempt::query()
-            ->whereHas('quiz', fn ($q) => $q->whereIn('module_id', $user->modules()->pluck('id')))
-            ->where('status', 'pending_review')
-            ->count();
+        $selectedClassroom = null;
+        if ($classroomId !== null) {
+            $selectedClassroom = collect($classrooms)->firstWhere('id', $classroomId);
+            if (! $selectedClassroom) {
+                // If invalid classroom ID or doesn't belong to teacher, reset to all
+                $classroomId = null;
+            }
+        }
 
         return Inertia::render('teachers/Dashboard', [
             'user' => [
@@ -64,13 +44,16 @@ class TeacherDashboardController extends Controller
                 'email' => $user->email,
                 'role' => $user->role->value,
             ],
-            'modules' => $modules,
-            'pending_grading_count' => $pendingGradingCount,
+            'modules' => $this->cache->getTeacherModules($user->id, $classroomId),
+            'classrooms' => $classrooms,
+            'selected_classroom_id' => $classroomId,
+            'selected_classroom' => $selectedClassroom,
+            'pending_grading_count' => $this->cache->getTeacherPendingGradingCount($user->id),
         ]);
     }
 
     /**
-     * Display the students ranking page.
+     * Display the students ranking page scoped to this teacher's classrooms.
      */
     public function students(Request $request): Response|RedirectResponse
     {
@@ -80,6 +63,10 @@ class TeacherDashboardController extends Controller
             return redirect()->route('students.dashboard');
         }
 
+        $classroomId = $request->query('class_id') ? (int) $request->query('class_id') : null;
+        $classrooms = $this->cache->getTeacherClassrooms($user->id);
+        $students = $this->cache->getTeacherStudents($user->id, $classroomId);
+
         return Inertia::render('teachers/Students', [
             'user' => [
                 'id' => $user->id,
@@ -87,6 +74,10 @@ class TeacherDashboardController extends Controller
                 'email' => $user->email,
                 'role' => $user->role->value,
             ],
+            'classrooms' => $classrooms,
+            'selected_classroom_id' => $classroomId,
+            'students' => $students,
+            'pending_grading_count' => $this->cache->getTeacherPendingGradingCount($user->id),
         ]);
     }
 }

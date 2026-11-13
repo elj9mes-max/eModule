@@ -27,6 +27,7 @@ class ModuleFactory extends Factory
             'user_id' => User::factory()->teacher(),
             'title' => Str::title($title),
             'slug' => Str::slug($title).'-'.fake()->unique()->randomNumber(4),
+            'join_code' => (string) fake()->unique()->numberBetween(100000, 999999),
             'grade_level' => 'Grade '.fake()->numberBetween(1, 6).' • Reading Legends',
             'description' => fake()->paragraph(),
             'theme' => fake()->randomElement(ModuleTheme::cases()),

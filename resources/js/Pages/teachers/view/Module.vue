@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import ReadingJourneyMap from '@/Components/ReadingJourneyMap.vue';
+import { flushAllClientCache, prefetchRoute } from '@/Composables/usePrefetch';
 
 const props = defineProps({
     user: {
@@ -116,6 +117,7 @@ const handleBack = () => {
 };
 
 const handleLogout = () => {
+    flushAllClientCache();
     router.post('/logout');
 };
 
@@ -124,6 +126,9 @@ const openCreateChoiceModal = () => {
     quizNotice.value = null;
     showCreateChoiceModal.value = true;
     showQuizTypesModal.value = false;
+    if (props.module?.slug) {
+        prefetchRoute(`/teachers/modules/${props.module.slug}/lectures/create`, ['teacher-modules', `module-${props.module.slug}`], ['15s', '60s']);
+    }
 };
 
 const closeAllModals = () => {
@@ -174,19 +179,52 @@ const launchQuizBuilder = (quiz) => {
         quizNotice.value = null;
     }, 3500);
 };
+
+const isCodeCopied = ref(false);
+
+const copyJoinCode = async () => {
+    if (!props.module?.join_code) return;
+    const codeStr = String(props.module.join_code);
+    try {
+        if (navigator?.clipboard?.writeText) {
+            await navigator.clipboard.writeText(codeStr);
+        } else {
+            throw new Error('Clipboard API unavailable');
+        }
+    } catch {
+        const textarea = document.createElement('textarea');
+        textarea.value = codeStr;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+    }
+
+    isCodeCopied.value = true;
+    quizNotice.value = `Quest Code ${codeStr} copied! Give this 6-digit code to your students to join.`;
+    setTimeout(() => {
+        isCodeCopied.value = false;
+    }, 2500);
+    setTimeout(() => {
+        if (quizNotice.value?.includes('Quest Code')) {
+            quizNotice.value = null;
+        }
+    }, 4000);
+};
 </script>
 
 <template>
     <Head :title="`${module.title} • Reading Journey Map`" />
 
-    <div class="module-view-page">
-        <!-- Google Fonts: Fredoka & Nunito -->
-        <component :is="'style'">
-            @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700;800;900&family=Nunito:wght@600;700;800;900&display=swap');
-        </component>
-
-        <!-- Ambient Floating Sparkles -->
+    <div class="module-view-page" :class="`page-theme-${module.theme || 'forest'}`">
+        <!-- Ambient Floating Memory Orbs & Sparkles -->
         <div class="game-bg-elements" aria-hidden="true">
+            <span class="pixar-bg-orb orb-1"></span>
+            <span class="pixar-bg-orb orb-2"></span>
+            <span class="pixar-bg-orb orb-3"></span>
             <div class="floating-sparkle sp-1">✨</div>
             <div class="floating-sparkle sp-2">⭐</div>
             <div class="floating-sparkle sp-3">✨</div>
@@ -196,7 +234,7 @@ const launchQuizBuilder = (quiz) => {
         <!-- Top Game Header Bar matching Dashboard conventions -->
         <header class="module-header-nav">
             <div class="nav-left">
-                <button type="button" class="btn-back-nav" @click="handleBack">
+                <button type="button" class="btn-back-nav" @mouseenter="prefetchRoute('/teachers/dashboard', ['teacher-modules'])" @focus="prefetchRoute('/teachers/dashboard', ['teacher-modules'])" @click="handleBack">
                     <span class="back-arrow">❮</span>
                     <span>Dashboard</span>
                 </button>
@@ -216,6 +254,33 @@ const launchQuizBuilder = (quiz) => {
             </div>
 
             <div class="nav-right">
+                <!-- 6-Digit Student Quest Code Pill & 1-Click Copy -->
+                <button
+                    v-if="module.join_code"
+                    type="button"
+                    class="btn-quest-code"
+                    :class="{ 'is-copied': isCodeCopied }"
+                    title="Click to copy 6-digit student quest code"
+                    @click="copyJoinCode"
+                >
+                    <span class="code-icon">{{ isCodeCopied ? '✅' : '🔑' }}</span>
+                    <span class="code-label">CODE:</span>
+                    <strong class="code-number">{{ module.join_code }}</strong>
+                    <span class="code-badge-action">{{ isCodeCopied ? 'COPIED!' : 'COPY' }}</span>
+                </button>
+
+                <!-- 🚀 Pixar 3D Tactile Publish Quiz Action Button -->
+                <button
+                    type="button"
+                    class="btn-nav-publish-quiz"
+                    title="Publish a reading comprehension quiz challenge to this module"
+                    @click="handleOpenQuizModal"
+                >
+                    <span class="btn-publish-glare" aria-hidden="true"></span>
+                    <span class="btn-publish-icon" aria-hidden="true">🚀</span>
+                    <span>PUBLISH QUIZ</span>
+                </button>
+
                 <!-- + Create Milestone Action Button -->
                 <button
                     type="button"
@@ -263,6 +328,11 @@ const launchQuizBuilder = (quiz) => {
                 @click.self="closeAllModals"
             >
                 <div class="modal-dialog choice-dialog">
+                    <!-- Overlapping 3D Storybook Crest Badge -->
+                    <div class="modal-crest-badge" aria-hidden="true">
+                        <span class="crest-icon">🗺️</span>
+                    </div>
+
                     <button
                         type="button"
                         class="modal-btn-close"
@@ -335,6 +405,11 @@ const launchQuizBuilder = (quiz) => {
                 @click.self="closeAllModals"
             >
                 <div class="modal-dialog quiz-dialog">
+                    <!-- Overlapping 3D Storybook Crest Badge -->
+                    <div class="modal-crest-badge" aria-hidden="true">
+                        <span class="crest-icon">🏆</span>
+                    </div>
+
                     <div class="dialog-nav-bar">
                         <button
                             type="button"
@@ -415,35 +490,116 @@ const launchQuizBuilder = (quiz) => {
 
 <style scoped>
 /* ==========================================================================
-   3D CARTOON + NEUMORPHIC DESIGN SYSTEM
+   PIXAR-INSPIRED 3D GRAPHIC GAME SYSTEM & TOKENS
    ========================================================================== */
 .module-view-page {
     --game-navy: #1D2440;
     --game-border: #2B3354;
-    --neu-bg: #E6EFF9;
-    --neu-surface: #F3F7FC;
-    --neu-light: #FFFFFF;
-    --neu-dark: #C6D3E5;
-    --neu-shadow: rgba(29, 36, 64, 0.16);
-    --neu-bevel-light: inset 2.5px 2.5px 5px rgba(255, 255, 255, 0.95);
-    --neu-bevel-dark: inset -2.5px -2.5px 5px rgba(160, 175, 205, 0.42);
     --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --font-game: 'Fredoka', -apple-system, sans-serif;
+    --font-ui: 'Nunito', -apple-system, sans-serif;
+
+    /* Theme defaults: Forest World */
+    --px-sky-top: #F0FDF4;
+    --px-sky-mid: #DCFCE7;
+    --px-sky-bottom: #BBF7D0;
+    --px-bloom: rgba(167, 243, 208, 0.45);
+    --px-theme-shadow: 20, 60, 45;
 
     min-height: 100vh;
-    background: #E0F2FE;
-    font-family: 'Nunito', system-ui, sans-serif;
+    background: linear-gradient(175deg, var(--px-sky-top) 0%, var(--px-sky-mid) 45%, var(--px-sky-bottom) 100%);
+    font-family: var(--font-ui);
     color: var(--game-navy);
     position: relative;
-    overflow-x: hidden;
+    overflow-x: clip;
 }
 
-/* Ambient Floating Background Sparkles */
+/* Atmospheric Biome Presets */
+.page-theme-ocean {
+    --px-sky-top: #F0F9FF;
+    --px-sky-mid: #E0F2FE;
+    --px-sky-bottom: #BAE6FD;
+    --px-bloom: rgba(186, 230, 253, 0.45);
+    --px-theme-shadow: 15, 55, 95;
+}
+
+.page-theme-cosmic {
+    --px-sky-top: #FAF5FF;
+    --px-sky-mid: #F3E8FF;
+    --px-sky-bottom: #E9D5FF;
+    --px-bloom: rgba(233, 213, 255, 0.45);
+    --px-theme-shadow: 45, 25, 90;
+}
+
+.page-theme-volcano {
+    --px-sky-top: #FFF7ED;
+    --px-sky-mid: #FFEDD5;
+    --px-sky-bottom: #FED7AA;
+    --px-bloom: rgba(254, 215, 170, 0.45);
+    --px-theme-shadow: 85, 35, 18;
+}
+
+/* Tactile Micro-Grain Film Overlay */
+.module-view-page::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Ambient Floating Memory Orbs & Sparkles */
 .game-bg-elements {
     position: fixed;
     inset: 0;
     pointer-events: none;
     z-index: 1;
     overflow: hidden;
+}
+
+.pixar-bg-orb {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    will-change: transform;
+}
+
+.orb-1 {
+    width: 130px;
+    height: 130px;
+    top: 14%;
+    left: 4%;
+    background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.45) 20%, rgba(56, 189, 248, 0.28) 60%, transparent 80%);
+    box-shadow: 0 16px 36px -6px rgba(56, 189, 248, 0.3);
+    animation: orbFloat 14s ease-in-out infinite alternate;
+}
+
+.orb-2 {
+    width: 90px;
+    height: 90px;
+    top: 36%;
+    right: 5%;
+    background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.45) 20%, rgba(251, 191, 36, 0.28) 60%, transparent 80%);
+    box-shadow: 0 14px 28px -4px rgba(251, 191, 36, 0.3);
+    animation: orbFloat 12s ease-in-out infinite alternate-reverse;
+}
+
+.orb-3 {
+    width: 150px;
+    height: 150px;
+    bottom: 12%;
+    left: 8%;
+    background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.4) 20%, rgba(167, 139, 250, 0.24) 65%, transparent 85%);
+    box-shadow: 0 20px 42px -8px rgba(167, 139, 250, 0.28);
+    animation: orbFloat 18s ease-in-out infinite alternate;
+}
+
+@keyframes orbFloat {
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    50% { transform: translate3d(14px, -20px, 0) scale(1.04); }
+    100% { transform: translate3d(-10px, 12px, 0) scale(0.97); }
 }
 
 .floating-sparkle {
@@ -465,40 +621,41 @@ const launchQuizBuilder = (quiz) => {
 }
 
 /* ==========================================================================
-   3D CARTOON HUD TOP BAR
+   PIXAR TACTILE HUD TOP STATUS BAR
    ========================================================================== */
 .module-header-nav {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.85rem 1.85rem;
-    background: linear-gradient(180deg, #FFFFFF 0%, #EEF4FD 100%);
+    padding: 0.85rem clamp(1.25rem, 2.5vw, 2.5rem);
+    background: linear-gradient(180deg, #FFFFFF 0%, #F5F8FE 60%, #EBF2FC 100%);
     border-bottom: 3.5px solid var(--game-border);
     box-shadow:
         0 6px 0 var(--game-border),
         0 14px 28px rgba(29, 36, 64, 0.12),
-        inset 0 2px 0 rgba(255, 255, 255, 0.95),
+        inset 0 2px 1.5px rgba(255, 255, 255, 1),
         inset 0 -3px 5px rgba(175, 188, 218, 0.35);
     position: sticky;
     top: 0;
     z-index: 50;
     gap: 1.25rem;
+    box-sizing: border-box;
 }
 
 .nav-left {
     display: flex;
     align-items: center;
-    gap: 1.25rem;
+    gap: 1.15rem;
 }
 
 .btn-back-nav {
-    background: linear-gradient(145deg, #FFFFFF 0%, #E8EEF8 100%);
+    background: linear-gradient(180deg, #FFFFFF 0%, #F1F5FB 50%, #E3EAF4 100%);
     border: 2.5px solid var(--game-border);
     border-radius: 9999px;
-    padding: 0.45rem 1.05rem;
-    font-family: 'Fredoka', sans-serif;
+    padding: 0.45rem 1.1rem;
+    font-family: var(--font-game);
     font-weight: 800;
-    font-size: 0.84rem;
+    font-size: 0.86rem;
     color: var(--game-navy);
     cursor: pointer;
     display: flex;
@@ -507,24 +664,30 @@ const launchQuizBuilder = (quiz) => {
     box-shadow:
         0 3.5px 0 var(--game-border),
         0 4px 10px rgba(29, 36, 64, 0.08),
-        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.95),
-        inset -1.5px -1.5px 3px rgba(165, 178, 208, 0.4);
+        inset 0 1.5px 1.5px rgba(255, 255, 255, 1),
+        inset 0 -2px 3px rgba(165, 178, 208, 0.4);
+    transform: translate3d(0, 0, 0);
     transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
 }
 
 .btn-back-nav:hover {
-    transform: translateY(-2px);
+    transform: translate3d(0, -2px, 0);
     box-shadow:
         0 5.5px 0 var(--game-border),
         0 8px 16px rgba(29, 36, 64, 0.12),
-        inset 1.5px 1.5px 3px rgba(255, 255, 255, 1);
+        inset 0 1.5px 1.5px rgba(255, 255, 255, 1);
 }
 
 .btn-back-nav:active {
-    transform: translateY(2px);
+    transform: translate3d(0, 2px, 0) scaleX(1.02) scaleY(0.96);
     box-shadow:
         0 1.5px 0 var(--game-border),
-        inset 2px 2px 4px rgba(165, 178, 208, 0.45);
+        inset 0 2px 4px rgba(165, 178, 208, 0.45);
+}
+
+.btn-back-nav:focus-visible {
+    outline: 2px solid #2395EB;
+    outline-offset: 3px;
 }
 
 .back-arrow {
@@ -539,7 +702,7 @@ const launchQuizBuilder = (quiz) => {
 }
 
 .brand-text {
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--font-game);
     font-weight: 900;
     font-size: 1.4rem;
     letter-spacing: -0.02em;
@@ -553,42 +716,42 @@ const launchQuizBuilder = (quiz) => {
     background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
     color: #854D0E;
     border: 2px solid #F59E0B;
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--font-game);
     font-size: 0.68rem;
     font-weight: 900;
-    padding: 0.18rem 0.55rem;
+    padding: 0.18rem 0.6rem;
     border-radius: 9999px;
     letter-spacing: 0.04em;
     box-shadow:
         0 2px 0 #D97706,
-        inset 1px 1px 2px rgba(255, 255, 255, 0.8);
+        inset 0 1px 1px rgba(255, 255, 255, 0.9);
 }
 
 /* Center Module Info Console */
 .nav-center-module {
     display: flex;
     align-items: center;
-    gap: 0.55rem;
+    gap: 0.65rem;
     background: #E8F0FA;
     border: 2.5px solid var(--game-border);
-    padding: 0.35rem 0.95rem;
+    padding: 0.35rem 1rem;
     border-radius: 9999px;
-    max-width: 380px;
+    max-width: 420px;
     box-shadow:
-        inset 2.5px 2.5px 5px rgba(29, 36, 64, 0.2),
-        inset -2.5px -2.5px 5px rgba(255, 255, 255, 0.95),
+        inset 0 3px 6px rgba(29, 36, 64, 0.2),
+        inset 0 -1.5px 2px rgba(255, 255, 255, 0.95),
         0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 .module-icon-pill {
-    font-size: 1.2rem;
+    font-size: 1.25rem;
     filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.15));
 }
 
 .module-nav-title {
-    font-family: 'Fredoka', sans-serif;
-    font-weight: 900;
-    font-size: 0.9rem;
+    font-family: var(--font-game);
+    font-weight: 800;
+    font-size: 0.92rem;
     color: var(--game-navy);
     white-space: nowrap;
     overflow: hidden;
@@ -599,14 +762,14 @@ const launchQuizBuilder = (quiz) => {
     background: linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 100%);
     color: #0369A1;
     border: 1.5px solid #38BDF8;
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--font-game);
     font-weight: 900;
     font-size: 0.72rem;
     padding: 0.18rem 0.6rem;
     border-radius: 9999px;
     box-shadow:
         0 2px 0 #0284C7,
-        inset 1px 1px 2px rgba(255, 255, 255, 0.8);
+        inset 0 1px 1px rgba(255, 255, 255, 0.8);
     white-space: nowrap;
 }
 
@@ -616,57 +779,233 @@ const launchQuizBuilder = (quiz) => {
     gap: 0.85rem;
 }
 
-/* Extruded 3D + Create Button */
+/* Extruded Hero Pixar + Create Button */
+.btn-quest-code {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: linear-gradient(180deg, #FEF08A 0%, #F59E0B 52%, #D97706 100%);
+    color: #451A03;
+    border: 2px solid #78350F;
+    border-radius: 9999px;
+    padding: 0.45rem 0.95rem;
+    font-family: var(--font-game);
+    cursor: pointer;
+    box-shadow:
+        0 4px 0 #78350F,
+        0 8px 16px rgba(217, 119, 6, 0.35),
+        inset 0 2px 2px rgba(255, 255, 255, 0.85);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn-quest-code:hover {
+    transform: translate3d(0, -2px, 0);
+    box-shadow:
+        0 6px 0 #78350F,
+        0 12px 20px rgba(217, 119, 6, 0.45),
+        inset 0 2px 2px rgba(255, 255, 255, 0.95);
+}
+
+.btn-quest-code:active {
+    transform: translate3d(0, 3px, 0);
+    box-shadow:
+        0 1.5px 0 #78350F,
+        inset 0 2px 4px rgba(120, 53, 15, 0.4);
+}
+
+.btn-quest-code.is-copied {
+    background: linear-gradient(180deg, #A7F3D0 0%, #10B981 50%, #059669 100%);
+    border-color: #064E3B;
+    color: #064E3B;
+    box-shadow:
+        0 4px 0 #064E3B,
+        0 8px 16px rgba(16, 185, 129, 0.35);
+}
+
+.code-icon {
+    font-size: 0.95rem;
+}
+
+.code-label {
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    opacity: 0.85;
+}
+
+.code-number {
+    font-size: 0.95rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    color: #1E1B4B;
+}
+
+.btn-quest-code.is-copied .code-number {
+    color: #064E3B;
+}
+
+.code-badge-action {
+    font-size: 0.62rem;
+    font-weight: 900;
+    background: rgba(0, 0, 0, 0.15);
+    padding: 0.15rem 0.45rem;
+    border-radius: 9999px;
+    letter-spacing: 0.04em;
+}
+
+/* 🚀 Pixar 3D Tactile Publish Quiz Button */
+.btn-nav-publish-quiz {
+    position: relative;
+    background: linear-gradient(180deg, #34D399 0%, #10B981 48%, #059669 100%);
+    color: #FFFFFF;
+    border: 2.5px solid #064E3B;
+    border-radius: 9999px;
+    padding: 0.55rem 1.35rem;
+    font-family: var(--font-game);
+    font-weight: 900;
+    font-size: 0.86rem;
+    letter-spacing: 0.04em;
+    box-shadow:
+        0 4.5px 0 #064E3B,
+        0 10px 20px rgba(5, 150, 105, 0.4),
+        inset 0 2px 2px rgba(255, 255, 255, 0.85),
+        inset 0 -2px 4px rgba(6, 78, 59, 0.45);
+    cursor: pointer;
+    overflow: hidden;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    transform: translate3d(0, 0, 0);
+    transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
+}
+
+.btn-nav-publish-quiz::before {
+    content: '';
+    position: absolute;
+    inset: 2px 6px auto 6px;
+    height: 38%;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+}
+
+.btn-publish-glare {
+    position: absolute;
+    top: 0;
+    left: -120%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+    transform: skewX(-22deg);
+    pointer-events: none;
+    transition: left 0.6s ease;
+}
+
+.btn-nav-publish-quiz:hover .btn-publish-glare {
+    left: 160%;
+}
+
+.btn-nav-publish-quiz:hover {
+    transform: translate3d(0, -2px, 0) scale(1.02);
+    box-shadow:
+        0 6.5px 0 #064E3B,
+        0 14px 26px rgba(5, 150, 105, 0.48),
+        inset 0 2px 2px rgba(255, 255, 255, 0.95);
+}
+
+.btn-nav-publish-quiz:active {
+    transform: translate3d(0, 3px, 0) scaleX(1.03) scaleY(0.95);
+    box-shadow:
+        0 1.5px 0 #064E3B,
+        inset 0 2px 4px rgba(6, 78, 59, 0.55);
+}
+
+.btn-nav-publish-quiz:focus-visible {
+    outline: 2px solid #10B981;
+    outline-offset: 3px;
+}
+
+.btn-publish-icon {
+    font-size: 1rem;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+    display: inline-block;
+    transition: transform 0.2s ease;
+}
+
+.btn-nav-publish-quiz:hover .btn-publish-icon {
+    transform: scale(1.15) rotate(-12deg);
+}
+
 .btn-nav-create {
-    background: linear-gradient(145deg, #FFB300 0%, #FF6B4A 100%);
+    position: relative;
+    background: linear-gradient(180deg, #FFA94D 0%, #FF6B4A 48%, #E04322 100%);
     color: #FFFFFF;
     border: 2.5px solid #8C250E;
     border-radius: 9999px;
-    padding: 0.5rem 1.25rem;
-    font-family: 'Fredoka', sans-serif;
+    padding: 0.55rem 1.35rem;
+    font-family: var(--font-game);
     font-weight: 900;
-    font-size: 0.85rem;
+    font-size: 0.86rem;
     letter-spacing: 0.04em;
     box-shadow:
-        0 4px 0 #8C250E,
-        0 8px 18px rgba(255, 107, 74, 0.38),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.7),
-        inset -2px -2px 4px rgba(140, 37, 14, 0.4);
+        0 4.5px 0 #8C250E,
+        0 10px 20px rgba(255, 107, 74, 0.4),
+        inset 0 2px 2px rgba(255, 255, 255, 0.8),
+        inset 0 -2px 4px rgba(140, 37, 14, 0.4);
     cursor: pointer;
-    transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
+    overflow: hidden;
     white-space: nowrap;
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
+    transform: translate3d(0, 0, 0);
+    transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
+}
+
+.btn-nav-create::before {
+    content: '';
+    position: absolute;
+    inset: 2px 6px auto 6px;
+    height: 38%;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
 }
 
 .btn-nav-create:hover {
-    transform: translateY(-2px);
+    transform: translate3d(0, -2px, 0) scale(1.02);
     box-shadow:
-        0 6px 0 #8C250E,
-        0 12px 24px rgba(255, 107, 74, 0.48),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.85);
+        0 6.5px 0 #8C250E,
+        0 14px 26px rgba(255, 107, 74, 0.48),
+        inset 0 2px 2px rgba(255, 255, 255, 0.9);
 }
 
 .btn-nav-create:active {
-    transform: translateY(2px);
+    transform: translate3d(0, 3px, 0) scaleX(1.03) scaleY(0.95);
     box-shadow:
-        0 1px 0 #8C250E,
-        inset 2px 2px 4px rgba(140, 37, 14, 0.5);
+        0 1.5px 0 #8C250E,
+        inset 0 2px 4px rgba(140, 37, 14, 0.5);
+}
+
+.btn-nav-create:focus-visible {
+    outline: 2px solid #FF6B4A;
+    outline-offset: 3px;
 }
 
 .user-chip {
     display: flex;
     align-items: center;
     gap: 0.45rem;
-    background: linear-gradient(145deg, #FFFFFF 0%, #EEF4FD 100%);
+    background: linear-gradient(180deg, #FFFFFF 0%, #EEF4FD 100%);
     border: 2px solid var(--game-border);
     padding: 0.38rem 0.85rem;
     border-radius: 9999px;
     box-shadow:
         0 3px 0 var(--game-border),
-        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.95),
-        inset -1.5px -1.5px 3px rgba(165, 178, 208, 0.4);
+        inset 0 1.5px 1.5px rgba(255, 255, 255, 0.95),
+        inset 0 -1.5px 2px rgba(165, 178, 208, 0.4);
 }
 
 .user-avatar {
@@ -675,79 +1014,116 @@ const launchQuizBuilder = (quiz) => {
 }
 
 .user-name {
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--font-game);
     font-weight: 800;
     font-size: 0.84rem;
     color: var(--game-navy);
 }
 
 .btn-logout-mini {
-    background: linear-gradient(145deg, #FFF1F2 0%, #FFE4E6 100%);
+    background: linear-gradient(180deg, #FFF1F2 0%, #FFE4E6 100%);
     color: #BE123C;
     border: 2px solid #E11D48;
     padding: 0.38rem 0.85rem;
     border-radius: 9999px;
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--font-game);
     font-weight: 800;
     font-size: 0.8rem;
     cursor: pointer;
     box-shadow:
         0 3px 0 #9F1239,
-        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.95),
-        inset -1.5px -1.5px 3px rgba(225, 29, 72, 0.25);
+        inset 0 1.5px 1.5px rgba(255, 255, 255, 0.95),
+        inset 0 -1.5px 2px rgba(225, 29, 72, 0.25);
+    transform: translate3d(0, 0, 0);
     transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
 }
 
 .btn-logout-mini:hover {
-    transform: translateY(-2px);
+    transform: translate3d(0, -2px, 0);
     box-shadow:
         0 5px 0 #9F1239,
         0 8px 16px rgba(225, 29, 72, 0.25);
 }
 
 .btn-logout-mini:active {
-    transform: translateY(2px);
+    transform: translate3d(0, 2px, 0);
     box-shadow: 0 1px 0 #9F1239;
 }
 
+.btn-logout-mini:focus-visible {
+    outline: 2px solid #E11D48;
+    outline-offset: 3px;
+}
+
 /* ==========================================================================
-   3D CARTOON NEUMORPHIC MODALS
+   STORYBOOK 3D MODALS WITH OVERLAPPING CRESTS
    ========================================================================== */
 .modal-backdrop-layer {
     position: fixed;
     inset: 0;
     z-index: 100;
-    background: rgba(15, 23, 42, 0.72);
-    backdrop-filter: blur(10px);
+    background: rgba(18, 24, 45, 0.68);
+    backdrop-filter: blur(14px) saturate(140%);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 1.5rem;
+    padding: 2.5rem 1.5rem 1.5rem 1.5rem;
     overflow-y: auto;
+    box-sizing: border-box;
 }
 
 .modal-dialog {
     position: relative;
     width: 100%;
-    background: linear-gradient(160deg, #FFFFFF 0%, #F5F9FE 55%, #EAF1FA 100%);
-    border: 4px solid var(--game-border);
+    max-inline-size: min(94vw, 920px);
+    background: linear-gradient(165deg, #FFFFFF 0%, #FAF8F2 50%, #F1EBE0 100%);
+    border: 3.5px solid var(--game-border);
     border-radius: 36px;
-    padding: 2.25rem 2.25rem 2rem 2.25rem;
+    padding: 2.5rem 2.25rem 2.25rem 2.25rem;
     box-shadow:
-        0 16px 0 var(--game-border),
-        0 28px 60px rgba(15, 23, 42, 0.42),
-        inset 3px 3px 6px rgba(255, 255, 255, 0.98),
-        inset -4px -4px 8px rgba(160, 175, 210, 0.45);
-    max-height: 90vh;
+        0 14px 0 var(--game-border),
+        0 28px 56px rgba(15, 23, 42, 0.38),
+        inset 0 3px 2px rgba(255, 255, 255, 1),
+        inset 0 -6px 12px rgba(160, 175, 210, 0.35);
+    max-height: 88vh;
     overflow-y: auto;
+    box-sizing: border-box;
 }
 
 .choice-dialog {
-    max-width: 780px;
+    max-inline-size: min(94vw, 780px);
 }
 
 .quiz-dialog {
-    max-width: 890px;
+    max-inline-size: min(94vw, 920px);
+}
+
+/* 3D Overlapping Storybook Crest Badge */
+.modal-crest-badge {
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #FFF9E6 0%, #FFD166 40%, #FF9F1C 100%);
+    border: 3.5px solid #1D2440;
+    box-shadow:
+        0 5px 0 #1D2440,
+        0 10px 22px rgba(255, 159, 28, 0.4),
+        inset 0 2.5px 2px rgba(255, 255, 255, 1),
+        inset 0 -3px 5px rgba(180, 100, 10, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 15;
+    pointer-events: none;
+}
+
+.crest-icon {
+    font-size: 1.85rem;
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.2));
 }
 
 /* 3D Round Close Button */
@@ -755,12 +1131,12 @@ const launchQuizBuilder = (quiz) => {
     position: absolute;
     top: 1.25rem;
     right: 1.25rem;
-    width: 40px;
-    height: 40px;
-    background: linear-gradient(145deg, #FFFFFF 0%, #FEE2E2 100%);
+    width: 42px;
+    height: 42px;
+    background: linear-gradient(180deg, #FFFFFF 0%, #FEE2E2 100%);
     border: 2.5px solid var(--game-border);
     border-radius: 50%;
-    font-size: 1.1rem;
+    font-size: 1.15rem;
     font-weight: 900;
     color: #BE123C;
     cursor: pointer;
@@ -769,15 +1145,15 @@ const launchQuizBuilder = (quiz) => {
     justify-content: center;
     box-shadow:
         0 3.5px 0 var(--game-border),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.95),
-        inset -2px -2px 4px rgba(225, 29, 72, 0.3);
-    transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
+        inset 0 1.5px 1.5px rgba(255, 255, 255, 1),
+        inset 0 -2px 3px rgba(225, 29, 72, 0.3);
+    transition: transform 0.24s var(--spring-bounce), box-shadow 0.2s ease;
     z-index: 10;
 }
 
 .modal-btn-close:hover {
     transform: rotate(90deg) scale(1.08);
-    background: linear-gradient(145deg, #FFF1F2 0%, #FECDD3 100%);
+    background: linear-gradient(180deg, #FFF1F2 0%, #FECDD3 100%);
     box-shadow:
         0 4.5px 0 var(--game-border),
         0 8px 16px rgba(225, 29, 72, 0.3);
@@ -786,6 +1162,11 @@ const launchQuizBuilder = (quiz) => {
 .modal-btn-close:active {
     transform: rotate(90deg) scale(0.95);
     box-shadow: 0 1px 0 var(--game-border);
+}
+
+.modal-btn-close:focus-visible {
+    outline: 2px solid #E11D48;
+    outline-offset: 3px;
 }
 
 /* Dialog Nav Bar (Modal 2) */
@@ -797,13 +1178,14 @@ const launchQuizBuilder = (quiz) => {
 }
 
 .btn-dialog-back {
-    background: linear-gradient(145deg, #FFFFFF 0%, #E8EEF8 100%);
+    max-inline-size: fit-content;
+    background: linear-gradient(180deg, #FFFFFF 0%, #EBF2FC 100%);
     border: 2px solid var(--game-border);
     border-radius: 9999px;
-    padding: 0.4rem 1rem;
-    font-family: 'Fredoka', sans-serif;
+    padding: 0.4rem 1.05rem;
+    font-family: var(--font-game);
     font-weight: 800;
-    font-size: 0.8rem;
+    font-size: 0.82rem;
     color: var(--game-navy);
     cursor: pointer;
     display: flex;
@@ -811,50 +1193,57 @@ const launchQuizBuilder = (quiz) => {
     gap: 0.4rem;
     box-shadow:
         0 3px 0 var(--game-border),
-        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.95);
+        inset 0 1.5px 1.5px rgba(255, 255, 255, 1);
+    transform: translate3d(0, 0, 0);
     transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
 }
 
 .btn-dialog-back:hover {
-    transform: translateX(-2px);
+    transform: translate3d(-2px, 0, 0);
     box-shadow: 0 4.5px 0 var(--game-border);
 }
 
 .btn-dialog-back:active {
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
     box-shadow: 0 1px 0 var(--game-border);
+}
+
+.btn-dialog-back:focus-visible {
+    outline: 2px solid #2395EB;
+    outline-offset: 3px;
 }
 
 /* Dialog Header */
 .dialog-header {
     text-align: center;
-    margin-bottom: 2rem;
+    margin-bottom: 1.85rem;
 }
 
 .dialog-badge {
     display: inline-block;
-    font-family: 'Fredoka', sans-serif;
-    font-size: 0.74rem;
+    max-inline-size: fit-content;
+    font-family: var(--font-game);
+    font-size: 0.72rem;
     font-weight: 900;
     letter-spacing: 0.08em;
     color: #0369A1;
-    background: linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 100%);
+    background: linear-gradient(180deg, #FFFFFF 0%, #E0F2FE 50%, #BAE6FD 100%);
     border: 2px solid #0284C7;
-    padding: 0.25rem 0.85rem;
+    padding: 0.25rem 0.9rem;
     border-radius: 9999px;
     margin-bottom: 0.65rem;
     box-shadow:
         0 3px 0 #0284C7,
-        inset 1px 1px 2px rgba(255, 255, 255, 0.85);
+        inset 0 1px 1px rgba(255, 255, 255, 0.9);
 }
 
 .dialog-title {
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--font-game);
     font-size: 1.95rem;
     font-weight: 900;
     color: var(--game-navy);
     margin: 0 0 0.4rem 0;
-    text-shadow: 1px 2px 0 rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1.5px 0 rgba(255, 255, 255, 0.95);
 }
 
 .dialog-subtitle {
@@ -873,85 +1262,101 @@ const launchQuizBuilder = (quiz) => {
    ========================================================================== */
 .choice-cards-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1.75rem;
 }
 
 .milestone-choice-card {
+    position: relative;
     border: 3.5px solid var(--game-border);
     border-radius: 28px;
-    padding: 1.75rem 1.5rem;
+    padding: 1.85rem 1.5rem;
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
     cursor: pointer;
     user-select: none;
-    position: relative;
     box-shadow:
         0 8px 0 var(--game-border),
-        0 14px 26px rgba(29, 36, 64, 0.14),
-        inset 2.5px 2.5px 5px rgba(255, 255, 255, 0.95),
-        inset -3px -3px 6px rgba(160, 175, 210, 0.35);
+        0 16px 30px rgba(29, 36, 64, 0.14),
+        inset 0 2.5px 2px rgba(255, 255, 255, 1),
+        inset 0 -4px 8px rgba(160, 175, 210, 0.35);
+    transform: translate3d(0, 0, 0);
     transition: transform 0.28s var(--spring-bounce), box-shadow 0.28s var(--spring-bounce);
 }
 
+.milestone-choice-card::before {
+    content: '';
+    position: absolute;
+    inset: 3px 10px auto 10px;
+    height: 38%;
+    border-radius: 24px 24px 60px 60px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+}
+
 .milestone-choice-card:hover {
-    transform: translateY(-6px) scale(1.02);
+    transform: translate3d(0, -6px, 0) scale(1.02);
     box-shadow:
         0 14px 0 var(--game-border),
-        0 22px 38px rgba(29, 36, 64, 0.2),
-        inset 2.5px 2.5px 5px rgba(255, 255, 255, 1);
+        0 24px 42px rgba(29, 36, 64, 0.2),
+        inset 0 2.5px 2px rgba(255, 255, 255, 1);
 }
 
 .milestone-choice-card:active {
-    transform: translateY(2px) scale(0.985);
+    transform: translate3d(0, 2px, 0) scale(0.985);
     box-shadow:
         0 3px 0 var(--game-border),
-        inset 3px 3px 6px rgba(160, 175, 210, 0.45);
+        inset 0 2px 4px rgba(160, 175, 210, 0.45);
+}
+
+.milestone-choice-card:focus-visible {
+    outline: 3px solid #2395EB;
+    outline-offset: 4px;
 }
 
 .card-lecture {
-    background: linear-gradient(155deg, #FFFFFF 0%, #F0FDF8 60%, #E0F7EF 100%);
+    background: linear-gradient(155deg, #FFFFFF 0%, #F0FDF8 50%, #D8F7EC 100%);
 }
 
 .card-quiz {
-    background: linear-gradient(155deg, #FFFFFF 0%, #F0F7FF 60%, #E3EFFF 100%);
+    background: linear-gradient(155deg, #FFFFFF 0%, #F0F7FF 50%, #DCEBFF 100%);
 }
 
 .choice-card-icon-wrap {
-    width: 82px;
-    height: 82px;
-    border-radius: 24px;
+    width: 84px;
+    height: 84px;
+    border-radius: 26px;
     display: flex;
     align-items: center;
     justify-content: center;
     margin-bottom: 1.15rem;
-    transition: transform 0.25s var(--spring-bounce);
+    transition: transform 0.26s var(--spring-bounce);
 }
 
 .milestone-choice-card:hover .choice-card-icon-wrap {
-    transform: scale(1.1) rotate(-4deg);
+    transform: scale(1.12) rotate(-5deg);
 }
 
 .bg-lecture {
-    background: linear-gradient(135deg, #A7F3D0 0%, #34D399 50%, #059669 100%);
+    background: linear-gradient(145deg, #A7F3D0 0%, #34D399 50%, #059669 100%);
     border: 3px solid #064E3B;
     box-shadow:
         0 5px 0 #064E3B,
-        0 8px 18px rgba(5, 150, 105, 0.35),
-        inset 2.5px 2.5px 5px rgba(255, 255, 255, 0.85),
-        inset -2.5px -2.5px 5px rgba(6, 78, 59, 0.4);
+        0 10px 20px rgba(5, 150, 105, 0.35),
+        inset 0 2.5px 2px rgba(255, 255, 255, 0.85),
+        inset 0 -2.5px 4px rgba(6, 78, 59, 0.4);
 }
 
 .bg-quiz {
-    background: linear-gradient(135deg, #BFDBFE 0%, #60A5FA 50%, #2563EB 100%);
+    background: linear-gradient(145deg, #BFDBFE 0%, #60A5FA 50%, #2563EB 100%);
     border: 3px solid #1E3A8A;
     box-shadow:
         0 5px 0 #1E3A8A,
-        0 8px 18px rgba(37, 99, 235, 0.35),
-        inset 2.5px 2.5px 5px rgba(255, 255, 255, 0.85),
-        inset -2.5px -2.5px 5px rgba(30, 58, 138, 0.4);
+        0 10px 20px rgba(37, 99, 235, 0.35),
+        inset 0 2.5px 2px rgba(255, 255, 255, 0.85),
+        inset 0 -2.5px 4px rgba(30, 58, 138, 0.4);
 }
 
 .choice-icon {
@@ -961,7 +1366,7 @@ const launchQuizBuilder = (quiz) => {
 
 .choice-tag {
     display: inline-block;
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--font-game);
     font-size: 0.68rem;
     font-weight: 900;
     letter-spacing: 0.06em;
@@ -974,23 +1379,23 @@ const launchQuizBuilder = (quiz) => {
     background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);
     color: #065F46;
     border: 1.5px solid #059669;
-    box-shadow: 0 2px 0 #059669, inset 1px 1px 2px #fff;
+    box-shadow: 0 2px 0 #059669, inset 0 1px 1px #fff;
 }
 
 .tag-quiz {
     background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%);
     color: #1E40AF;
     border: 1.5px solid #2563EB;
-    box-shadow: 0 2px 0 #2563EB, inset 1px 1px 2px #fff;
+    box-shadow: 0 2px 0 #2563EB, inset 0 1px 1px #fff;
 }
 
 .choice-card-title {
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--font-game);
     font-size: 1.45rem;
     font-weight: 900;
     color: var(--game-navy);
     margin: 0 0 0.5rem 0;
-    text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 
 .choice-card-desc {
@@ -1004,64 +1409,85 @@ const launchQuizBuilder = (quiz) => {
 
 /* 3D Action Buttons inside Choice Cards */
 .btn-3d-choice {
+    position: relative;
     width: 100%;
     border-radius: 16px;
     padding: 0.8rem 1.15rem;
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--font-game);
     font-weight: 900;
     font-size: 0.92rem;
     color: #FFFFFF;
     cursor: pointer;
+    overflow: hidden;
+    transform: translate3d(0, 0, 0);
     transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
+.btn-3d-choice::before {
+    content: '';
+    position: absolute;
+    inset: 2px 6px auto 6px;
+    height: 38%;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+}
+
 .btn-choice-lecture {
-    background: linear-gradient(145deg, #06D6A0 0%, #059669 100%);
+    background: linear-gradient(180deg, #34D399 0%, #059669 100%);
     border: 2.5px solid #064E3B;
     box-shadow:
         0 4.5px 0 #064E3B,
-        0 8px 16px rgba(6, 214, 160, 0.35),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.7),
-        inset -2px -2px 4px rgba(6, 78, 59, 0.35);
+        0 10px 20px rgba(6, 214, 160, 0.35),
+        inset 0 2px 2px rgba(255, 255, 255, 0.7);
 }
 
 .btn-choice-lecture:hover {
-    transform: translateY(-2px);
+    transform: translate3d(0, -2px, 0);
     box-shadow:
         0 6.5px 0 #064E3B,
-        0 12px 22px rgba(6, 214, 160, 0.45),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.85);
+        0 14px 24px rgba(6, 214, 160, 0.45),
+        inset 0 2px 2px rgba(255, 255, 255, 0.85);
 }
 
 .btn-choice-lecture:active {
-    transform: translateY(2px);
+    transform: translate3d(0, 3px, 0) scaleX(1.02) scaleY(0.96);
     box-shadow: 0 1.5px 0 #064E3B;
 }
 
+.btn-choice-lecture:focus-visible {
+    outline: 2px solid #059669;
+    outline-offset: 3px;
+}
+
 .btn-choice-quiz {
-    background: linear-gradient(145deg, #38A3F5 0%, #1677C2 100%);
+    background: linear-gradient(180deg, #60A5FA 0%, #1677C2 100%);
     border: 2.5px solid #0E5287;
     box-shadow:
         0 4.5px 0 #0E5287,
-        0 8px 16px rgba(35, 149, 235, 0.35),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.7),
-        inset -2px -2px 4px rgba(14, 82, 135, 0.35);
+        0 10px 20px rgba(35, 149, 235, 0.35),
+        inset 0 2px 2px rgba(255, 255, 255, 0.7);
 }
 
 .btn-choice-quiz:hover {
-    transform: translateY(-2px);
+    transform: translate3d(0, -2px, 0);
     box-shadow:
         0 6.5px 0 #0E5287,
-        0 12px 22px rgba(35, 149, 235, 0.45),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.85);
+        0 14px 24px rgba(35, 149, 235, 0.45),
+        inset 0 2px 2px rgba(255, 255, 255, 0.85);
 }
 
 .btn-choice-quiz:active {
-    transform: translateY(2px);
+    transform: translate3d(0, 3px, 0) scaleX(1.02) scaleY(0.96);
     box-shadow: 0 1.5px 0 #0E5287;
+}
+
+.btn-choice-quiz:focus-visible {
+    outline: 2px solid #1677C2;
+    outline-offset: 3px;
 }
 
 /* ==========================================================================
@@ -1069,12 +1495,13 @@ const launchQuizBuilder = (quiz) => {
    ========================================================================== */
 .quiz-types-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1.15rem;
     margin-bottom: 1.75rem;
 }
 
 .quiz-type-card {
+    position: relative;
     border: 3px solid var(--game-border);
     border-radius: 24px;
     padding: 1.25rem 1.15rem;
@@ -1084,48 +1511,65 @@ const launchQuizBuilder = (quiz) => {
     user-select: none;
     box-shadow:
         0 5px 0 var(--game-border),
-        0 8px 18px rgba(29, 36, 64, 0.1),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.95),
-        inset -2px -2px 4px rgba(160, 175, 210, 0.35);
+        0 10px 20px rgba(29, 36, 64, 0.1),
+        inset 0 2px 2px rgba(255, 255, 255, 1),
+        inset 0 -2px 4px rgba(160, 175, 210, 0.35);
+    transform: translate3d(0, 0, 0);
     transition: transform 0.25s var(--spring-bounce), box-shadow 0.25s var(--spring-bounce), border-color 0.2s ease;
 }
 
+.quiz-type-card::before {
+    content: '';
+    position: absolute;
+    inset: 2px 6px auto 6px;
+    height: 32%;
+    border-radius: 20px 20px 40px 40px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+}
+
 .quiz-type-card:hover {
-    transform: translateY(-4px) scale(1.02);
+    transform: translate3d(0, -4px, 0) scale(1.02);
     box-shadow:
         0 9px 0 var(--game-border),
-        0 16px 26px rgba(29, 36, 64, 0.16),
-        inset 2px 2px 4px rgba(255, 255, 255, 1);
+        0 18px 28px rgba(29, 36, 64, 0.16),
+        inset 0 2px 2px rgba(255, 255, 255, 1);
 }
 
 .quiz-type-card.is-selected {
-    transform: translateY(-3px) scale(1.03);
-    border-color: #FF8C00;
+    transform: translate3d(0, -3px, 0) scale(1.03);
+    border-color: #F59E0B;
     background: linear-gradient(155deg, #FFFDF8 0%, #FFF3DC 100%) !important;
     box-shadow:
-        0 7px 0 #D97706,
-        0 0 20px rgba(255, 140, 0, 0.4),
-        inset 2.5px 2.5px 5px rgba(255, 255, 255, 1);
+        0 0 0 3px #FFFFFF,
+        0 0 0 6px #F59E0B,
+        0 8px 0 #D97706,
+        0 14px 28px rgba(245, 158, 11, 0.35);
+}
+
+.quiz-type-card:focus-visible {
+    outline: 3px solid #2395EB;
+    outline-offset: 3px;
 }
 
 /* Biome theme tints for the 6 quizzes */
 .theme-orange {
-    background: linear-gradient(155deg, #FFFFFF 0%, #FFF8F1 60%, #FEEDDC 100%);
+    background: linear-gradient(155deg, #FFFFFF 0%, #FFF8F1 50%, #FEEDDC 100%);
 }
 .theme-green {
-    background: linear-gradient(155deg, #FFFFFF 0%, #F1FDF6 60%, #DCFCE7 100%);
+    background: linear-gradient(155deg, #FFFFFF 0%, #F1FDF6 50%, #DCFCE7 100%);
 }
 .theme-blue {
-    background: linear-gradient(155deg, #FFFFFF 0%, #F1F8FE 60%, #DBEAFE 100%);
+    background: linear-gradient(155deg, #FFFFFF 0%, #F1F8FE 50%, #DBEAFE 100%);
 }
 .theme-purple {
-    background: linear-gradient(155deg, #FFFFFF 0%, #F9F5FE 60%, #F3E8FF 100%);
+    background: linear-gradient(155deg, #FFFFFF 0%, #F9F5FE 50%, #F3E8FF 100%);
 }
 .theme-rose {
-    background: linear-gradient(155deg, #FFFFFF 0%, #FFF4F6 60%, #FFE4E6 100%);
+    background: linear-gradient(155deg, #FFFFFF 0%, #FFF4F6 50%, #FFE4E6 100%);
 }
 .theme-amber {
-    background: linear-gradient(155deg, #FFFFFF 0%, #FFFBF1 60%, #FEF3C7 100%);
+    background: linear-gradient(155deg, #FFFFFF 0%, #FFFBF1 50%, #FEF3C7 100%);
 }
 
 .quiz-card-top {
@@ -1139,20 +1583,20 @@ const launchQuizBuilder = (quiz) => {
     width: 48px;
     height: 48px;
     border-radius: 16px;
-    background: linear-gradient(145deg, #FFFFFF 0%, #EEF4FD 100%);
+    background: linear-gradient(180deg, #FFFFFF 0%, #EEF4FD 100%);
     border: 2px solid var(--game-border);
     display: flex;
     align-items: center;
     justify-content: center;
     box-shadow:
         0 3px 0 var(--game-border),
-        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.95),
-        inset -1.5px -1.5px 3px rgba(160, 175, 205, 0.35);
+        inset 0 1.5px 1.5px rgba(255, 255, 255, 1),
+        inset 0 -1.5px 2px rgba(160, 175, 205, 0.35);
     transition: transform 0.25s var(--spring-bounce);
 }
 
 .quiz-type-card:hover .quiz-icon-pod {
-    transform: scale(1.1) rotate(6deg);
+    transform: scale(1.12) rotate(6deg);
 }
 
 .quiz-emoji {
@@ -1161,7 +1605,7 @@ const launchQuizBuilder = (quiz) => {
 }
 
 .quiz-badge-pill {
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--font-game);
     font-size: 0.65rem;
     font-weight: 900;
     padding: 0.18rem 0.55rem;
@@ -1177,7 +1621,7 @@ const launchQuizBuilder = (quiz) => {
 .theme-amber .quiz-badge-pill { background: #FEF3C7; color: #B45309; border: 1.5px solid #F59E0B; }
 
 .quiz-type-title {
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--font-game);
     font-size: 1.15rem;
     font-weight: 900;
     color: var(--game-navy);
@@ -1203,7 +1647,7 @@ const launchQuizBuilder = (quiz) => {
 }
 
 .quiz-xp-chip {
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--font-game);
     font-size: 0.74rem;
     font-weight: 900;
     background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
@@ -1211,11 +1655,11 @@ const launchQuizBuilder = (quiz) => {
     border: 1.5px solid #F59E0B;
     padding: 0.15rem 0.55rem;
     border-radius: 9999px;
-    box-shadow: 0 2px 0 #D97706, inset 1px 1px 2px #fff;
+    box-shadow: 0 2px 0 #D97706, inset 0 1px 1px #fff;
 }
 
 .quiz-select-arrow {
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--font-game);
     font-size: 0.76rem;
     font-weight: 900;
     color: #2563EB;
@@ -1228,7 +1672,7 @@ const launchQuizBuilder = (quiz) => {
 
 /* Quiz Selected 3D Action Banner */
 .quiz-selected-banner {
-    background: linear-gradient(145deg, #FFF7ED 0%, #FFEDD5 100%);
+    background: linear-gradient(155deg, #FFF7ED 0%, #FFEDD5 100%);
     border: 3px solid #F97316;
     border-radius: 24px;
     padding: 1.1rem 1.5rem;
@@ -1238,8 +1682,8 @@ const launchQuizBuilder = (quiz) => {
     gap: 1.25rem;
     box-shadow:
         0 6px 0 #EA580C,
-        0 10px 24px rgba(234, 88, 12, 0.22),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.85);
+        0 12px 24px rgba(234, 88, 12, 0.22),
+        inset 0 2px 2px rgba(255, 255, 255, 0.95);
 }
 
 .banner-info {
@@ -1254,7 +1698,7 @@ const launchQuizBuilder = (quiz) => {
 }
 
 .banner-title {
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--font-game);
     font-size: 1.05rem;
     font-weight: 900;
     color: #9A3412;
@@ -1268,34 +1712,52 @@ const launchQuizBuilder = (quiz) => {
 }
 
 .btn-3d-launch-quiz {
-    background: linear-gradient(145deg, #FF9F43 0%, #FF6B4A 100%);
+    position: relative;
+    background: linear-gradient(180deg, #FFA94D 0%, #FF6B4A 100%);
     color: #FFFFFF;
     border: 2.5px solid #8C250E;
     border-radius: 16px;
     padding: 0.75rem 1.45rem;
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--font-game);
     font-weight: 900;
     font-size: 0.9rem;
     letter-spacing: 0.03em;
+    overflow: hidden;
     box-shadow:
         0 4px 0 #8C250E,
-        0 8px 18px rgba(255, 107, 74, 0.35),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.7);
+        0 10px 20px rgba(255, 107, 74, 0.35),
+        inset 0 2px 2px rgba(255, 255, 255, 0.7);
     cursor: pointer;
     white-space: nowrap;
+    transform: translate3d(0, 0, 0);
     transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
 }
 
+.btn-3d-launch-quiz::before {
+    content: '';
+    position: absolute;
+    inset: 2px 6px auto 6px;
+    height: 38%;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+}
+
 .btn-3d-launch-quiz:hover {
-    transform: translateY(-2px);
+    transform: translate3d(0, -2px, 0);
     box-shadow:
         0 6px 0 #8C250E,
-        0 12px 24px rgba(255, 107, 74, 0.45);
+        0 14px 26px rgba(255, 107, 74, 0.45);
 }
 
 .btn-3d-launch-quiz:active {
-    transform: translateY(2px);
-    box-shadow: 0 1px 0 #8C250E;
+    transform: translate3d(0, 2px, 0) scaleX(1.02) scaleY(0.96);
+    box-shadow: 0 1.5px 0 #8C250E;
+}
+
+.btn-3d-launch-quiz:focus-visible {
+    outline: 2px solid #FF6B4A;
+    outline-offset: 3px;
 }
 
 /* Toast Notice 3D Pill */
@@ -1304,7 +1766,7 @@ const launchQuizBuilder = (quiz) => {
     top: 5.5rem;
     right: 2rem;
     z-index: 120;
-    background: linear-gradient(145deg, #1E293B 0%, #0F172A 100%);
+    background: linear-gradient(180deg, #1E293B 0%, #0F172A 100%);
     color: #FFFFFF;
     border: 3px solid #F59E0B;
     border-radius: 9999px;
@@ -1312,13 +1774,13 @@ const launchQuizBuilder = (quiz) => {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    font-family: 'Fredoka', sans-serif;
+    font-family: var(--font-game);
     font-size: 0.92rem;
     font-weight: 900;
     box-shadow:
         0 6px 0 #B45309,
         0 14px 30px rgba(0, 0, 0, 0.35),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.25);
+        inset 0 2px 2px rgba(255, 255, 255, 0.25);
 }
 
 /* Modal Animations */
@@ -1366,7 +1828,7 @@ const launchQuizBuilder = (quiz) => {
     }
 
     .quiz-types-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
@@ -1379,7 +1841,8 @@ const launchQuizBuilder = (quiz) => {
         padding: 0.75rem 1rem;
     }
 
-    .btn-nav-create span {
+    .btn-nav-create span,
+    .btn-nav-publish-quiz span {
         font-size: 0.74rem;
     }
 
@@ -1392,7 +1855,7 @@ const launchQuizBuilder = (quiz) => {
     }
 
     .modal-dialog {
-        padding: 1.6rem 1.25rem;
+        padding: 2.2rem 1.25rem 1.5rem 1.25rem;
         border-radius: 28px;
     }
 
@@ -1408,6 +1871,18 @@ const launchQuizBuilder = (quiz) => {
 
     .banner-info {
         flex-direction: column;
+    }
+}
+
+/* Accessibility & Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
     }
 }
 </style>

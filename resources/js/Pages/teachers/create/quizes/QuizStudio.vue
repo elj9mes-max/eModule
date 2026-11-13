@@ -2671,8 +2671,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700;800&family=Nunito:wght@600;700;800;900&display=swap');
-
 .quiz-studio-shell {
     --font-display: 'Fredoka', sans-serif;
     --font-body: 'Nunito', sans-serif;

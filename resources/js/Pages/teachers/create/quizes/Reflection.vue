@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
+import { generateQuizAssist } from '@/Services/geminiAi.js';
 
 const props = defineProps({
     user: {
@@ -70,6 +71,46 @@ const removeContext = (index) => {
         form.contexts.splice(index, 1);
     } else {
         form.contexts[0] = { scenario: '', hint: '' };
+    }
+};
+
+// Gemini AI Reflection Assistant
+const isGeneratingAiPrompts = ref(false);
+
+const generateReflectionWithAi = async () => {
+    isGeneratingAiPrompts.value = true;
+
+    try {
+        const result = await generateQuizAssist({
+            quizType: 'reflection',
+            topicOrPassage: form.description || form.title || props.module.title,
+            questionCount: 2,
+            gradeLevel: props.module.grade_level,
+        });
+
+        if (result) {
+            if (result.title) {
+                form.title = result.title;
+            }
+            if (result.description) {
+                form.description = result.description;
+            }
+            if (Array.isArray(result.prompts) && result.prompts.length > 0) {
+                form.prompts = result.prompts.map((p, idx) => ({
+                    prompt_text: p.prompt_text || '',
+                    max_words: Number(p.max_words) || 150,
+                    min_words: p.min_words ? Number(p.min_words) : 20,
+                    guiding_hint: p.guiding_hint || '',
+                    starter_sentence: p.starter_sentence || '',
+                    points: Number(p.points) || 50,
+                    sort_order: idx + 1,
+                }));
+            }
+        }
+    } catch (err) {
+        alert(err.message || 'Gemini reflection prompt generation failed.');
+    } finally {
+        isGeneratingAiPrompts.value = false;
     }
 };
 
@@ -144,11 +185,6 @@ const submitQuiz = () => {
     <Head :title="`Create Reflection Activity • ${module.title}`" />
 
     <div class="reflection-page">
-        <!-- Google Fonts: Fredoka & Nunito -->
-        <component :is="'style'">
-            @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700;800;900&family=Nunito:wght@600;700;800;900&display=swap');
-        </component>
-
         <!-- Top Header Navigation -->
         <header class="studio-header">
             <div class="header-left">
@@ -394,6 +430,15 @@ const submitQuiz = () => {
                             @click="addPrompt"
                         >
                             ➕ Add Prompt
+                        </button>
+                        <button
+                            type="button"
+                            class="neu-btn small-btn ai-action-btn"
+                            :disabled="isGeneratingAiPrompts"
+                            @click="generateReflectionWithAi"
+                        >
+                            <span v-if="isGeneratingAiPrompts">⏳ Generating...</span>
+                            <span v-else>✨ AI Generate Prompts</span>
                         </button>
                     </div>
                 </div>
@@ -1534,6 +1579,25 @@ const submitQuiz = () => {
     padding: 1rem 1.75rem;
     background: #f8fafc;
     border-top: 2px solid #e2e8f0;
+}
+
+/* Gemini AI Reflection Assistant Styles */
+.ai-action-btn {
+    background: linear-gradient(180deg, #6366F1 0%, #4F46E5 100%) !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 3px 0 #3730A3 !important;
+    font-family: var(--font-heading);
+    font-weight: 800;
+}
+
+.ai-action-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 0 #3730A3 !important;
+}
+
+.ai-action-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 </style>
 

@@ -23,3 +23,15 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
+
+<IfModule mod_headers.c>
+    # Immutable Vite fingerprinted bundles & bundled WOFF2/WOFF fonts
+    <FilesMatch "\.(js|css|woff2?|ttf|otf|eot)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+
+    # Diorama illustrations, uploaded lecture media & narration audio
+    <FilesMatch "\.(png|jpe?g|webp|gif|svg|ico|mp3|wav|ogg|m4a|mp4|webm)$">
+        Header set Cache-Control "public, max-age=604800, stale-while-revalidate=86400"
+    </FilesMatch>
+</IfModule>

@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
+import TeacherLayout from '@/Components/TeacherLayout.vue';
 
 const props = defineProps({
     user: {
@@ -12,6 +13,22 @@ const props = defineProps({
             role: 'teacher',
         }),
     },
+    classrooms: {
+        type: Array,
+        default: () => [],
+    },
+    selected_classroom_id: {
+        type: Number,
+        default: null,
+    },
+    students: {
+        type: Array,
+        default: () => [],
+    },
+    pending_grading_count: {
+        type: Number,
+        default: 0,
+    },
 });
 
 const handleLogout = () => {
@@ -22,141 +39,51 @@ const goToDashboard = () => {
     router.visit('/teachers/dashboard');
 };
 
+const goToClasses = () => {
+    router.visit('/teachers/classes');
+};
+
+const selectedClassId = ref(props.selected_classroom_id);
+
+const filterByClass = (classId) => {
+    selectedClassId.value = classId;
+    router.visit(classId ? `/teachers/students?class_id=${classId}` : '/teachers/students', {
+        preserveState: true,
+        preserveScroll: true,
+    });
+};
+
 // Search & Filter State
 const searchQuery = ref('');
 const selectedKingdom = ref('all');
 const sortBy = ref('stars'); // 'stars' | 'level' | 'streak'
 const kudosCount = ref({});
 
-// Student Adventurers Data
-const allStudents = ref([
-    {
-        rank: 1,
-        name: 'Maya "Star-Reader" Lin',
-        level: 34,
-        kingdom: 'Whispering Forest',
-        kingdomIcon: '🌲',
-        stars: 48,
-        streak: 18,
-        booksRead: 42,
-        badge: 'Guild Grand Champion',
-        avatar: '🦊',
-        podiumColor: '#FFD166',
-        quote: 'Books are portals to magical realms!',
-    },
-    {
-        rank: 2,
-        name: 'Leo "Speed-Reader" Vance',
-        level: 32,
-        kingdom: 'Cosmic Nebula',
-        kingdomIcon: '🚀',
-        stars: 44,
-        streak: 15,
-        booksRead: 39,
-        badge: 'Master Storyteller',
-        avatar: '🦁',
-        podiumColor: '#E0E2EC',
-        quote: 'Speed reading across galaxies!',
-    },
-    {
-        rank: 3,
-        name: 'Aria "Word-Weaver" Patel',
-        level: 31,
-        kingdom: 'Sunken Atlantis',
-        kingdomIcon: '🌊',
-        stars: 41,
-        streak: 14,
-        booksRead: 36,
-        badge: 'Syntax Wizard',
-        avatar: '🐼',
-        podiumColor: '#FFC09F',
-        quote: 'Unlocking ancient coral mysteries.',
-    },
-    {
-        rank: 4,
-        name: 'Kai "Quest-Master" Thorne',
-        level: 29,
-        kingdom: 'Dino Volcanoes',
-        kingdomIcon: '🌋',
-        stars: 38,
-        streak: 12,
-        booksRead: 31,
-        badge: 'Dragon Reader',
-        avatar: '🐯',
-    },
-    {
-        rank: 5,
-        name: 'Zoe "Bookworm" Alvarez',
-        level: 28,
-        kingdom: 'Whispering Forest',
-        kingdomIcon: '🌲',
-        stars: 35,
-        streak: 11,
-        booksRead: 29,
-        badge: 'Lore Chronicler',
-        avatar: '🐰',
-    },
-    {
-        rank: 6,
-        name: 'Noah "Cyber-Coder" Chen',
-        level: 27,
-        kingdom: 'Cosmic Nebula',
-        kingdomIcon: '🚀',
-        stars: 34,
-        streak: 9,
-        booksRead: 27,
-        badge: 'Sci-Fi Scribe',
-        avatar: '🐨',
-    },
-    {
-        rank: 7,
-        name: 'Sophia "Myth-Seeker" Rossi',
-        level: 26,
-        kingdom: 'Sunken Atlantis',
-        kingdomIcon: '🌊',
-        stars: 32,
-        streak: 8,
-        booksRead: 25,
-        badge: 'Rune Decoder',
-        avatar: '🦄',
-    },
-    {
-        rank: 8,
-        name: 'Ethan "Rhyme-Hunter" Brooks',
-        level: 24,
-        kingdom: 'Dino Volcanoes',
-        kingdomIcon: '🌋',
-        stars: 29,
-        streak: 7,
-        booksRead: 22,
-        badge: 'Fossil Detective',
-        avatar: '🐸',
-    },
-    {
-        rank: 9,
-        name: 'Elena "Story-Speller" Gomez',
-        level: 23,
-        kingdom: 'Whispering Forest',
-        kingdomIcon: '🌲',
-        stars: 28,
-        streak: 6,
-        booksRead: 20,
-        badge: 'Forest Wanderer',
-        avatar: '🦉',
-    },
-    {
-        rank: 10,
-        name: 'Marcus "Gale-Walker" Young',
-        level: 21,
-        kingdom: 'Cosmic Nebula',
-        kingdomIcon: '🚀',
-        stars: 25,
-        streak: 5,
-        booksRead: 18,
-        badge: 'Space Explorer',
-        avatar: '🐺',
-    },
-]);
+// Dynamic Student Adventurers Data sourced from database
+const allStudents = computed(() => {
+    if (Array.isArray(props.students) && props.students.length > 0) {
+        const avatars = ['🦊', '🦁', '🐼', '🐯', '🐰', '🐻', '🦉'];
+        return props.students.map((s, idx) => {
+            return {
+                id: s.id,
+                rank: s.rank || idx + 1,
+                name: s.name,
+                level: Number(s.level) || 1,
+                kingdom: s.classroom_name || 'Classroom Adventurer',
+                kingdomIcon: '🏫',
+                stars: Number(s.stars) || 0,
+                xp: Number(s.xp) || 0,
+                streak: 1,
+                booksRead: Number(s.lectures_completed) || 0,
+                badge: s.badge || (idx === 0 ? 'Guild Grand Champion' : idx === 1 ? 'Master Storyteller' : idx === 2 ? 'Syntax Wizard' : 'Explorer'),
+                avatar: avatars[idx % avatars.length],
+                podiumColor: idx === 0 ? '#FFD166' : idx === 1 ? '#E0E2EC' : '#FFC09F',
+                quote: s.classroom_grade || 'Reading adventure in progress!',
+            };
+        });
+    }
+    return [];
+});
 
 // Top 3 Podium
 const topThree = computed(() => {
@@ -197,97 +124,58 @@ const sendKudos = (studentName) => {
 <template>
     <Head title="Student Guild Leaderboard • WEBREAD" />
 
-    <div class="game-dashboard-page">
-        <!-- Google Fonts: Fredoka & Nunito -->
-        <component :is="'style'">
-            @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700;800;900&family=Nunito:wght@600;700;800;900&display=swap');
-        </component>
-
-        <!-- Floating 3D Pop-Up Scenery Assets -->
-        <div class="game-bg-elements" aria-hidden="true">
-            <img src="/images/book_left_trees_mountains.png" alt="" class="bg-asset bg-book-left" />
-            <img src="/images/book_right_mountains_river.png" alt="" class="bg-asset bg-book-right" />
-            <div class="floating-sparkle sp-1">✨</div>
-            <div class="floating-sparkle sp-2">⭐</div>
-            <div class="floating-sparkle sp-3">👑</div>
-            <div class="floating-sparkle sp-4">🌟</div>
-        </div>
-
-        <!-- 3D CARTOON GAME HUD (TOP STATUS BAR) -->
-        <header class="game-hud">
-            <!-- Player Status / Level Badge -->
-            <div class="hud-profile-card">
-                <div class="hud-avatar-wrapper">
-                    <div class="avatar-ring">
-                        <span class="avatar-emoji">🧙‍♂️</span>
-                    </div>
-                    <span class="avatar-lvl-badge">LVL 42</span>
-                </div>
-
-                <div class="hud-profile-meta">
-                    <div class="hud-name-row">
-                        <span class="hud-title-crown">👑</span>
-                        <span class="hud-name">{{ user.name }}</span>
-                        <span class="instructor-tag">MASTER INSTRUCTOR</span>
-                    </div>
-
-                    <!-- XP Meter Bar -->
-                    <div class="hud-xp-meter">
-                        <div class="xp-track">
-                            <div class="xp-fill" style="width: 84%">
-                                <div class="xp-shine"></div>
-                            </div>
-                        </div>
-                        <span class="xp-label">8,450 / 10,000 XP</span>
-                    </div>
-                </div>
+    <TeacherLayout
+        :user="user"
+        active-nav="students"
+        :pending-grading-count="pending_grading_count"
+    >
+        <!-- CLASSROOM / ROOM SELECTOR PILLS -->
+            <div class="room-selector-strip">
+                <span class="room-selector-label">ROOM:</span>
+                <button
+                    type="button"
+                    class="room-filter-pill"
+                    :class="{ active: !selectedClassId }"
+                    @click="filterByClass(null)"
+                >
+                    <span>🏫 All My Students ({{ props.students.length }})</span>
+                </button>
+                <button
+                    v-for="c in classrooms"
+                    :key="c.id"
+                    type="button"
+                    class="room-filter-pill"
+                    :class="{ active: selectedClassId === c.id }"
+                    @click="filterByClass(c.id)"
+                >
+                    <span>{{ c.icon }} {{ c.name }} ({{ c.students_count }})</span>
+                </button>
+                <button
+                    type="button"
+                    class="room-manage-link"
+                    @click="goToClasses"
+                >
+                    <span>⚙️ Manage Rooms</span>
+                </button>
             </div>
 
-            <!-- Game Resource Indicators -->
-            <div class="hud-inventory-meters">
-                <div class="inventory-pill gems-pill" title="Classroom Reading Gems">
-                    <span class="pill-icon gem-icon">💎</span>
-                    <div class="pill-data">
-                        <span class="pill-num">1,450</span>
-                        <span class="pill-lbl">GEMS</span>
-                    </div>
-                </div>
-
-                <div class="inventory-pill stars-pill" title="Guild Star Power">
-                    <span class="pill-icon star-icon">⭐</span>
-                    <div class="pill-data">
-                        <span class="pill-num">3,820</span>
-                        <span class="pill-lbl">STARS</span>
-                    </div>
-                </div>
-
-                <div class="inventory-pill energy-pill" title="Classroom Energy">
-                    <span class="pill-icon energy-icon">⚡</span>
-                    <div class="pill-data">
-                        <span class="pill-num">95%</span>
-                        <span class="pill-lbl">ENERGY</span>
-                    </div>
-                </div>
-
-                <div class="inventory-pill guild-pill" title="Guild Members">
-                    <span class="pill-icon guild-icon">🎒</span>
-                    <div class="pill-data">
-                        <span class="pill-num">118</span>
-                        <span class="pill-lbl">STUDENTS</span>
-                    </div>
-                </div>
+            <!-- Empty State if No Students Yet in Selected Room -->
+            <div v-if="allStudents.length === 0" class="empty-classroom-students-card">
+                <div class="empty-badge">👥</div>
+                <h3 class="empty-title">No Students in this Room Yet</h3>
+                <p class="empty-desc">
+                    Share your 6-digit room access code with your students so they can join this reading room and appear on the leaderboard!
+                </p>
+                <button type="button" class="btn-goto-classes" @click="goToClasses">
+                    <span>🗝️ View Room Access Codes</span>
+                </button>
             </div>
-        </header>
-
-        <!-- MAIN ARENA STAGE -->
-        <main class="game-stage">
-            <!-- PAGE TITLE BAR -->
 
             <!-- 3D CARTOON TOP 3 WINNERS PODIUM -->
-            <section class="podium-section" aria-label="Top 3 Champion Podium">
+            <section v-if="topThree.length > 0" class="podium-section" aria-label="Top 3 Champion Podium">
                 <div class="podium-grid">
                     <!-- Rank #2: Silver Stand (Left) -->
-                    <div class="podium-column rank-2-col">
+                    <div v-if="topThree[1]" class="podium-column rank-2-col">
                         <div class="podium-avatar-card">
                             <span class="crown-badge silver-crown">🥈</span>
                             <div class="podium-avatar-bubble silver-bubble">
@@ -308,7 +196,7 @@ const sendKudos = (studentName) => {
                     </div>
 
                     <!-- Rank #1: Gold Stand (Center, Tallest) -->
-                    <div class="podium-column rank-1-col">
+                    <div v-if="topThree[0]" class="podium-column rank-1-col">
                         <div class="gold-halo-effect"></div>
                         <div class="podium-avatar-card gold-card">
                             <span class="crown-badge gold-crown">👑 🥇</span>
@@ -330,7 +218,7 @@ const sendKudos = (studentName) => {
                     </div>
 
                     <!-- Rank #3: Bronze Stand (Right) -->
-                    <div class="podium-column rank-3-col">
+                    <div v-if="topThree[2]" class="podium-column rank-3-col">
                         <div class="podium-avatar-card">
                             <span class="crown-badge bronze-crown">🥉</span>
                             <div class="podium-avatar-bubble bronze-bubble">
@@ -434,51 +322,7 @@ const sendKudos = (studentName) => {
                     <p class="empty-desc">Try clearing your search term or switching to "All Realms".</p>
                 </div>
             </section>
-        </main>
-
-        <!-- 3D CARTOON BOTTOM GAME NAVIGATION DOCK -->
-        <nav class="game-bottom-dock" aria-label="Game Console Dock">
-            <!-- Dock Item: Your Modules (Back to Dashboard) -->
-            <button
-                type="button"
-                class="dock-item"
-                @click="goToDashboard"
-                title="Your Modules"
-            >
-                <div class="dock-bubble">
-                    <span class="dock-icon">🏰</span>
-                </div>
-                <span class="dock-label">MODULES</span>
-            </button>
-
-            <!-- Dock Item: Students Ranking (Active) -->
-            <button
-                type="button"
-                class="dock-item active"
-                title="Student Guild Rankings"
-            >
-                <div class="dock-bubble">
-                    <span class="dock-icon">🏆</span>
-                </div>
-                <span class="dock-label">STUDENTS</span>
-            </button>
-
-            <div class="dock-divider"></div>
-
-            <!-- Dock Item: Log Out -->
-            <button
-                type="button"
-                class="dock-item logout-item"
-                @click="handleLogout"
-                title="Exit Game"
-            >
-                <div class="dock-bubble exit-bubble">
-                    <span class="dock-icon">🚪</span>
-                </div>
-                <span class="dock-label">EXIT</span>
-            </button>
-        </nav>
-    </div>
+    </TeacherLayout>
 </template>
 
 <style scoped>
@@ -956,6 +800,112 @@ const sendKudos = (studentName) => {
 /* ==========================================================================
    TOP 3 CHAMPION PODIUM
    ========================================================================== */
+/* Classroom / Room Selector Strip */
+.room-selector-strip {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+    background: rgba(255, 255, 255, 0.7);
+    padding: 0.65rem 1rem;
+    border-radius: 20px;
+    border: 2px solid #E2E8F0;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
+}
+
+.room-selector-label {
+    font-family: var(--font-game);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    color: #64748B;
+}
+
+.room-filter-pill {
+    padding: 0.45rem 0.95rem;
+    border-radius: 999px;
+    border: 2px solid #CBD5E1;
+    background: #FFFFFF;
+    color: #334155;
+    font-family: var(--font-game);
+    font-size: 0.82rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 3px 0 #CBD5E1;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.room-filter-pill:hover {
+    transform: translateY(-2px);
+    border-color: #0284C7;
+}
+
+.room-filter-pill.active {
+    background: linear-gradient(180deg, #38BDF8 0%, #0284C7 100%);
+    border-color: #0369A1;
+    color: #FFFFFF;
+    box-shadow: 0 3px 0 #0369A1, 0 6px 14px rgba(2, 132, 199, 0.3);
+    transform: translateY(-2px);
+}
+
+.room-manage-link {
+    margin-left: auto;
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    background: #F1F5F9;
+    border: 1.5px solid #CBD5E1;
+    color: #475569;
+    font-family: var(--font-game);
+    font-size: 0.75rem;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.empty-classroom-students-card {
+    text-align: center;
+    background: #FFFFFF;
+    border: 3px dashed #CBD5E1;
+    border-radius: 26px;
+    padding: 3rem 1.5rem;
+    margin: 2rem 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.empty-classroom-students-card .empty-badge {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+}
+
+.empty-classroom-students-card .empty-title {
+    font-family: var(--font-game);
+    font-size: 1.4rem;
+    font-weight: 900;
+    color: #0F172A;
+    margin: 0;
+}
+
+.empty-classroom-students-card .empty-desc {
+    color: #64748B;
+    max-width: 440px;
+    margin: 0.5rem 0 1.25rem 0;
+    font-size: 0.9rem;
+}
+
+.btn-goto-classes {
+    padding: 0.6rem 1.25rem;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #6366F1 0%, #4F46E5 100%);
+    color: #FFFFFF;
+    border: 2px solid #312E81;
+    font-family: var(--font-game);
+    font-weight: 900;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #312E81;
+}
+
 .podium-section {
     width: 100%;
 }
@@ -1495,135 +1445,9 @@ const sendKudos = (studentName) => {
 }
 
 /* ==========================================================================
-   3D CARTOON + NEUMORPHIC BOTTOM GAME NAVIGATION DOCK
-   ========================================================================== */
-.game-bottom-dock {
-    position: fixed;
-    bottom: 1.5rem;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 999;
-    background: var(--neu-surface);
-    border: 3.5px solid var(--game-border);
-    border-radius: 38px;
-    padding: 0.65rem 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    box-shadow:
-        0 10px 0 var(--game-border),
-        -6px -6px 16px rgba(255, 255, 255, 0.85),
-        0 22px 42px rgba(29, 36, 64, 0.25),
-        var(--neu-bevel-light),
-        var(--neu-bevel-dark);
-    user-select: none;
-    max-width: 95vw;
-}
-
-.dock-item {
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.25rem 0.5rem;
-    transition: transform 0.2s var(--spring-bounce);
-    outline: none;
-}
-
-.dock-item:hover {
-    transform: translateY(-4px);
-}
-
-.dock-bubble {
-    width: 50px;
-    height: 50px;
-    border-radius: 18px;
-    background: linear-gradient(145deg, #FFFFFF 0%, #E9EDF7 100%);
-    border: 2.5px solid var(--game-border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    box-shadow:
-        0 3px 0 var(--game-border),
-        inset 2px 2px 5px rgba(255, 255, 255, 0.95),
-        inset -2px -2px 5px rgba(164, 176, 204, 0.45);
-    position: relative;
-    transition: all 0.2s var(--spring-bounce);
-}
-
-.dock-item.active .dock-bubble {
-    background: linear-gradient(145deg, #38A3F5 0%, #1579C4 100%);
-    border-color: #0E5287;
-    box-shadow:
-        0 4px 0 #0E5287,
-        0 6px 14px rgba(35, 149, 235, 0.35),
-        inset 2px 2px 5px rgba(255, 255, 255, 0.6),
-        inset -2px -3px 6px rgba(14, 82, 135, 0.5);
-    transform: translateY(-4px) scale(1.08);
-}
-
-.dock-item.active .dock-bubble .dock-icon {
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-}
-
-.dock-label {
-    font-family: var(--font-game);
-    font-size: 0.72rem;
-    font-weight: 900;
-    color: #727B94;
-    letter-spacing: 0.05em;
-    transition: color 0.15s ease;
-}
-
-.dock-item.active .dock-label {
-    color: var(--game-blue);
-}
-
-.dock-divider {
-    width: 3px;
-    height: 42px;
-    background: #DFE4F2;
-    border-radius: 9999px;
-    box-shadow:
-        inset 1px 1px 2px rgba(163, 174, 198, 0.6),
-        1px 0 0 rgba(255, 255, 255, 0.9);
-}
-
-.logout-item:hover .exit-bubble {
-    background: linear-gradient(145deg, #FFF5F5 0%, #FFE0E0 100%);
-    border-color: #FF4D4F;
-    box-shadow:
-        0 3px 0 #CF1322,
-        inset 2px 2px 4px rgba(255, 255, 255, 0.9),
-        inset -2px -2px 4px rgba(255, 77, 79, 0.25);
-}
-
-.logout-item:hover .dock-label {
-    color: #E03131;
-}
-
-/* ==========================================================================
    RESPONSIVE DESIGN
    ========================================================================== */
 @media (max-width: 900px) {
-    .game-hud {
-        flex-direction: column;
-        align-items: stretch;
-        padding: 1rem 1.25rem;
-    }
-
-    .hud-profile-card {
-        justify-content: flex-start;
-    }
-
-    .hud-inventory-meters {
-        justify-content: space-between;
-    }
-
     .podium-grid {
         align-items: center;
     }

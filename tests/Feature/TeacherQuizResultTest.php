@@ -1,12 +1,21 @@
 <?php
 
+use App\Enums\ConflictType;
+use App\Enums\QuestionSelectionType;
 use App\Enums\QuizType;
+use App\Models\ColorConflictCard;
+use App\Models\ConflictMapEvent;
+use App\Models\ConflictMapZone;
 use App\Models\EvaluationItem;
 use App\Models\EvaluationItemOption;
+use App\Models\MatchingChoice;
+use App\Models\MatchingItem;
 use App\Models\Module;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Models\QuizAttemptAnswer;
+use App\Models\QuizQuestion;
+use App\Models\QuizQuestionOption;
 use App\Models\ReflectionPrompt;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -358,6 +367,265 @@ test('evaluation quiz submission records stance properly even when option stance
             ->has('submissions.0.answers.0', fn ($ans) => $ans
                 ->where('answer_data.stance', 'Right and Just')
                 ->where('answer_data.option_id', $option->id)
+                ->etc()
+            )
+        );
+});
+
+test('teacher inspecting multiple choice submission receives full question, all options, and student picks', function () {
+    $teacher = User::factory()->teacher()->create();
+    $student = User::factory()->student()->create();
+    $module = Module::factory()->for($teacher, 'teacher')->create();
+
+    $quiz = Quiz::create([
+        'module_id' => $module->id,
+        'title' => 'MCQ Inspector Quiz',
+        'slug' => 'mcq-inspector-quiz',
+        'type' => QuizType::MultipleChoice,
+        'passing_percentage' => 70,
+        'xp_reward' => 150,
+        'sort_order' => 1,
+        'is_published' => true,
+    ]);
+
+    $question = QuizQuestion::create([
+        'quiz_id' => $quiz->id,
+        'question_text' => 'What does "luminous" mean in the story?',
+        'selection_type' => QuestionSelectionType::Single,
+        'passage_context' => 'The inscription was luminous, casting a golden glow.',
+        'explanation' => 'Luminous means glowing brightly.',
+        'points' => 10,
+        'sort_order' => 1,
+    ]);
+
+    $correctOpt = QuizQuestionOption::create([
+        'question_id' => $question->id,
+        'option_text' => 'Glowing brightly with light',
+        'is_correct' => true,
+        'sort_order' => 1,
+    ]);
+    $wrongOpt = QuizQuestionOption::create([
+        'question_id' => $question->id,
+        'option_text' => 'Covered in heavy moss',
+        'is_correct' => false,
+        'sort_order' => 2,
+    ]);
+
+    $this->actingAs($student)
+        ->postJson(route('students.quizzes.submit', ['module' => $module->slug, 'quiz' => $quiz->slug]), [
+            'answers' => [
+                (string) $question->id => [$wrongOpt->id],
+            ],
+            'time_spent_seconds' => 25,
+        ])
+        ->assertOk();
+
+    $this->actingAs($teacher)
+        ->get(route('teachers.quizzes.results', ['module' => $module->slug, 'quiz' => $quiz->slug]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('teachers/view/quizes/QuizResult')
+            ->has('submissions.0.answers.0', fn (Assert $ans) => $ans
+                ->where('item_type', 'multiple_choice')
+                ->where('is_correct', false)
+                ->where('points_earned', 0)
+                ->where('answer_data.selected_option_ids.0', $wrongOpt->id)
+                ->where('context.question_text', 'What does "luminous" mean in the story?')
+                ->where('context.passage_context', 'The inscription was luminous, casting a golden glow.')
+                ->where('context.explanation', 'Luminous means glowing brightly.')
+                ->has('context.options', 2)
+                ->where('context.options.0.id', $correctOpt->id)
+                ->where('context.options.0.is_correct', true)
+                ->where('context.options.1.id', $wrongOpt->id)
+                ->where('context.options.1.is_correct', false)
+                ->etc()
+            )
+        );
+});
+
+test('teacher inspecting color the conflict submission receives excerpt, correct category, and all category options', function () {
+    $teacher = User::factory()->teacher()->create();
+    $student = User::factory()->student()->create();
+    $module = Module::factory()->for($teacher, 'teacher')->create();
+
+    $quiz = Quiz::create([
+        'module_id' => $module->id,
+        'title' => 'Color Conflict Inspector',
+        'slug' => 'color-conflict-inspector',
+        'type' => QuizType::ColorTheConflict,
+        'passing_percentage' => 70,
+        'xp_reward' => 160,
+        'sort_order' => 2,
+        'is_published' => true,
+    ]);
+
+    $card = ColorConflictCard::create([
+        'quiz_id' => $quiz->id,
+        'excerpt' => 'A fierce blizzard whipped across the mountain pass.',
+        'conflict_type' => ConflictType::CharacterVsNature,
+        'explanation' => 'A blizzard is a natural weather force.',
+        'points' => 10,
+        'sort_order' => 1,
+    ]);
+
+    $this->actingAs($student)
+        ->postJson(route('students.quizzes.submit', ['module' => $module->slug, 'quiz' => $quiz->slug]), [
+            'answers' => [
+                (string) $card->id => ConflictType::CharacterVsCharacter->value,
+            ],
+            'time_spent_seconds' => 20,
+        ])
+        ->assertOk();
+
+    $this->actingAs($teacher)
+        ->get(route('teachers.quizzes.results', ['module' => $module->slug, 'quiz' => $quiz->slug]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('teachers/view/quizes/QuizResult')
+            ->has('quiz.conflict_cards', 1)
+            ->has('submissions.0.answers.0', fn (Assert $ans) => $ans
+                ->where('item_type', 'color_conflict')
+                ->where('is_correct', false)
+                ->where('answer_data.conflict_type', 'character_vs_character')
+                ->where('context.excerpt', 'A fierce blizzard whipped across the mountain pass.')
+                ->where('context.correct_conflict_type', 'character_vs_nature')
+                ->where('context.correct_conflict_label', 'Character vs. Nature')
+                ->has('context.options', 4)
+                ->etc()
+            )
+        );
+});
+
+test('teacher inspecting conflict map submission receives event text, drop zones, and target zone', function () {
+    $teacher = User::factory()->teacher()->create();
+    $student = User::factory()->student()->create();
+    $module = Module::factory()->for($teacher, 'teacher')->create();
+
+    $quiz = Quiz::create([
+        'module_id' => $module->id,
+        'title' => 'Conflict Map Inspector',
+        'slug' => 'conflict-map-inspector',
+        'type' => QuizType::TheConflictMap,
+        'passing_percentage' => 70,
+        'xp_reward' => 180,
+        'sort_order' => 3,
+        'is_published' => true,
+    ]);
+
+    ConflictMapZone::create([
+        'quiz_id' => $quiz->id,
+        'conflict_type' => ConflictType::CharacterVsCharacter,
+        'label' => 'VS CHARACTER',
+        'sort_order' => 1,
+    ]);
+    ConflictMapZone::create([
+        'quiz_id' => $quiz->id,
+        'conflict_type' => ConflictType::CharacterVsSelf,
+        'label' => 'VS SELF',
+        'sort_order' => 2,
+    ]);
+
+    $event = ConflictMapEvent::create([
+        'quiz_id' => $quiz->id,
+        'card_letter' => 'Card A',
+        'event_text' => 'Hana debated with her conscience about confessing.',
+        'target_conflict_type' => ConflictType::CharacterVsSelf,
+        'points' => 10,
+        'sort_order' => 1,
+    ]);
+
+    $this->actingAs($student)
+        ->postJson(route('students.quizzes.submit', ['module' => $module->slug, 'quiz' => $quiz->slug]), [
+            'answers' => [
+                (string) $event->id => ConflictType::CharacterVsCharacter->value,
+            ],
+            'time_spent_seconds' => 30,
+        ])
+        ->assertOk();
+
+    $this->actingAs($teacher)
+        ->get(route('teachers.quizzes.results', ['module' => $module->slug, 'quiz' => $quiz->slug]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('teachers/view/quizes/QuizResult')
+            ->has('quiz.map_zones', 2)
+            ->has('quiz.map_events', 1)
+            ->has('submissions.0.answers.0', fn (Assert $ans) => $ans
+                ->where('item_type', 'conflict_map')
+                ->where('is_correct', false)
+                ->where('answer_data.assigned_conflict_type', 'character_vs_character')
+                ->where('context.card_letter', 'Card A')
+                ->where('context.event_text', 'Hana debated with her conscience about confessing.')
+                ->where('context.target_conflict_type', 'character_vs_self')
+                ->has('context.zones', 2)
+                ->etc()
+            )
+        );
+});
+
+test('teacher inspecting matching type submission receives description, column B choices, and correct letter', function () {
+    $teacher = User::factory()->teacher()->create();
+    $student = User::factory()->student()->create();
+    $module = Module::factory()->for($teacher, 'teacher')->create();
+
+    $quiz = Quiz::create([
+        'module_id' => $module->id,
+        'title' => 'Matching Inspector',
+        'slug' => 'matching-inspector',
+        'type' => QuizType::MatchingType,
+        'passing_percentage' => 70,
+        'xp_reward' => 160,
+        'sort_order' => 4,
+        'is_published' => true,
+    ]);
+
+    $choiceA = MatchingChoice::create([
+        'quiz_id' => $quiz->id,
+        'choice_letter' => 'A',
+        'choice_text' => 'Exposition',
+        'sort_order' => 1,
+    ]);
+    MatchingChoice::create([
+        'quiz_id' => $quiz->id,
+        'choice_letter' => 'B',
+        'choice_text' => 'Climax',
+        'sort_order' => 2,
+    ]);
+
+    $item = MatchingItem::create([
+        'quiz_id' => $quiz->id,
+        'correct_choice_id' => $choiceA->id,
+        'item_number' => 1,
+        'description' => 'The opening scene introducing characters and setting.',
+        'points' => 10,
+        'sort_order' => 1,
+    ]);
+
+    $this->actingAs($student)
+        ->postJson(route('students.quizzes.submit', ['module' => $module->slug, 'quiz' => $quiz->slug]), [
+            'answers' => [
+                (string) $item->id => 'B',
+            ],
+            'time_spent_seconds' => 22,
+        ])
+        ->assertOk();
+
+    $this->actingAs($teacher)
+        ->get(route('teachers.quizzes.results', ['module' => $module->slug, 'quiz' => $quiz->slug]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('teachers/view/quizes/QuizResult')
+            ->has('quiz.matching_choices', 2)
+            ->has('quiz.matching_items', 1)
+            ->has('submissions.0.answers.0', fn (Assert $ans) => $ans
+                ->where('item_type', 'matching')
+                ->where('is_correct', false)
+                ->where('answer_data.choice_letter', 'B')
+                ->where('context.item_number', 1)
+                ->where('context.description', 'The opening scene introducing characters and setting.')
+                ->where('context.correct_letter', 'A')
+                ->where('context.correct_choice_text', 'Exposition')
+                ->has('context.choices', 2)
                 ->etc()
             )
         );

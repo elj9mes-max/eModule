@@ -1,6 +1,7 @@
 <script setup>
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { defineWord, generateLectureAssist } from '@/Services/geminiAi.js';
 
 const props = defineProps({
     user: {
@@ -243,6 +244,16 @@ const vocabMeaningInput = ref('');
 const vocabColorInput = ref(highlightSwatches[0]);
 let savedSelectionRange = null;
 
+// Gemini AI Vocabulary Assistant State
+const isAiDefiningWord = ref(false);
+const aiDefineError = ref('');
+
+// Gemini AI Story Generator State
+const showAiStoryModal = ref(false);
+const aiStoryTopic = ref('');
+const isGeneratingAiStory = ref(false);
+const aiStoryError = ref('');
+
 // Active Hover/Click Word Meaning Popover (Works in both Canvas & Student Preview!)
 const activeVocabTooltip = ref(null); // { word, pronunciation, meaning, x, y }
 
@@ -422,7 +433,88 @@ const openVocabGlossCreatorFromSelection = () => {
     vocabPronunciationInput.value = '';
     vocabMeaningInput.value = '';
     vocabColorInput.value = highlightSwatches[0];
+    aiDefineError.value = '';
     showVocabGlossModal.value = true;
+};
+
+const fetchAiWordMeaning = async () => {
+    const word = vocabWordInput.value.trim();
+    if (!word) {
+        return;
+    }
+
+    isAiDefiningWord.value = true;
+    aiDefineError.value = '';
+
+    try {
+        const result = await defineWord({
+            word,
+            context: plainTextContent.value || '',
+            gradeLevel: props.module.grade_level || '',
+        });
+
+        if (result) {
+            if (result.meaning) {
+                vocabMeaningInput.value = result.meaning;
+            }
+            if (result.pronunciation) {
+                vocabPronunciationInput.value = result.pronunciation;
+            }
+            if (result.suggested_color) {
+                const match = highlightSwatches.find(s =>
+                    s.label.toLowerCase().includes(result.suggested_color.toLowerCase())
+                );
+                if (match) {
+                    vocabColorInput.value = match;
+                }
+            }
+            triggerToast(`✨ Gemini defined "${word}"!`);
+        }
+    } catch (err) {
+        aiDefineError.value = err.message || 'Gemini definition unavailable';
+        triggerToast(`⚠️ ${err.message || 'Unable to define word'}`);
+    } finally {
+        isAiDefiningWord.value = false;
+    }
+};
+
+const generateStoryWithAi = async () => {
+    const topic = aiStoryTopic.value.trim() || props.lecture.title || props.module.title;
+    if (!topic) {
+        aiStoryError.value = 'Please provide a topic or theme.';
+        return;
+    }
+
+    isGeneratingAiStory.value = true;
+    aiStoryError.value = '';
+
+    try {
+        const result = await generateLectureAssist({
+            topic,
+            gradeLevel: props.module.grade_level,
+            mode: 'full_story',
+        });
+
+        if (result && result.story_html) {
+            form.content = result.story_html;
+            form.layout_style = 'interactive_story';
+            if (result.title && !form.title) {
+                form.title = result.title;
+            }
+            if (editorSurfaceRef.value) {
+                editorSurfaceRef.value.innerHTML = result.story_html;
+            }
+            syncGlossesListFromDom();
+            pushHistorySnapshot();
+            showAiStoryModal.value = false;
+            triggerToast('✨ Generated adventure story with vocabulary glosses!');
+        }
+    } catch (err) {
+        aiStoryError.value = err.message || 'Gemini story generation failed.';
+        triggerToast(`⚠️ ${err.message || 'Could not generate story'}`);
+    } finally {
+        isGeneratingAiStory.value = false;
+    }
 };
 
 const applyVocabMeaningToWord = () => {
@@ -945,9 +1037,14 @@ const deleteExistingBlock = (block) => {
         `/teachers/modules/${props.module.slug}/lectures/${props.lecture.slug}/contents/${block.id}`,
         {
             preserveScroll: true,
-            onSuccess: () => {
+            onSuccess: (page) => {
                 if (editingContentId.value === block.id) {
-                    startNewBlankPage();
+                    const remaining = (page?.props?.existing_contents || props.existing_contents || []).filter((c) => c.id !== block.id);
+                    if (remaining.length > 0) {
+                        loadExistingPageOntoCanvas(remaining[0]);
+                    } else {
+                        startNewBlankPage();
+                    }
                 }
                 triggerToast('Page block removed from lecture.');
             },
@@ -975,12 +1072,16 @@ const submitContent = () => {
     })).post(targetUrl, {
         forceFormData: true,
         preserveScroll: true,
-        onSuccess: () => {
+        onSuccess: (page) => {
             if (wasEditing) {
                 triggerToast('Saved updates to page block!');
             } else {
                 triggerToast('New page block published to lecture!');
-                startNewBlankPage();
+                const updatedList = page?.props?.existing_contents || props.existing_contents || [];
+                if (updatedList.length > 0) {
+                    const latestBlock = updatedList[updatedList.length - 1];
+                    loadExistingPageOntoCanvas(latestBlock);
+                }
             }
         },
     });
@@ -1021,6 +1122,55 @@ const stripHtmlPreview = (html) => {
         .trim();
 };
 
+const isSelectionInEditableText = () => {
+    const activeEl = document.activeElement;
+    const activeTag = activeEl?.tagName?.toLowerCase();
+
+    // If focused on an input, textarea, or select element
+    if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') {
+        return true;
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+        return false;
+    }
+
+    const anchorNode = selection.anchorNode;
+    if (!anchorNode) {
+        return false;
+    }
+
+    // Check if the caret or selection is inside the rich editor surface
+    if (editorSurfaceRef.value && editorSurfaceRef.value.contains(anchorNode)) {
+        // Text node: user is actively editing text inside a paragraph, heading, or block
+        if (anchorNode.nodeType === Node.TEXT_NODE) {
+            return true;
+        }
+
+        // Element node: distinguish between media (img, audio, video, hr) and text containers
+        if (anchorNode.nodeType === Node.ELEMENT_NODE) {
+            const el = anchorNode;
+            const tag = el.tagName?.toLowerCase();
+
+            // Non-text media elements where deleting via keyboard is intended
+            if (['img', 'hr', 'audio', 'video'].includes(tag)) {
+                return false;
+            }
+
+            // Figure elements: treat as media unless the user is actively focused in figcaption
+            if (tag === 'figure' && !selection.focusNode?.closest?.('figcaption')) {
+                return false;
+            }
+
+            // Any other element inside contenteditable is an editable text container (p, div, span, strong, etc.)
+            return true;
+        }
+    }
+
+    return false;
+};
+
 const handleGlobalKeydown = (e) => {
     const isMod = e.ctrlKey || e.metaKey;
     if (isMod && e.key.toLowerCase() === 'z') {
@@ -1043,28 +1193,48 @@ const handleGlobalKeydown = (e) => {
     }
 
     if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCanvasBlockEl.value) {
-        const activeTag = document.activeElement?.tagName?.toLowerCase();
-        if (activeTag !== 'input' && activeTag !== 'textarea') {
-            const selection = window.getSelection();
-            if (!selection || selection.isCollapsed) {
-                e.preventDefault();
-                removeSelectedCanvasBlock();
-            }
+        // Never delete the entire block if the user is actively editing text inside the document or block
+        if (isSelectionInEditableText()) {
+            return;
         }
+
+        e.preventDefault();
+        removeSelectedCanvasBlock();
     }
 };
 
 onMounted(() => {
     window.addEventListener('keydown', handleGlobalKeydown);
 
-    if (!form.content && (props.existing_contents?.length || 0) === 0) {
-        const starterTpl = canvaTemplates[0];
-        form.title = starterTpl.defaultTitle;
-        form.content = starterTpl.html;
-        form.layout_style = 'interactive_story';
+    let targetBlock = null;
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetId = Number(urlParams.get('content_id'));
+        if (targetId && props.existing_contents?.length) {
+            targetBlock = props.existing_contents.find((c) => c.id === targetId);
+        }
+    } catch {
+        // ignore search param error
     }
-    syncEditorFromForm();
-    nextTick(() => resetHistoryWithCurrentState());
+
+    if (!targetBlock && props.existing_contents?.length > 0) {
+        targetBlock = props.existing_contents[0];
+    }
+
+    if (targetBlock) {
+        loadExistingPageOntoCanvas(targetBlock);
+    } else {
+        if (props.lecture?.title || props.lecture?.body || props.lecture?.description) {
+            form.title = props.lecture.title || '';
+            const rawBody = props.lecture.body || props.lecture.description || '';
+            const bodyHtml = rawBody
+                ? (rawBody.startsWith('<') ? rawBody : `<p>${rawBody.replace(/\n/g, '<br/>')}</p>`)
+                : '<p><br/></p>';
+            form.content = bodyHtml;
+        }
+        syncEditorFromForm();
+        nextTick(() => resetHistoryWithCurrentState());
+    }
 });
 
 onBeforeUnmount(() => {
@@ -1076,11 +1246,6 @@ onBeforeUnmount(() => {
     <Head :title="`Studio • ${lecture.title} • WEBREAD`" />
 
     <div class="word-canva-studio-shell">
-        <!-- Google Fonts: Fredoka & Nunito -->
-        <component :is="'style'">
-            @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700;800&family=Nunito:wght@600;700;800;900&display=swap');
-        </component>
-
         <!-- Hidden File Inputs: 1) Inline Media Uploads, 2) Dedicated Full-Page Read-Aloud Narration Audio -->
         <input
             ref="fileInputRef"
@@ -1500,6 +1665,22 @@ onBeforeUnmount(() => {
                         </div>
 
                         <div class="shelf-cards-list">
+                            <!-- Featured AI Story Writer Card -->
+                            <div class="ai-story-writer-card">
+                                <div class="tpl-top-row">
+                                    <span class="ai-tag-pill">✨ GEMINI AI AUTHOR</span>
+                                </div>
+                                <strong class="tpl-name">Auto-Write Story & Vocab</strong>
+                                <p class="tpl-desc">Give Gemini an idea, and it drafts a complete adventure chapter with interactive vocabulary words!</p>
+                                <button
+                                    type="button"
+                                    class="btn-open-ai-story"
+                                    @click="showAiStoryModal = true"
+                                >
+                                    ✨ Draft with Gemini
+                                </button>
+                            </div>
+
                             <div
                                 v-for="tpl in canvaTemplates"
                                 :key="tpl.id"
@@ -2046,28 +2227,7 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div v-if="isRightDeckOpen" class="pages-deck-scroller">
-                    <div
-                        class="page-thumb-card draft-thumb-card"
-                        :class="{ 'is-selected-page': editingContentId === null }"
-                        role="button"
-                        tabindex="0"
-                        @click="startNewBlankPage()"
-                    >
-                        <div class="thumb-card-top">
-                            <span class="thumb-page-num badge-draft">+ NEW DRAFT</span>
-                            <span class="thumb-type-tag">Story Page</span>
-                        </div>
-                        <strong class="thumb-page-title">
-                            {{
-                                editingContentId === null && form.title
-                                    ? form.title
-                                    : 'New Blank Story Page'
-                            }}
-                        </strong>
-                        <p class="thumb-page-snippet">
-                            Click to compose a brand-new presentation page on the canvas.
-                        </p>
-                    </div>
+
 
                     <div
                         v-for="(block, idx) in existing_contents"
@@ -2118,12 +2278,12 @@ onBeforeUnmount(() => {
                         </div>
                     </div>
                 </div>
-
+<!-- 
                 <div v-if="isRightDeckOpen" class="pages-dock-footer">
                     <button type="button" class="btn-finish-return-map" @click="goToModule">
                         <span>✓ Done & Return to Journey Map</span>
                     </button>
-                </div>
+                </div> -->
             </aside>
         </div>
 
@@ -2151,13 +2311,26 @@ onBeforeUnmount(() => {
 
                         <div class="vocab-modal-body">
                             <div class="vocab-field">
-                                <label>Word or Phrase to Highlight *</label>
+                                <div class="vocab-label-row">
+                                    <label>Word or Phrase to Highlight *</label>
+                                    <button
+                                        type="button"
+                                        class="btn-ai-define-pill"
+                                        :disabled="!vocabWordInput.trim() || isAiDefiningWord"
+                                        @click="fetchAiWordMeaning"
+                                    >
+                                        <span v-if="isAiDefiningWord">⏳ Gemini Defining...</span>
+                                        <span v-else>✨ AI Auto-Define</span>
+                                    </button>
+                                </div>
                                 <input
                                     v-model="vocabWordInput"
                                     type="text"
                                     class="vocab-input"
                                     placeholder="e.g., luminous"
+                                    @keydown.enter.prevent="fetchAiWordMeaning"
                                 />
+                                <p v-if="aiDefineError" class="ai-error-inline">⚠️ {{ aiDefineError }}</p>
                             </div>
 
                             <div class="vocab-field">
@@ -2213,6 +2386,65 @@ onBeforeUnmount(() => {
                                 @click="applyVocabMeaningToWord"
                             >
                                 ✨ Highlight & Attach Meaning
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+
+        <!-- =========================================================================
+             GEMINI AI STORY WRITER MODAL
+             ========================================================================= -->
+        <Teleport to="body">
+            <Transition name="studio-toast-pop">
+                <div
+                    v-if="showAiStoryModal"
+                    class="vocab-modal-backdrop"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="ai-story-modal-title"
+                    @click.self="showAiStoryModal = false"
+                >
+                    <div class="vocab-modal-card ai-story-modal-card">
+                        <div class="vocab-modal-header">
+                            <span class="vocab-modal-badge ai-badge-accent">✨ GEMINI AI STORY GENERATOR</span>
+                            <h3 id="ai-story-modal-title">Draft Reading Chapter with Vocabulary</h3>
+                            <p>
+                                Generate a rich narrative chapter tailored for <strong>{{ module.grade_level }}</strong>, complete with interactive vocabulary words that students can hover to read!
+                            </p>
+                        </div>
+
+                        <div class="vocab-modal-body">
+                            <div class="vocab-field">
+                                <label>Story Topic or Prompt *</label>
+                                <textarea
+                                    v-model="aiStoryTopic"
+                                    rows="3"
+                                    class="vocab-textarea"
+                                    :placeholder="`e.g., A brave child finds an old brass lantern in a misty pine forest that reveals hidden folklore letters. (Defaults to '${lecture.title}')`"
+                                ></textarea>
+                            </div>
+
+                            <p v-if="aiStoryError" class="ai-error-inline">⚠️ {{ aiStoryError }}</p>
+                        </div>
+
+                        <div class="vocab-modal-footer">
+                            <button
+                                type="button"
+                                class="btn-vocab-cancel"
+                                @click="showAiStoryModal = false"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                class="btn-vocab-save ai-btn-primary"
+                                :disabled="isGeneratingAiStory"
+                                @click="generateStoryWithAi"
+                            >
+                                <span v-if="isGeneratingAiStory">⏳ Writing Story & Glosses...</span>
+                                <span v-else>✨ Generate & Insert into Canvas</span>
                             </button>
                         </div>
                     </div>
@@ -4011,5 +4243,94 @@ onBeforeUnmount(() => {
 .studio-toast-pop-leave-to {
     opacity: 0;
     transform: translate(-50%, 16px);
+}
+
+/* Gemini AI Enhancements */
+.vocab-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.25rem;
+}
+
+.btn-ai-define-pill {
+    background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
+    border: 1.5px solid #93C5FD;
+    color: #1D4ED8;
+    font-family: var(--font-heading);
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-ai-define-pill:hover:not(:disabled) {
+    background: #BFDBFE;
+    transform: translateY(-1px);
+}
+
+.btn-ai-define-pill:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.ai-error-inline {
+    font-size: 0.76rem;
+    color: #DC2626;
+    margin: 0.35rem 0 0 0;
+    font-weight: 700;
+}
+
+.ai-story-writer-card {
+    background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
+    border: 2px solid #818CF8;
+    border-radius: 14px;
+    padding: 0.75rem 0.8rem;
+    margin-bottom: 0.75rem;
+    box-shadow: 0 4px 10px rgba(99, 102, 241, 0.12);
+}
+
+.ai-tag-pill {
+    display: inline-block;
+    background: #4F46E5;
+    color: #FFFFFF;
+    font-size: 0.68rem;
+    font-weight: 900;
+    padding: 0.15rem 0.45rem;
+    border-radius: 9999px;
+    margin-bottom: 0.35rem;
+}
+
+.btn-open-ai-story {
+    margin-top: 0.5rem;
+    width: 100%;
+    background: linear-gradient(180deg, #6366F1 0%, #4F46E5 100%);
+    color: #FFFFFF;
+    border: none;
+    border-radius: 10px;
+    padding: 0.45rem 0.75rem;
+    font-family: var(--font-heading);
+    font-size: 0.75rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 2px 0 #3730A3;
+}
+
+.btn-open-ai-story:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 0 #3730A3;
+}
+
+.ai-badge-accent {
+    background: #EEF2FF;
+    color: #4F46E5;
+    border: 1px solid #C7D2FE;
+}
+
+.ai-btn-primary {
+    background: linear-gradient(180deg, #4F46E5 0%, #4338CA 100%) !important;
+    box-shadow: 0 3px 0 #312E81 !important;
 }
 </style>

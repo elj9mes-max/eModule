@@ -1,9 +1,12 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, useRemember } from '@inertiajs/vue3';
 import { useSound } from '@/Services/soundManager';
+import { flushCacheTags, prefetchRoute } from '@/Composables/usePrefetch';
+import { usePixarTheme } from '@/Composables/usePixarTheme';
 
 const { duckBgm } = useSound();
+const { activeWorld } = usePixarTheme();
 
 const props = defineProps({
     user: {
@@ -29,109 +32,33 @@ const props = defineProps({
 });
 
 /* ==========================================================================
-   FALLBACK DEMO STORY PAGES (WHEN VIEWED WITHOUT DATABASE RECORDS)
+   RESOLVED MODULE, LECTURE & PAGES (STRICTLY FROM DATABASE)
    ========================================================================== */
-const fallbackModule = {
-    id: 1,
-    title: 'Whispering Woods: Reading Quest',
-    slug: 'whispering-woods',
-    grade_level: 'Grade 4 • Interactive Story Realm',
+const activeModule = computed(() => props.module || {
+    id: null,
+    title: '',
+    slug: '',
+    grade_level: '',
     theme: 'forest',
-    icon: '🌲',
-    xp_bonus: 300,
-    boss_name: 'Elder Oak Guardian',
-};
+    icon: '📘',
+});
 
-const fallbackLecture = {
-    id: 101,
-    title: 'The Lantern of Whispering Pines',
-    slug: 'lantern-of-whispering-pines',
-    description: 'Hover or tap highlighted words to unlock their meanings, or listen to the full-page story narration!',
-    estimated_duration_minutes: 6,
-    xp_reward: 150,
+const activeLecture = computed(() => props.lecture || {
+    id: null,
+    title: '',
+    slug: '',
+    description: '',
+    estimated_duration_minutes: 0,
+    xp_reward: 0,
     sort_order: 1,
-};
-
-const fallbackContents = [
-    {
-        id: 1,
-        type: 'text',
-        layout_style: 'interactive_story',
-        title: 'Page 1: The Glowing Cedar Bark',
-        content: `
-            <div style="background:linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%); border:3px solid #F59E0B; border-radius:24px; padding:1.5rem 1.75rem; margin:0 0 1.25rem; box-shadow:0 8px 20px rgba(245, 158, 11, 0.14);">
-                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem;">
-                    <span style="background:#D97706; color:#FFFFFF; font-size:0.72rem; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; padding:0.28rem 0.75rem; border-radius:999px;">📖 Interactive Story • Hover or Tap Highlighted Words</span>
-                    <span style="font-size:0.76rem; font-weight:800; color:#92400E;">✨ Tap any glowing word to reveal its meaning!</span>
-                </div>
-                <h1 style="font-family:'Fredoka',sans-serif; font-size:1.85rem; color:#78350F; margin:0 0 0.75rem;">The Lantern of Whispering Pines</h1>
-                <p style="font-size:1.12rem; line-height:1.9; color:#1E293B; margin:0 0 0.9rem;">
-                    Deep within the Emerald Woods, the <span class="vocab-gloss-token" tabindex="0" role="button" data-vocab-word="ancient" data-vocab-pronunciation="AYN-shunt" data-vocab-meaning="Belonging to the very distant past; hundreds of years old." style="background:linear-gradient(180deg, #FEF9C3 0%, #FDE047 100%); color:#78350F; font-weight:900; padding:0.08rem 0.42rem; border-radius:8px; border-bottom:3px solid #D97706; cursor:pointer; display:inline-block;">ancient</span> cedar trees hummed with forgotten stories. Young explorer Mira held up her brass lantern, watching its <span class="vocab-gloss-token" tabindex="0" role="button" data-vocab-word="luminous" data-vocab-pronunciation="LOO-muh-nus" data-vocab-meaning="Radiating or reflecting bright, warm light in the dark." style="background:linear-gradient(180deg, #FEF9C3 0%, #FDE047 100%); color:#78350F; font-weight:900; padding:0.08rem 0.42rem; border-radius:8px; border-bottom:3px solid #D97706; cursor:pointer; display:inline-block;">luminous</span> amber beam awaken silver letters along the mossy bark.
-                </p>
-                <p style="font-size:1.12rem; line-height:1.9; color:#1E293B; margin:0;">
-                    By searching carefully for <span class="vocab-gloss-token" tabindex="0" role="button" data-vocab-word="context clues" data-vocab-pronunciation="KON-tekst klooz" data-vocab-meaning="Hints found within a sentence or paragraph that help a reader figure out the meaning of an unfamiliar word." style="background:linear-gradient(180deg, #FEF9C3 0%, #FDE047 100%); color:#78350F; font-weight:900; padding:0.08rem 0.42rem; border-radius:8px; border-bottom:3px solid #D97706; cursor:pointer; display:inline-block;">context clues</span> in the carved verses, Mira pieced together the secret trail to the Timber Crossing before twilight fell.
-                </p>
-            </div>
-        `,
-        vocabulary_glosses: [
-            {
-                word: 'ancient',
-                pronunciation: 'AYN-shunt',
-                meaning: 'Belonging to the very distant past; hundreds of years old.',
-            },
-            {
-                word: 'luminous',
-                pronunciation: 'LOO-muh-nus',
-                meaning: 'Radiating or reflecting bright, warm light in the dark.',
-            },
-            {
-                word: 'context clues',
-                pronunciation: 'KON-tekst klooz',
-                meaning: 'Hints found within a sentence or paragraph that help a reader figure out the meaning of an unfamiliar word.',
-            },
-        ],
-        caption: 'Hover or tap any golden word inside the story passage to discover its definition!',
-        sort_order: 1,
-    },
-    {
-        id: 2,
-        type: 'text',
-        layout_style: 'interactive_story',
-        title: 'Page 2: Reading Skill — Decoding Unfamiliar Words',
-        content: `
-            <h2 style="font-family:'Fredoka',sans-serif; font-size:1.55rem; color:#0F172A; margin:0 0 0.65rem;">Key Reading Strategy: Context Clues</h2>
-            <p style="font-size:1.06rem; line-height:1.8; color:#334155; margin:0 0 1rem;">
-                Great explorers never skip an unfamiliar word! When you spot a new word like <span class="vocab-gloss-token" tabindex="0" role="button" data-vocab-word="inscription" data-vocab-pronunciation="in-SKRIP-shun" data-vocab-meaning="Words or symbols carved, engraved, or written on a stone, monument, or book." style="background:linear-gradient(180deg, #FEF9C3 0%, #FDE047 100%); color:#78350F; font-weight:900; padding:0.08rem 0.42rem; border-radius:8px; border-bottom:3px solid #D97706; cursor:pointer; display:inline-block;">inscription</span>, look at the words right before and after it to unlock its meaning.
-            </p>
-            <div style="background:linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%); border:2.5px solid #F59E0B; border-radius:18px; padding:1rem 1.25rem; margin:0.9rem 0; color:#78350F;">
-                <strong style="display:block; font-family:'Fredoka',sans-serif; font-size:1rem; margin-bottom:0.25rem;">💡 Explorer Reading Tip</strong>
-                <span style="font-size:0.95rem; font-weight:700;">Look for synonyms, examples, or descriptions nearby in the same paragraph!</span>
-            </div>
-        `,
-        vocabulary_glosses: [
-            {
-                word: 'inscription',
-                pronunciation: 'in-SKRIP-shun',
-                meaning: 'Words or symbols carved, engraved, or written on a stone, monument, or book.',
-            },
-        ],
-        caption: 'Practice spotting context clues before heading to the Forest Rune Decoder Quiz!',
-        sort_order: 2,
-    },
-];
-
-/* ==========================================================================
-   RESOLVED MODULE, LECTURE & PAGES
-   ========================================================================== */
-const activeModule = computed(() => props.module || fallbackModule);
-const activeLecture = computed(() => props.lecture || fallbackLecture);
+});
 
 const pages = computed(() => {
     if (Array.isArray(props.contents) && props.contents.length > 0) {
         return props.contents;
     }
 
-    if (props.lecture?.body) {
+    if (props.lecture?.body && props.lecture.body.trim()) {
         return [
             {
                 id: 'lecture-body-1',
@@ -145,14 +72,40 @@ const pages = computed(() => {
         ];
     }
 
-    return fallbackContents;
+    return [];
 });
 
-const currentPageIndex = ref(0);
+const currentPageIndex = useRemember(0, () => `student.lecture.page.${activeLecture.value?.id || 'demo'}`);
 const visitedPageIndices = ref(new Set([0]));
 const discoveredWordsMap = ref({});
 const activeVocabGloss = ref(null);
 const showMobilePagesDrawer = ref(false);
+const prewarmedMediaUrls = new Set();
+
+const prewarmPageMedia = (index) => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    const nextPage = pages.value[index];
+    if (!nextPage) {
+        return;
+    }
+
+    if (nextPage.type === 'image' && nextPage.media_url && !prewarmedMediaUrls.has(nextPage.media_url)) {
+        prewarmedMediaUrls.add(nextPage.media_url);
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = nextPage.media_url;
+    }
+
+    if (nextPage.narration_audio_url && !prewarmedMediaUrls.has(nextPage.narration_audio_url)) {
+        prewarmedMediaUrls.add(nextPage.narration_audio_url);
+        const audio = new Audio();
+        audio.preload = 'metadata';
+        audio.src = nextPage.narration_audio_url;
+    }
+};
 const showCompletionCelebration = ref(false);
 
 // Reader Text Zoom: 100%, 112%, 125%
@@ -171,7 +124,10 @@ const currentPage = computed(() => {
 const totalPages = computed(() => pages.value.length);
 
 const readingProgressPercent = computed(() => {
-    if (totalPages.value <= 1) {
+    if (totalPages.value === 0) {
+        return 0;
+    }
+    if (totalPages.value === 1) {
         return 100;
     }
 
@@ -507,7 +463,15 @@ const completeStoryLecture = () => {
                 'Accept': 'application/json',
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
             },
-        }).catch((err) => console.error('Lecture completion error:', err));
+        })
+            .then((res) => {
+                if (res.ok) {
+                    const tags = ['student-modules', `module-${props.module.slug}`];
+                    flushCacheTags(tags);
+                    prefetchRoute(backToMapUrl.value, tags, ['15s', '60s']);
+                }
+            })
+            .catch((err) => console.error('Lecture completion error:', err));
     }
 };
 
@@ -521,11 +485,19 @@ const handleKeydown = (event) => {
     }
 };
 
-watch(currentPageIndex, () => {
-    resetAudioPlayer();
-});
+watch(
+    currentPageIndex,
+    (idx) => {
+        resetAudioPlayer();
+        prewarmPageMedia(idx + 1);
+    },
+    { immediate: true },
+);
 
 onMounted(() => {
+    if (currentPageIndex.value >= pages.value.length) {
+        currentPageIndex.value = Math.max(0, pages.value.length - 1);
+    }
     window.addEventListener('keydown', handleKeydown);
 });
 
@@ -536,9 +508,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <Head :title="`${activeLecture.title} • ${activeModule.title} • WEBREAD`" />
+    <Head :title="`${activeLecture.title || 'Lecture Reader'} • ${activeModule.title || 'Expedition'} • WEBREAD`" />
 
-    <div class="clay-standalone-reader-shell">
+    <div class="clay-standalone-reader-shell" :data-pixar-theme="activeWorld">
         <!-- Rich 3D Cartoon Sky & Clouds Backdrop -->
         <div class="reader-sky-backdrop" aria-hidden="true">
             <div class="sky-sun-orb"></div>
@@ -559,6 +531,9 @@ onBeforeUnmount(() => {
                     <div class="hud-zone-left">
                         <Link
                             :href="backToMapUrl"
+                            prefetch
+                            :cache-for="['15s', '60s']"
+                            :cache-tags="['student-modules', activeModule.slug ? `module-${activeModule.slug}` : '']"
                             class="clay-hud-back-btn"
                             aria-label="Back to Island Expedition Map"
                         >
@@ -580,7 +555,7 @@ onBeforeUnmount(() => {
                             class="clay-hud-pages-toggle"
                             @click="showMobilePagesDrawer = !showMobilePagesDrawer"
                         >
-                            <span>📑 {{ currentPageIndex + 1 }}/{{ totalPages }}</span>
+                            <span>📑 {{ totalPages > 0 ? `${currentPageIndex + 1}/${totalPages}` : '0 Pages' }}</span>
                         </button>
                     </div>
 
@@ -589,15 +564,15 @@ onBeforeUnmount(() => {
                         <div class="hud-title-row">
                             <span class="hud-world-pill">
                                 <span class="hud-biome-dot" aria-hidden="true"></span>
-                                <span>{{ activeModule.icon || '🌲' }} {{ activeModule.title }}</span>
+                                <span>{{ activeModule.icon || '🌲' }} {{ activeModule.title || 'Expedition' }}</span>
                             </span>
 
                             <h1 id="student-lecture-title" class="hud-lecture-title">
-                                {{ activeLecture.title }}
+                                {{ activeLecture.title || 'Reading Milestone' }}
                             </h1>
 
                             <span class="hud-page-fraction-pill">
-                                Page {{ currentPageIndex + 1 }} of {{ totalPages }}
+                                {{ totalPages > 0 ? `Page ${currentPageIndex + 1} of ${totalPages}` : 'Blank Lecture' }}
                             </span>
                         </div>
 
@@ -923,8 +898,22 @@ onBeforeUnmount(() => {
                         </div>
                     </article>
 
+                    <!-- EMPTY STATE WHEN THERE IS NO LECTURE CONTENT IN THE DATABASE -->
+                    <div v-else class="empty-lecture-stage">
+                        <div class="empty-paper-card">
+                            <span class="empty-paper-icon" aria-hidden="true">📜</span>
+                            <h2 class="empty-paper-title">No Lecture Pages Yet</h2>
+                            <p class="empty-paper-desc">
+                                This reading milestone is currently blank. Content published by the teacher in the database will appear here!
+                            </p>
+                            <Link :href="backToMapUrl" class="empty-paper-btn">
+                                🗺️ Back to Island Map
+                            </Link>
+                        </div>
+                    </div>
+
                     <!-- C. STICKY BOTTOM PAGE-TURN & COMPLETE STORY BAR -->
-                    <footer class="clay-page-turn-dock">
+                    <footer v-if="totalPages > 0" class="clay-page-turn-dock">
                         <button
                             type="button"
                             class="clay-turn-btn btn-prev"
@@ -1103,18 +1092,17 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700;800&family=Nunito:wght@600;700;800;900&display=swap');
-
 .clay-standalone-reader-shell {
-    --font-display: 'Fredoka', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-body: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
-    --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --font-display: var(--px-font-display, 'Fredoka', -apple-system, BlinkMacSystemFont, sans-serif);
+    --font-body: var(--px-font-body, 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif);
+    --spring-bounce: var(--px-ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 
     position: relative;
     min-height: 100vh;
-    background: linear-gradient(180deg, #DBEAFE 0%, #EEF2FF 48%, #F0FDF4 100%);
-    color: #1E1B4B;
+    background: linear-gradient(166deg, var(--px-sky-top, #DBEAFE) 0%, var(--px-sky-mid, #EEF2FF) 50%, var(--px-sky-bottom, #F0FDF4) 100%);
+    color: var(--px-ink, #1E1B4B);
     overflow-x: clip;
+    transition: background 380ms var(--px-ease-settle, ease);
 }
 
 .reader-sky-backdrop {
@@ -1129,10 +1117,10 @@ onBeforeUnmount(() => {
     position: absolute;
     top: -80px;
     right: -60px;
-    width: 280px;
-    height: 280px;
+    width: 320px;
+    height: 320px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(254, 240, 138, 0.65) 0%, rgba(254, 240, 138, 0) 70%);
+    background: radial-gradient(circle, var(--px-sun-bloom, rgba(254, 240, 138, 0.65)) 0%, transparent 70%);
 }
 
 .sky-cloud-puff {
@@ -1174,15 +1162,15 @@ onBeforeUnmount(() => {
     position: sticky;
     top: 0.6rem;
     z-index: 45;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(241, 245, 249, 0.96) 100%);
+    background: linear-gradient(180deg, var(--px-surface-card, rgba(255, 255, 255, 0.98)) 0%, var(--px-surface-card-bottom, rgba(241, 245, 249, 0.96)) 100%);
     backdrop-filter: blur(14px);
     border-radius: 26px;
     padding: 0.65rem 0.9rem;
-    border: 3px solid #FFFFFF;
+    border: 2.5px solid var(--px-card-border, #FFFFFF);
     box-shadow:
-        0 7px 0 #CBD5E1,
-        0 16px 32px rgba(30, 27, 75, 0.14),
-        inset 0 2px 3px rgba(255, 255, 255, 0.95);
+        0 7px 0 var(--px-hud-ledge, #CBD5E1),
+        0 16px 32px rgba(var(--px-shadow-rgb, 30, 27, 75), 0.16),
+        inset 0 2px 3px var(--px-rim-top, rgba(255, 255, 255, 0.95));
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -1271,11 +1259,11 @@ onBeforeUnmount(() => {
     display: flex;
     flex-direction: column;
     gap: 0.32rem;
-    background: #F8FAFC;
-    border: 2px solid #E2E8F0;
+    background: var(--px-surface-well, #F8FAFC);
+    border: 2px solid var(--px-card-border, #E2E8F0);
     border-radius: 18px;
     padding: 0.42rem 0.75rem;
-    box-shadow: inset 0 2px 4px rgba(15, 23, 42, 0.04);
+    box-shadow: inset 0 2px 4px rgba(var(--px-shadow-rgb, 15, 23, 42), 0.08);
 }
 
 .hud-title-row {
@@ -1316,7 +1304,7 @@ onBeforeUnmount(() => {
     font-family: var(--font-display);
     font-size: 0.92rem;
     font-weight: 800;
-    color: #1E1B4B;
+    color: var(--px-ink, #1E1B4B);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1373,7 +1361,7 @@ onBeforeUnmount(() => {
     font-family: var(--font-display);
     font-size: 0.66rem;
     font-weight: 800;
-    color: #475569;
+    color: var(--px-ink-muted, #475569);
     flex-shrink: 0;
 }
 
@@ -2415,5 +2403,69 @@ onBeforeUnmount(() => {
     .sidebar-mobile-close {
         display: none;
     }
+}
+
+/* Empty State */
+.empty-lecture-stage {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 3rem 1.5rem;
+    min-height: 480px;
+    width: 100%;
+}
+
+.empty-paper-card {
+    background: #FFFFFF;
+    border: 3px dashed #CBD5E1;
+    border-radius: 28px;
+    padding: 3rem 2rem;
+    text-align: center;
+    max-width: 520px;
+    width: 100%;
+    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.06);
+}
+
+.empty-paper-icon {
+    font-size: 3.5rem;
+    display: block;
+    margin-bottom: 1rem;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+}
+
+.empty-paper-title {
+    font-family: var(--font-heading, 'Fredoka', sans-serif);
+    font-size: 1.55rem;
+    color: #1E293B;
+    margin: 0 0 0.75rem 0;
+    font-weight: 800;
+}
+
+.empty-paper-desc {
+    font-size: 0.95rem;
+    color: #64748B;
+    line-height: 1.6;
+    margin: 0 0 1.75rem 0;
+}
+
+.empty-paper-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: linear-gradient(180deg, #3B82F6 0%, #1D4ED8 100%);
+    color: #FFFFFF;
+    font-family: var(--font-heading, 'Fredoka', sans-serif);
+    font-size: 0.9rem;
+    font-weight: 800;
+    padding: 0.75rem 1.5rem;
+    border-radius: 9999px;
+    text-decoration: none;
+    box-shadow: 0 4px 0 #1E3A8A;
+    transition: all 0.15s ease;
+}
+
+.empty-paper-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 #1E3A8A;
 }
 </style>

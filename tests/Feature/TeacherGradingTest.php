@@ -1,12 +1,19 @@
 <?php
 
+use App\Enums\ConflictType;
+use App\Enums\QuestionSelectionType;
 use App\Enums\QuizType;
+use App\Models\ColorConflictCard;
 use App\Models\EvaluationItem;
 use App\Models\EvaluationItemOption;
+use App\Models\MatchingChoice;
+use App\Models\MatchingItem;
 use App\Models\Module;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Models\QuizAttemptAnswer;
+use App\Models\QuizQuestion;
+use App\Models\QuizQuestionOption;
 use App\Models\ReflectionPrompt;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -237,4 +244,125 @@ test('teacher cannot grade submissions from other teachers modules', function ()
         ]);
 
     $response->assertStatus(403);
+});
+
+test('teacher grading dashboard returns full question and options context for non-subjective quiz formats', function () {
+    $teacher = User::factory()->teacher()->create();
+    $student = User::factory()->student()->create();
+    $module = Module::factory()->for($teacher, 'teacher')->create();
+
+    $mcqQuiz = Quiz::create([
+        'module_id' => $module->id,
+        'title' => 'MCQ Grading Check',
+        'slug' => 'mcq-grading-check',
+        'type' => QuizType::MultipleChoice,
+        'is_published' => true,
+    ]);
+    $question = QuizQuestion::create([
+        'quiz_id' => $mcqQuiz->id,
+        'question_text' => 'Who led the expedition?',
+        'selection_type' => QuestionSelectionType::Single,
+        'points' => 10,
+    ]);
+    $optRight = QuizQuestionOption::create(['question_id' => $question->id, 'option_text' => 'Mira', 'is_correct' => true]);
+    $optWrong = QuizQuestionOption::create(['question_id' => $question->id, 'option_text' => 'Marco', 'is_correct' => false]);
+
+    $mcqAttempt = QuizAttempt::create([
+        'user_id' => $student->id,
+        'quiz_id' => $mcqQuiz->id,
+        'attempt_number' => 1,
+        'status' => 'completed',
+        'score' => 0,
+        'max_score' => 10,
+    ]);
+    QuizAttemptAnswer::create([
+        'attempt_id' => $mcqAttempt->id,
+        'item_type' => 'multiple_choice',
+        'item_id' => $question->id,
+        'answer_data' => ['selected_option_ids' => [$optWrong->id]],
+        'answer_text' => (string) $optWrong->id,
+        'is_correct' => false,
+        'points_earned' => 0,
+        'points_possible' => 10,
+    ]);
+
+    $colorQuiz = Quiz::create([
+        'module_id' => $module->id,
+        'title' => 'Color Grading Check',
+        'slug' => 'color-grading-check',
+        'type' => QuizType::ColorTheConflict,
+        'is_published' => true,
+    ]);
+    $card = ColorConflictCard::create([
+        'quiz_id' => $colorQuiz->id,
+        'excerpt' => 'The storm tore away the bridge.',
+        'conflict_type' => ConflictType::CharacterVsNature,
+        'points' => 10,
+    ]);
+    $colorAttempt = QuizAttempt::create([
+        'user_id' => $student->id,
+        'quiz_id' => $colorQuiz->id,
+        'attempt_number' => 1,
+        'status' => 'completed',
+        'score' => 10,
+        'max_score' => 10,
+    ]);
+    QuizAttemptAnswer::create([
+        'attempt_id' => $colorAttempt->id,
+        'item_type' => 'color_conflict',
+        'item_id' => $card->id,
+        'answer_data' => ['conflict_type' => ConflictType::CharacterVsNature->value],
+        'answer_text' => ConflictType::CharacterVsNature->value,
+        'is_correct' => true,
+        'points_earned' => 10,
+        'points_possible' => 10,
+    ]);
+
+    $matchingQuiz = Quiz::create([
+        'module_id' => $module->id,
+        'title' => 'Matching Grading Check',
+        'slug' => 'matching-grading-check',
+        'type' => QuizType::MatchingType,
+        'is_published' => true,
+    ]);
+    $chA = MatchingChoice::create(['quiz_id' => $matchingQuiz->id, 'choice_letter' => 'A', 'choice_text' => 'Setting']);
+    $mItem = MatchingItem::create([
+        'quiz_id' => $matchingQuiz->id,
+        'correct_choice_id' => $chA->id,
+        'item_number' => 1,
+        'description' => 'Where and when the story occurs.',
+        'points' => 10,
+    ]);
+    $matchAttempt = QuizAttempt::create([
+        'user_id' => $student->id,
+        'quiz_id' => $matchingQuiz->id,
+        'attempt_number' => 1,
+        'status' => 'completed',
+        'score' => 10,
+        'max_score' => 10,
+    ]);
+    QuizAttemptAnswer::create([
+        'attempt_id' => $matchAttempt->id,
+        'item_type' => 'matching',
+        'item_id' => $mItem->id,
+        'answer_data' => ['choice_letter' => 'A'],
+        'answer_text' => 'A',
+        'is_correct' => true,
+        'points_earned' => 10,
+        'points_possible' => 10,
+    ]);
+
+    $this->actingAs($teacher)
+        ->get(route('teachers.grading.index', ['status' => 'all']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('teachers/Grading')
+            ->has('submissions', 3)
+            ->where('submissions.0.answers.0.context.description', 'Where and when the story occurs.')
+            ->has('submissions.0.answers.0.context.choices', 1)
+            ->where('submissions.1.answers.0.context.excerpt', 'The storm tore away the bridge.')
+            ->where('submissions.2.answers.0.context.question_text', 'Who led the expedition?')
+            ->has('submissions.2.answers.0.context.options', 2)
+            ->where('submissions.2.answers.0.context.options.0.id', $optRight->id)
+        );
 });

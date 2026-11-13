@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
 
 #[Fillable([
     'lecture_id',
@@ -82,7 +81,7 @@ class LectureContent extends Model
     public function mediaUrl(): ?string
     {
         if ($this->file_path !== null) {
-            return Storage::disk($this->file_disk ?? 'public')->url($this->file_path);
+            return '/storage/'.ltrim($this->file_path, '/');
         }
 
         return $this->external_url;
@@ -94,7 +93,7 @@ class LectureContent extends Model
     public function narrationAudioUrl(): ?string
     {
         if ($this->narration_audio_path !== null) {
-            return Storage::disk($this->narration_audio_disk ?? 'public')->url($this->narration_audio_path);
+            return '/storage/'.ltrim($this->narration_audio_path, '/');
         }
 
         return null;

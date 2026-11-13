@@ -4,6 +4,8 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\StudentDashboardController;
 use App\Http\Controllers\StudentQuizController;
+use App\Http\Controllers\TeacherAiAssistantController;
+use App\Http\Controllers\TeacherClassroomController;
 use App\Http\Controllers\TeacherColorConflictQuizController;
 use App\Http\Controllers\TeacherConflictMapQuizController;
 use App\Http\Controllers\TeacherDashboardController;
@@ -31,6 +33,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/teachers/Dasboard', fn () => redirect()->route('teachers.dashboard'));
     Route::get('/teachers/students', [TeacherDashboardController::class, 'students'])->name('teachers.students');
     Route::get('/teachers/Students', fn () => redirect()->route('teachers.students'));
+    Route::get('/teachers/classes', [TeacherClassroomController::class, 'index'])->name('teachers.classes.index');
+    Route::post('/teachers/classes', [TeacherClassroomController::class, 'store'])->name('teachers.classes.store');
+    Route::post('/teachers/classes/{classroom}/modules', [TeacherClassroomController::class, 'assignModule'])->name('teachers.classes.modules.assign');
+    Route::delete('/teachers/classes/{classroom}/modules/{module}', [TeacherClassroomController::class, 'removeModule'])->name('teachers.classes.modules.remove');
+    Route::delete('/teachers/classes/{classroom}/students/{student}', [TeacherClassroomController::class, 'removeStudent'])->name('teachers.classes.students.remove');
     Route::get('/teachers/grading', [TeacherGradingController::class, 'index'])->name('teachers.grading.index');
     Route::post('/teachers/grading/attempts/{attempt}', [TeacherGradingController::class, 'grade'])->name('teachers.grading.grade');
 
@@ -38,6 +45,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/teachers/create/Module', fn () => redirect()->route('teachers.modules.create'));
     Route::get('/teachers/modules/{module:slug}', [TeacherModuleController::class, 'show'])->name('teachers.modules.show');
     Route::post('/teachers/modules', [TeacherModuleController::class, 'store'])->name('teachers.modules.store');
+    Route::match(['patch', 'post'], '/teachers/modules/{module:slug}/status', [TeacherModuleController::class, 'updateStatus'])->name('teachers.modules.status.update');
 
     Route::get('/teachers/modules/{module:slug}/lectures/create', [TeacherLectureController::class, 'create'])->name('teachers.lectures.create');
     Route::post('/teachers/modules/{module:slug}/lectures', [TeacherLectureController::class, 'store'])->name('teachers.lectures.store');
@@ -71,15 +79,25 @@ Route::middleware('auth')->group(function () {
     Route::get('/teachers/modules/{module:slug}/quizzes/reflection/create', [TeacherReflectionQuizController::class, 'create'])->name('teachers.quizzes.reflection.create');
     Route::post('/teachers/modules/{module:slug}/quizzes/reflection', [TeacherReflectionQuizController::class, 'store'])->name('teachers.quizzes.reflection.store');
 
+    Route::prefix('teachers/ai')->name('teachers.ai.')->group(function () {
+        Route::get('/status', [TeacherAiAssistantController::class, 'status'])->name('status');
+        Route::post('/word-meaning', [TeacherAiAssistantController::class, 'wordMeaning'])->name('word-meaning');
+        Route::post('/lecture-assist', [TeacherAiAssistantController::class, 'lectureAssist'])->name('lecture-assist');
+        Route::post('/module-assist', [TeacherAiAssistantController::class, 'moduleAssist'])->name('module-assist');
+        Route::post('/quiz-assist', [TeacherAiAssistantController::class, 'quizAssist'])->name('quiz-assist');
+    });
+
     Route::get('/students/welcome', [StudentDashboardController::class, 'welcome'])->name('students.welcome');
     Route::get('/students/dashboard', [StudentDashboardController::class, 'index'])->name('students.dashboard');
     Route::get('/students/Dashboard', fn () => redirect()->route('students.dashboard'));
+    Route::post('/students/modules/join', [StudentDashboardController::class, 'joinModule'])->name('students.modules.join');
     Route::get('/students/progress', [StudentDashboardController::class, 'progress'])->name('students.progress');
     Route::get('/students/Progress', fn () => redirect()->route('students.progress'));
     Route::get('/students/ranking', [StudentDashboardController::class, 'ranking'])->name('students.ranking');
     Route::get('/students/Ranking', fn () => redirect()->route('students.ranking'));
     Route::get('/students/settings', [StudentDashboardController::class, 'settings'])->name('students.settings');
     Route::get('/students/Settings', fn () => redirect()->route('students.settings'));
+    Route::patch('/students/settings/theme', [StudentDashboardController::class, 'updateTheme'])->name('students.settings.theme');
     Route::get('/students/modules/{module:slug}', [StudentDashboardController::class, 'progress'])->name('students.modules.show');
     Route::get('/students/modules/{module:slug}/lectures/{lecture:slug}', [StudentDashboardController::class, 'showLecture'])->name('students.lectures.show');
     Route::post('/students/modules/{module:slug}/lectures/{lecture:slug}/complete', [StudentDashboardController::class, 'completeLecture'])->name('students.lectures.complete');

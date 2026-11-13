@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\PixarWorldTheme;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -43,6 +44,7 @@ class HandleInertiaRequests extends Middleware
                     'name' => $request->user()->name,
                     'email' => $request->user()->email,
                     'role' => $request->user()->role?->value ?? $request->user()->role,
+                    'ui_theme' => $request->user()->ui_theme?->value ?? PixarWorldTheme::Toybox->value,
                 ] : null,
             ],
         ];

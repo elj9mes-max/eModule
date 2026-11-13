@@ -1,7 +1,8 @@
 <script setup>
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, useRemember } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import StudentLayout from '../../Components/StudentLayout.vue';
+import { prefetchRoute, useIdlePrefetch } from '@/Composables/usePrefetch';
 
 const props = defineProps({
     user: {
@@ -227,7 +228,7 @@ const computeDbUnlockedStep = () => {
 };
 
 const currentStep = ref(computeDbUnlockedStep());
-const activeFilter = ref('all'); // 'all' | 'lecture' | 'quiz'
+const activeFilter = useRemember('all', () => `student.progress.filter.${props.module?.id || 'default'}`); // 'all' | 'lecture' | 'quiz'
 const shakingStep = ref(null);
 const lockedTooltipStep = ref(null);
 const isChestOpen = ref(false);
@@ -472,6 +473,33 @@ const closeLockedChestModalAndScroll = () => {
     nextTick(() => scrollToCurrentStep());
 };
 
+const getNodeUrl = (node) => {
+    if (!node || !props.module?.slug || !node.slug) {
+        return null;
+    }
+
+    return node.itemType === 'lecture'
+        ? `/students/modules/${props.module.slug}/lectures/${node.slug}`
+        : `/students/modules/${props.module.slug}/quizzes/${node.slug}`;
+};
+
+const prefetchNode = (node) => {
+    if (!node || node.step > currentStep.value) {
+        return;
+    }
+
+    const url = getNodeUrl(node);
+    if (url) {
+        prefetchRoute(url, ['student-modules', `module-${props.module?.slug}`], ['20s', '90s']);
+    }
+};
+
+useIdlePrefetch(
+    () => (activeQuestNode.value && !isAllCompleted.value ? getNodeUrl(activeQuestNode.value) : null),
+    ['student-modules', props.module?.slug ? `module-${props.module.slug}` : ''],
+    ['20s', '90s'],
+);
+
 const goBackToWorlds = () => {
     router.visit('/students/dashboard');
 };
@@ -546,6 +574,8 @@ onMounted(() => {
                         type="button"
                         class="clay-back-worlds-btn"
                         aria-label="Back to Story Worlds"
+                        @mouseenter="prefetchRoute('/students/dashboard', ['student-nav', 'student-modules'])"
+                        @focus="prefetchRoute('/students/dashboard', ['student-nav', 'student-modules'])"
                         @click="goBackToWorlds"
                     >
                         <svg viewBox="0 0 20 20" class="back-arrow-svg" aria-hidden="true">
@@ -735,25 +765,25 @@ onMounted(() => {
                 <div class="desktop-storybook-wings" aria-hidden="true">
                     <div class="wing-column wing-left">
                         <div class="wing-prop-card wing-float-slow">
-                            <img src="/images/book_left_trees_mountains.png" alt="" class="wing-art-img" />
+                            <img src="/images/book_left_trees_mountains.png" alt="" width="965" height="777" loading="lazy" decoding="async" class="wing-art-img" />
                         </div>
                         <div class="wing-prop-card wing-float-mid">
-                            <img src="/images/boy_left_on_book_laptop.png" alt="" class="wing-art-img" />
+                            <img src="/images/boy_left_on_book_laptop.png" alt="" width="838" height="905" loading="lazy" decoding="async" class="wing-art-img" />
                         </div>
                         <div class="wing-prop-card wing-float-fast">
-                            <img src="/images/girl_left_reading_book.png" alt="" class="wing-art-img" />
+                            <img src="/images/girl_left_reading_book.png" alt="" width="945" height="878" loading="lazy" decoding="async" class="wing-art-img" />
                         </div>
                     </div>
 
                     <div class="wing-column wing-right">
                         <div class="wing-prop-card wing-float-mid">
-                            <img src="/images/book_right_mountains_river.png" alt="" class="wing-art-img" />
+                            <img src="/images/book_right_mountains_river.png" alt="" width="996" height="640" loading="lazy" decoding="async" class="wing-art-img" />
                         </div>
                         <div class="wing-prop-card wing-float-slow">
-                            <img src="/images/book_with_message_and_laptop_girl.png" alt="" class="wing-art-img" />
+                            <img src="/images/book_with_message_and_laptop_girl.png" alt="" width="1030" height="682" loading="lazy" decoding="async" class="wing-art-img" />
                         </div>
                         <div class="wing-prop-card wing-float-fast">
-                            <img src="/images/girl_right_using_tablet.png" alt="" class="wing-art-img" />
+                            <img src="/images/girl_right_using_tablet.png" alt="" width="942" height="814" loading="lazy" decoding="async" class="wing-art-img" />
                         </div>
                     </div>
                 </div>
@@ -861,12 +891,14 @@ onMounted(() => {
                         v-for="node in nodePositions"
                         :id="`quest-step-${node.step}`"
                         :key="`${node.itemType}-${node.id}`"
+                        v-memo="[node.step < currentStep, node.step === currentStep, isNodeDimmedByFilter(node), lockedTooltipStep === node.step, shakingStep === node.step]"
                         class="island-milestone-row"
                         :class="[
                             node.isLeft ? 'row-island-left' : 'row-island-right',
                             { 'is-dimmed-filter': isNodeDimmedByFilter(node) },
                         ]"
                         :style="{ top: `${node.cy - 54}px` }"
+                        @mouseenter="prefetchNode(node)"
                     >
                         <!-- FLOATING 3D STORYBOOK DIORAMA PROP (OPPOSITE BEND FOR RICH GRAPHICS ON MOBILE & DESKTOP) -->
                         <div
@@ -874,7 +906,7 @@ onMounted(() => {
                             :class="node.isLeft ? 'diorama-on-right' : 'diorama-on-left'"
                             aria-hidden="true"
                         >
-                            <img :src="node.biome.dioramaImg" alt="" class="diorama-art-img" loading="lazy" />
+                            <img :src="node.biome.dioramaImg" alt="" width="68" height="68" class="diorama-art-img" loading="lazy" decoding="async" />
                         </div>
 
                         <!-- 1. 3D FLOATING BIOME ISLAND + CHUNKY TOY NODE BUTTON -->
@@ -1372,15 +1404,15 @@ onMounted(() => {
     position: sticky;
     top: 0.35rem;
     z-index: 45;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(241, 245, 249, 0.96) 100%);
+    background: linear-gradient(180deg, var(--px-surface-card, rgba(255, 255, 255, 0.96)) 0%, var(--px-surface-card-bottom, rgba(241, 245, 249, 0.96)) 100%);
     backdrop-filter: blur(12px);
     border-radius: 22px;
     padding: 0.55rem 0.7rem;
-    border: 2.5px solid #FFFFFF;
+    border: 2.5px solid var(--px-card-border, #FFFFFF);
     box-shadow:
-        0 6px 0 #CBD5E1,
-        0 12px 24px rgba(30, 27, 75, 0.14),
-        inset 0 2px 3px rgba(255, 255, 255, 0.95);
+        0 6px 0 var(--px-hud-ledge, #CBD5E1),
+        0 12px 24px rgba(var(--px-shadow-rgb, 30, 27, 75), 0.16),
+        inset 0 2px 3px var(--px-rim-top, rgba(255, 255, 255, 0.95));
     display: flex;
     flex-direction: column;
     gap: 0.45rem;
@@ -1432,8 +1464,8 @@ onMounted(() => {
     flex: 1 1 auto;
     padding: 0.28rem 0.6rem;
     border-radius: 9999px;
-    background: #F1F5F9;
-    border: 1.5px solid #E2E8F0;
+    background: var(--px-surface-well, #F1F5F9);
+    border: 1.5px solid var(--px-card-border, #E2E8F0);
 }
 
 .hud-biome-dot {
@@ -1449,7 +1481,7 @@ onMounted(() => {
     font-family: var(--font-display);
     font-size: 0.74rem;
     font-weight: 700;
-    color: #1E1B4B;
+    color: var(--px-ink, #1E1B4B);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1778,14 +1810,14 @@ onMounted(() => {
     width: 100%;
     border-radius: 30px;
     background:
-        radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.65) 0%, transparent 38%),
-        radial-gradient(circle at 80% 45%, rgba(186, 230, 253, 0.65) 0%, transparent 45%),
-        linear-gradient(180deg, #E0F2FE 0%, #BAE6FD 35%, #A5F3FC 72%, #D9F99D 100%);
-    border: 3.5px solid #FFFFFF;
+        radial-gradient(circle at 20% 15%, var(--px-sun-bloom, rgba(255, 255, 255, 0.65)) 0%, transparent 45%),
+        radial-gradient(circle at 80% 45%, var(--px-secondary-bloom, rgba(186, 230, 253, 0.65)) 0%, transparent 48%),
+        linear-gradient(180deg, var(--px-sky-top, #E0F2FE) 0%, var(--px-sky-mid, #BAE6FD) 45%, var(--px-sky-bottom, #D9F99D) 100%);
+    border: 3px solid var(--px-card-border, #FFFFFF);
     box-shadow:
-        0 10px 0 #94A3B8,
-        0 20px 38px rgba(15, 23, 42, 0.16),
-        inset 0 4px 10px rgba(255, 255, 255, 0.9);
+        0 10px 0 var(--px-hud-ledge, #94A3B8),
+        0 20px 38px rgba(var(--px-shadow-rgb, 15, 23, 42), 0.18),
+        inset 0 4px 10px var(--px-rim-top, rgba(255, 255, 255, 0.9));
     overflow: hidden;
     padding: 0.5rem 0 2rem;
 }
@@ -2115,12 +2147,12 @@ onMounted(() => {
 /* Floating 3D Storybook Vignette on the Opposite Bend (Visible on Mobile!) */
 .curve-bend-diorama {
     position: absolute;
-    top: -42px;
+    top: -70px;
     width: 68px;
     height: 68px;
     pointer-events: none;
-    z-index: 2;
-    opacity: 0.92;
+    z-index: 6;
+    opacity: 0.94;
     animation: dioramaFloat 4.2s ease-in-out infinite alternate;
 }
 
@@ -2585,8 +2617,12 @@ onMounted(() => {
     font-family: var(--font-body);
     font-size: 0.72rem;
     font-weight: 800;
-    color: #0C4A6E;
-    max-width: 290px;
+    color: var(--px-ink, #0C4A6E);
+    background: var(--px-surface-glass, rgba(255, 255, 255, 0.85));
+    border: 1.5px solid var(--px-card-border, rgba(255, 255, 255, 0.9));
+    padding: 0.25rem 0.78rem;
+    border-radius: 9999px;
+    max-width: 310px;
 }
 
 .clay-treasure-chest-stage {
@@ -3298,6 +3334,20 @@ onMounted(() => {
     .clay-quest-callout-card {
         max-width: 340px;
         padding: 0.95rem 1.1rem;
+    }
+
+    .curve-bend-diorama {
+        top: -36px;
+        width: 84px;
+        height: 84px;
+    }
+
+    .diorama-on-right {
+        right: 20px;
+    }
+
+    .diorama-on-left {
+        left: 20px;
     }
 
     .callout-quest-title {

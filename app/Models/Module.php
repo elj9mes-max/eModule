@@ -11,13 +11,14 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Storage;
 
 #[Fillable([
     'user_id',
     'title',
     'slug',
+    'join_code',
     'grade_level',
     'description',
     'theme',
@@ -115,7 +116,75 @@ class Module extends Model
             return null;
         }
 
-        return Storage::disk('public')->url($this->cover_image_path);
+        return '/storage/'.ltrim($this->cover_image_path, '/');
+    }
+
+    /**
+     * The "booted" method of the model.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (Module $module): void {
+            if (empty($module->join_code)) {
+                $module->join_code = static::generateUniqueJoinCode();
+            }
+        });
+    }
+
+    /**
+     * Generate a unique 6-digit random numerical join code.
+     */
+    public static function generateUniqueJoinCode(): string
+    {
+        do {
+            $code = (string) random_int(100000, 999999);
+        } while (static::query()->where('join_code', $code)->exists());
+
+        return $code;
+    }
+
+    /**
+     * Get the student enrollments for this module.
+     *
+     * @return HasMany<ModuleEnrollment, $this>
+     */
+    public function enrollments(): HasMany
+    {
+        return $this->hasMany(ModuleEnrollment::class);
+    }
+
+    /**
+     * Get the students enrolled in this module.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function enrolledStudents(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'module_enrollments')
+            ->withPivot('enrolled_at')
+            ->withTimestamps();
+    }
+
+    /**
+     * Classroom module assignment pivot records.
+     *
+     * @return HasMany<ClassroomModule, $this>
+     */
+    public function classroomModules(): HasMany
+    {
+        return $this->hasMany(ClassroomModule::class);
+    }
+
+    /**
+     * The classrooms this module is assigned to.
+     *
+     * @return BelongsToMany<Classroom, $this>
+     */
+    public function classrooms(): BelongsToMany
+    {
+        return $this->belongsToMany(Classroom::class, 'classroom_modules')
+            ->withPivot('assigned_at')
+            ->withTimestamps();
     }
 
     /**
