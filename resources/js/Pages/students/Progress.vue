@@ -3,6 +3,9 @@ import { Head, router, useRemember } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import StudentLayout from '../../Components/StudentLayout.vue';
 import { prefetchRoute, useIdlePrefetch } from '@/Composables/usePrefetch';
+import { spawnPixarBurst } from '@/Composables/usePixarTheme';
+import { shouldReduceEffects } from '@/Composables/usePerformanceMode';
+import { consumeReturnToMapFocus } from '@/Composables/useMapReturnFocus';
 
 const props = defineProps({
     user: {
@@ -53,6 +56,16 @@ const props = defineProps({
     initialStep: {
         type: Number,
         default: null,
+    },
+    /** Where the back button returns to: the classroom / Code Adventures list this module was opened from. */
+    backLink: {
+        type: Object,
+        default: () => ({ url: '/students/classes', label: 'All Classrooms' }),
+    },
+    /** Whether this student already opened this module's Treasure Vault. */
+    bonusClaim: {
+        type: Object,
+        default: () => ({ claimed: false, xp_awarded: null, claimed_at: null }),
     },
 });
 
@@ -231,8 +244,14 @@ const currentStep = ref(computeDbUnlockedStep());
 const activeFilter = useRemember('all', () => `student.progress.filter.${props.module?.id || 'default'}`); // 'all' | 'lecture' | 'quiz'
 const shakingStep = ref(null);
 const lockedTooltipStep = ref(null);
-const isChestOpen = ref(false);
 const chestShaking = ref(false);
+const chestStageRef = ref(null);
+const isClaimingBonus = ref(false);
+/** 'reward' | 'claimed' | 'error' | null */
+const vaultModal = ref(null);
+const vaultModalError = ref('');
+const vaultModalCtaRef = ref(null);
+const displayedBonusXp = ref(0);
 const showLockedChestModal = ref(false);
 const showQuestCelebrationToast = ref(false);
 const lastCompletedStepTitle = ref('');
@@ -465,8 +484,126 @@ const handleChestClick = () => {
         return;
     }
 
-    isChestOpen.value = !isChestOpen.value;
+    if (isClaimingBonus.value) {
+        return;
+    }
+
+    if (isBonusClaimed.value) {
+        chestShaking.value = true;
+        window.setTimeout(() => {
+            chestShaking.value = false;
+        }, 520);
+        openVaultModal('claimed');
+
+        return;
+    }
+
+    claimVaultBonus();
 };
+
+const isBonusClaimed = computed(() => Boolean(props.bonusClaim?.claimed));
+
+/** Lid stays open once the bonus is claimed, and swings open while a claim is in flight. */
+const isChestOpen = computed(() => isAllCompleted.value && (isBonusClaimed.value || isClaimingBonus.value));
+
+const vaultBonusXp = computed(() => Number(props.bonusClaim?.xp_awarded ?? props.module?.xp_bonus ?? 300));
+
+const bonusClaimedDate = computed(() => {
+    if (!props.bonusClaim?.claimed_at) {
+        return null;
+    }
+
+    return new Date(props.bonusClaim.claimed_at).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+});
+
+const prefersReducedMotion = shouldReduceEffects;
+
+/** Count the XP medal up from zero with an ease-out, so the reward feels earned. */
+const countUpBonusXp = (target) => {
+    if (prefersReducedMotion()) {
+        displayedBonusXp.value = target;
+
+        return;
+    }
+
+    const duration = 1100;
+    const startedAt = performance.now();
+    displayedBonusXp.value = 0;
+
+    const tick = (now) => {
+        const t = Math.min(1, (now - startedAt) / duration);
+        const eased = 1 - (1 - t) ** 3;
+        displayedBonusXp.value = Math.round(target * eased);
+        if (t < 1 && vaultModal.value === 'reward') {
+            requestAnimationFrame(tick);
+        }
+    };
+
+    requestAnimationFrame(tick);
+};
+
+const openVaultModal = async (variant) => {
+    vaultModal.value = variant;
+
+    if (variant === 'reward') {
+        countUpBonusXp(vaultBonusXp.value);
+        spawnPixarBurst(chestStageRef.value, 18, document.documentElement.dataset.pixarTheme || 'toybox');
+    }
+
+    await nextTick();
+    vaultModalCtaRef.value?.focus();
+};
+
+const closeVaultModal = () => {
+    vaultModal.value = null;
+    nextTick(() => chestStageRef.value?.focus());
+};
+
+const claimVaultBonus = () => {
+    if (!props.module?.slug) {
+        return;
+    }
+
+    isClaimingBonus.value = true;
+    vaultModalError.value = '';
+
+    router.post(
+        `/students/modules/${props.module.slug}/bonus/claim`,
+        {},
+        {
+            preserveScroll: true,
+            preserveState: true,
+            only: ['bonusClaim'],
+            onSuccess: () => {
+                if (isBonusClaimed.value) {
+                    openVaultModal('reward');
+                }
+            },
+            onError: (errors) => {
+                vaultModalError.value = errors.bonus || '';
+            },
+            onFinish: () => {
+                isClaimingBonus.value = false;
+
+                if (!isBonusClaimed.value && vaultModal.value === null) {
+                    vaultModalError.value ||= 'The vault lid is stuck! Check your connection and tap the chest to try again.';
+                    openVaultModal('error');
+                }
+            },
+        },
+    );
+};
+
+/** Coming back from a lecture/quiz: glide to the next island once Inertia has finished resetting scroll to the top. */
+onMounted(() => {
+    if (consumeReturnToMapFocus()) {
+        window.setTimeout(scrollToCurrentStep, 150);
+    }
+});
 
 const closeLockedChestModalAndScroll = () => {
     showLockedChestModal.value = false;
@@ -500,8 +637,11 @@ useIdlePrefetch(
     ['20s', '90s'],
 );
 
+const backUrl = computed(() => props.backLink?.url || '/students/classes');
+const backLabel = computed(() => props.backLink?.label || 'All Classrooms');
+
 const goBackToWorlds = () => {
-    router.visit('/students/dashboard');
+    router.visit(backUrl.value);
 };
 
 const openFullLectureReader = (node) => {
@@ -544,11 +684,6 @@ const confettiPieces = Array.from({ length: 38 }, (_, i) => {
     };
 });
 
-onMounted(() => {
-    if (isAllCompleted.value) {
-        isChestOpen.value = true;
-    }
-});
 </script>
 
 <template>
@@ -562,7 +697,7 @@ onMounted(() => {
         :points="studentHudStats.points"
         :stars="studentHudStats.stars"
         :streak="studentHudStats.streak"
-        active-nav="modules"
+        active-nav="classes"
     >
         <section class="clay-expedition-page" aria-labelledby="expedition-module-title">
             <!-- =========================================================================
@@ -573,9 +708,10 @@ onMounted(() => {
                     <button
                         type="button"
                         class="clay-back-worlds-btn"
-                        aria-label="Back to Story Worlds"
-                        @mouseenter="prefetchRoute('/students/dashboard', ['student-nav', 'student-modules'])"
-                        @focus="prefetchRoute('/students/dashboard', ['student-nav', 'student-modules'])"
+                        :aria-label="`Back to ${backLabel}`"
+                        :title="`Back to ${backLabel}`"
+                        @mouseenter="prefetchRoute(backUrl, ['student-nav', 'student-classes'])"
+                        @focus="prefetchRoute(backUrl, ['student-nav', 'student-classes'])"
                         @click="goBackToWorlds"
                     >
                         <svg viewBox="0 0 20 20" class="back-arrow-svg" aria-hidden="true">
@@ -588,7 +724,7 @@ onMounted(() => {
                                 stroke-linejoin="round"
                             />
                         </svg>
-                        <span>Worlds</span>
+                        <span class="back-btn-label">{{ backLabel }}</span>
                     </button>
 
                     <div class="expedition-hud-title-pill">
@@ -984,13 +1120,11 @@ onMounted(() => {
                                           : 'node-is-locked',
                                     { 'is-shaking': shakingStep === node.step },
                                 ]"
-                                :aria-label="`Step ${node.step}: ${node.title} (${
-                                    node.step < currentStep
-                                        ? 'Completed'
-                                        : node.step === currentStep
-                                          ? 'Current Quest'
-                                          : 'Locked'
-                                })`"
+                                :aria-label="
+                                    node.step > currentStep
+                                        ? `Step ${node.step} (Locked)`
+                                        : `Step ${node.step}: ${node.title} (${node.step < currentStep ? 'Completed' : 'Current Quest'})`
+                                "
                                 @click="handleNodeInteraction(node)"
                             >
                                 <span class="node-specular-shine" aria-hidden="true"></span>
@@ -1063,6 +1197,7 @@ onMounted(() => {
                             class="clay-quest-callout-card"
                             :class="[
                                 node.isLeft ? 'callout-from-left' : 'callout-from-right',
+                                `callout-type-${node.itemType}`,
                                 {
                                     'callout-is-active': node.step === currentStep,
                                     'callout-is-completed': node.step < currentStep,
@@ -1071,13 +1206,35 @@ onMounted(() => {
                             ]"
                             role="button"
                             tabindex="0"
+                            :aria-label="
+                                node.step > currentStep
+                                    ? `${node.itemType === 'quiz' ? 'Quiz' : 'Story'} ${node.step}: Locked`
+                                    : `${node.itemType === 'quiz' ? 'Quiz' : 'Story'} ${node.step}: ${node.title}. ${
+                                          node.step < currentStep ? 'Completed, tap to replay' : 'Current quest, tap to start'
+                                      }`
+                            "
                             @click="handleNodeInteraction(node)"
                             @keydown.enter="handleNodeInteraction(node)"
                             @keydown.space.prevent="handleNodeInteraction(node)"
                         >
                             <span class="callout-top-gloss" aria-hidden="true"></span>
 
-                            <!-- Top Kicker Row: Quest Type Pill + XP Bounty -->
+                            <!-- 3D clay type medallion breaking the card's top-left corner -->
+                            <span class="callout-type-medal" aria-hidden="true">
+                                <svg v-if="node.step > currentStep" viewBox="0 0 24 24" class="medal-glyph">
+                                    <rect x="5.5" y="10.5" width="13" height="10" rx="3" fill="currentColor" />
+                                    <path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" />
+                                </svg>
+                                <svg v-else-if="node.itemType === 'quiz'" viewBox="0 0 24 24" class="medal-glyph">
+                                    <path d="M13.5 2L5 13.5h6L9.5 22 19 9.5h-6.2L13.5 2z" fill="currentColor" stroke="rgba(0,0,0,0.18)" stroke-width="1" stroke-linejoin="round" />
+                                </svg>
+                                <svg v-else viewBox="0 0 24 24" class="medal-glyph">
+                                    <path d="M3 6.5C6 5 9.2 5.2 12 7c2.8-1.8 6-2 9-.5v12c-3-1.5-6.2-1.3-9 .5-2.8-1.8-6-2-9-.5z" fill="currentColor" />
+                                    <path d="M12 7v12" stroke="rgba(0,0,0,0.22)" stroke-width="1.6" />
+                                </svg>
+                            </span>
+
+                            <!-- Kicker row: quest type + XP bounty candy -->
                             <div class="callout-header-row">
                                 <span
                                     class="callout-biome-pill"
@@ -1086,24 +1243,28 @@ onMounted(() => {
                                         color: node.biome.pillText,
                                     }"
                                 >
-                                    <template v-if="node.itemType === 'quiz'">⚡ QUIZ {{ node.step }}</template>
-                                    <template v-else>📖 STORY {{ node.step }}</template>
+                                    {{ node.itemType === 'quiz' ? 'QUIZ' : 'STORY' }} {{ node.step }}
                                 </span>
 
-                                <span class="callout-xp-pill">+{{ node.xp }} XP</span>
+                                <span class="callout-xp-pill">
+                                    <svg viewBox="0 0 16 16" class="callout-xp-bolt" aria-hidden="true">
+                                        <path d="M9.5 1L3 9h4.5L6.5 15L13 7H8.5L9.5 1z" fill="currentColor" />
+                                    </svg>
+                                    +{{ node.xp }} XP
+                                </span>
                             </div>
 
-                            <!-- Quest Title & Short Description -->
                             <h3 class="callout-quest-title">{{ node.title }}</h3>
                             <p class="callout-quest-summary">{{ node.summary }}</p>
 
-                            <!-- Footer Meta + Action Button -->
+                            <!-- Footer meta + raised 3D action key -->
                             <div class="callout-footer-row">
                                 <div class="callout-meta-tags">
-                                    <span class="meta-duration-chip">{{ node.duration }}</span>
+                                    <span class="meta-duration-chip">⏱ {{ node.duration }}</span>
                                     <span v-if="node.passingPercentage" class="meta-pass-chip">
-                                        Pass {{ node.passingPercentage }}%
+                                        🎯 {{ node.passingPercentage }}%
                                     </span>
+                                    <span v-if="node.step < currentStep" class="meta-done-chip">✓ Done</span>
                                 </div>
 
                                 <span
@@ -1115,10 +1276,13 @@ onMounted(() => {
                                               ? 'cta-start'
                                               : 'cta-locked'
                                     "
+                                    aria-hidden="true"
                                 >
-                                    <template v-if="node.step < currentStep">Replay ↻</template>
-                                    <template v-else-if="node.step === currentStep">START ▶</template>
-                                    <template v-else>Locked</template>
+                                    <span class="cta-face">
+                                        <template v-if="node.step < currentStep">Replay ↻</template>
+                                        <template v-else-if="node.step === currentStep">START ▶</template>
+                                        <template v-else>🔒 Locked</template>
+                                    </span>
                                 </span>
                             </div>
                         </article>
@@ -1144,79 +1308,143 @@ onMounted(() => {
 
                         <!-- Interactive 3D Treasure Chest Stage -->
                         <div
+                            ref="chestStageRef"
                             class="clay-treasure-chest-stage"
                             :class="{
-                                'chest-is-open': isChestOpen && isAllCompleted,
+                                'chest-is-open': isChestOpen,
+                                'chest-is-locked': !isAllCompleted,
+                                'chest-is-claimable': isAllCompleted && !isBonusClaimed && !isClaimingBonus,
+                                'chest-is-claimed': isAllCompleted && isBonusClaimed,
                                 'chest-is-shaking': chestShaking,
                             }"
                             role="button"
                             tabindex="0"
+                            :aria-busy="isClaimingBonus"
                             :aria-label="
-                                isAllCompleted
-                                    ? 'Open Grand Treasure Chest'
-                                    : `Locked Treasure Chest. ${remainingMilestonesCount} quests remaining.`
+                                !isAllCompleted
+                                    ? `Locked Treasure Chest. ${remainingMilestonesCount} quests remaining.`
+                                    : isBonusClaimed
+                                        ? `Treasure Chest open. ${vaultBonusXp} bonus XP already claimed.`
+                                        : `Open the Grand Treasure Chest to claim ${vaultBonusXp} bonus XP`
                             "
                             @click="handleChestClick"
                             @keydown.enter="handleChestClick"
                             @keydown.space.prevent="handleChestClick"
                         >
-                            <!-- Spinning Sunburst Aura when Unlocked -->
+                            <!-- Rotating god-rays behind the chest once the vault is earned -->
                             <div
                                 class="vault-golden-sunburst"
                                 :class="{ 'is-spinning': isAllCompleted }"
                                 aria-hidden="true"
                             ></div>
 
-                            <!-- 3D Treasure Chest Box -->
-                            <div class="clay-chest-assembly" aria-hidden="true">
-                                <!-- Chest Lid -->
-                                <div class="clay-chest-lid">
-                                    <div class="chest-lid-handle"></div>
-                                    <div class="chest-lid-shell">
-                                        <span class="chest-gold-strap"></span>
-                                        <span class="chest-gold-strap"></span>
-                                    </div>
-                                </div>
+                            <!-- Floating sparkles around a claimable / open chest -->
+                            <template v-if="isAllCompleted">
+                                <span class="chest-sparkle chest-sparkle--1" aria-hidden="true"></span>
+                                <span class="chest-sparkle chest-sparkle--2" aria-hidden="true"></span>
+                                <span class="chest-sparkle chest-sparkle--3" aria-hidden="true"></span>
+                            </template>
 
-                                <!-- Overflowing Coins, Gems & Trophy Booty (Visible when Open) -->
-                                <div
-                                    class="clay-chest-loot"
-                                    :class="{ 'loot-popped': isChestOpen && isAllCompleted }"
-                                >
+                            <div class="clay-chest-assembly" aria-hidden="true">
+                                <svg width="0" height="0" class="chest-defs">
+                                    <defs>
+                                        <linearGradient id="pxChestWood" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stop-color="#E08A3C" />
+                                            <stop offset="55%" stop-color="#B45F1E" />
+                                            <stop offset="100%" stop-color="#7A3A10" />
+                                        </linearGradient>
+                                        <linearGradient id="pxChestLidWood" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stop-color="#F0A257" />
+                                            <stop offset="60%" stop-color="#C46A25" />
+                                            <stop offset="100%" stop-color="#8E4513" />
+                                        </linearGradient>
+                                        <linearGradient id="pxChestGold" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stop-color="#FFF1A6" />
+                                            <stop offset="45%" stop-color="#FCC93A" />
+                                            <stop offset="100%" stop-color="#C77D0A" />
+                                        </linearGradient>
+                                        <radialGradient id="pxChestInnerGlow" cx="50%" cy="100%" r="80%">
+                                            <stop offset="0%" stop-color="#FFF7C2" />
+                                            <stop offset="60%" stop-color="#FFC93D" />
+                                            <stop offset="100%" stop-color="#B45309" />
+                                        </radialGradient>
+                                        <radialGradient id="pxLootCoin" cx="34%" cy="30%" r="70%">
+                                            <stop offset="0%" stop-color="#FFFBEA" />
+                                            <stop offset="40%" stop-color="#FDD34A" />
+                                            <stop offset="100%" stop-color="#C47A06" />
+                                        </radialGradient>
+                                        <radialGradient id="pxLootGemBlue" cx="34%" cy="28%" r="75%">
+                                            <stop offset="0%" stop-color="#FFFFFF" />
+                                            <stop offset="40%" stop-color="#7DD3FC" />
+                                            <stop offset="100%" stop-color="#0369A1" />
+                                        </radialGradient>
+                                        <radialGradient id="pxLootGemPink" cx="34%" cy="28%" r="75%">
+                                            <stop offset="0%" stop-color="#FFFFFF" />
+                                            <stop offset="40%" stop-color="#FDA4AF" />
+                                            <stop offset="100%" stop-color="#BE123C" />
+                                        </radialGradient>
+                                    </defs>
+                                </svg>
+
+                                <!-- Soft tinted contact shadow -->
+                                <span class="chest-contact-shadow"></span>
+
+                                <!-- Warm light spilling out of the open chest -->
+                                <span class="chest-light-beam"></span>
+
+                                <!-- Loot: coins, gems and a trophy springing out when open -->
+                                <div class="clay-chest-loot">
                                     <svg viewBox="0 0 120 64" class="loot-treasure-svg">
-                                        <!-- Golden Coins & Ruby/Emerald Gems + Center Trophy -->
-                                        <circle cx="28" cy="46" r="11" fill="#FACC15" stroke="#B45309" stroke-width="2" />
-                                        <circle cx="92" cy="46" r="11" fill="#FACC15" stroke="#B45309" stroke-width="2" />
-                                        <polygon points="44,32 54,44 44,54 34,44" fill="#38BDF8" stroke="#0284C7" stroke-width="1.8" />
-                                        <polygon points="76,32 86,44 76,54 66,44" fill="#FB7185" stroke="#E11D48" stroke-width="1.8" />
-                                        <!-- Golden Trophy Cup -->
-                                        <path d="M48 12h24v16c0 6.6-5.4 12-12 12s-12-5.4-12-12V12z" fill="#FDE047" stroke="#B45309" stroke-width="2.2" />
-                                        <rect x="55" y="40" width="10" height="8" fill="#F59E0B" />
-                                        <rect x="49" y="48" width="22" height="5" rx="2.5" fill="#B45309" />
+                                        <path d="M50 10h20v14c0 5.5-4.5 10-10 10s-10-4.5-10-10V10z" fill="url(#pxChestGold)" stroke="#9A5A06" stroke-width="2" />
+                                        <path d="M50 14h-5a5 5 0 0 0 5 8M70 14h5a5 5 0 0 1-5 8" fill="none" stroke="#9A5A06" stroke-width="2" />
+                                        <ellipse cx="55" cy="16" rx="2.5" ry="4.5" fill="#FFFFFF" opacity="0.7" />
+                                        <rect x="56" y="34" width="8" height="6" fill="#E3A008" />
+                                        <rect x="51" y="40" width="18" height="5" rx="2.5" fill="#9A5A06" />
+                                        <circle cx="26" cy="46" r="11" fill="url(#pxLootCoin)" stroke="#A86206" stroke-width="1.6" />
+                                        <circle cx="94" cy="46" r="11" fill="url(#pxLootCoin)" stroke="#A86206" stroke-width="1.6" />
+                                        <text x="26" y="50.5" text-anchor="middle" class="loot-coin-mark">★</text>
+                                        <text x="94" y="50.5" text-anchor="middle" class="loot-coin-mark">★</text>
+                                        <path d="M42 32l9 11-9 11-9-11z" fill="url(#pxLootGemBlue)" stroke="#075985" stroke-width="1.4" />
+                                        <path d="M78 32l9 11-9 11-9-11z" fill="url(#pxLootGemPink)" stroke="#9F1239" stroke-width="1.4" />
                                     </svg>
                                 </div>
 
-                                <!-- Chest Base Body -->
+                                <!-- Chest lid: hinges open from its back edge -->
+                                <div class="clay-chest-lid">
+                                    <svg viewBox="0 0 140 52" class="chest-lid-svg">
+                                        <path d="M8 50 V30 C8 12 30 3 70 3 C110 3 132 12 132 30 V50 Z" fill="url(#pxChestLidWood)" stroke="#5A2A0A" stroke-width="3" />
+                                        <path d="M20 22 C30 13 48 9 70 9" stroke="#FFD7A8" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.7" />
+                                        <rect x="28" y="4" width="13" height="47" rx="3" fill="url(#pxChestGold)" stroke="#9A5A06" stroke-width="1.5" />
+                                        <rect x="99" y="4" width="13" height="47" rx="3" fill="url(#pxChestGold)" stroke="#9A5A06" stroke-width="1.5" />
+                                        <rect x="6" y="42" width="128" height="9" rx="4" fill="url(#pxChestGold)" stroke="#9A5A06" stroke-width="1.5" />
+                                    </svg>
+                                </div>
+
+                                <!-- Chest base body -->
                                 <div class="clay-chest-base">
-                                    <span class="chest-gold-strap"></span>
-                                    <div class="chest-center-lock">
+                                    <svg viewBox="0 0 140 64" class="chest-base-svg">
+                                        <ellipse cx="70" cy="6" rx="60" ry="6" class="chest-mouth" />
+                                        <path d="M8 4 H132 V50 C132 58 126 62 118 62 H22 C14 62 8 58 8 50 Z" fill="url(#pxChestWood)" stroke="#5A2A0A" stroke-width="3" />
+                                        <path d="M14 14 H126" stroke="#8E4513" stroke-width="2" opacity="0.45" />
+                                        <path d="M14 30 H126" stroke="#8E4513" stroke-width="2" opacity="0.45" />
+                                        <path d="M14 46 H126" stroke="#8E4513" stroke-width="2" opacity="0.45" />
+                                        <rect x="28" y="4" width="13" height="58" rx="3" fill="url(#pxChestGold)" stroke="#9A5A06" stroke-width="1.5" />
+                                        <rect x="99" y="4" width="13" height="58" rx="3" fill="url(#pxChestGold)" stroke="#9A5A06" stroke-width="1.5" />
+                                        <ellipse cx="22" cy="14" rx="8" ry="3.5" fill="#FFFFFF" opacity="0.28" />
+                                    </svg>
+
+                                    <span class="chest-center-lock">
                                         <svg v-if="isAllCompleted" viewBox="0 0 20 20" class="lock-emblem-svg">
                                             <path
                                                 d="M10 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4L10 14.3l-4.8 2.6.9-5.4-3.9-3.8 5.4-.8L10 2z"
-                                                fill="#78350F"
+                                                fill="#7A3A10"
                                             />
                                         </svg>
                                         <svg v-else viewBox="0 0 20 20" class="lock-emblem-svg">
-                                            <rect x="4.5" y="9" width="11" height="8" rx="2.5" fill="#78350F" />
-                                            <path
-                                                d="M7 9V6.8a3 3 0 0 1 6 0V9"
-                                                fill="none"
-                                                stroke="#78350F"
-                                                stroke-width="2.2"
-                                            />
+                                            <rect x="4.5" y="9" width="11" height="8" rx="2.5" fill="#7A3A10" />
+                                            <path d="M7 9V6.8a3 3 0 0 1 6 0V9" fill="none" stroke="#7A3A10" stroke-width="2.2" />
                                         </svg>
-                                    </div>
-                                    <span class="chest-gold-strap"></span>
+                                    </span>
                                 </div>
                             </div>
 
@@ -1225,10 +1453,11 @@ onMounted(() => {
                                     🔒 Locked • {{ remainingMilestonesCount }}
                                     {{ remainingMilestonesCount === 1 ? 'Quest' : 'Quests' }} Left
                                 </template>
-                                <template v-else-if="isChestOpen">
-                                    ✨ +{{ module?.xp_bonus || 300 }} Bonus XP Claimed!
+                                <template v-else-if="isClaimingBonus">✨ Opening the vault…</template>
+                                <template v-else-if="isBonusClaimed">
+                                    ✅ +{{ vaultBonusXp }} XP Claimed
                                 </template>
-                                <template v-else>Tap to Open Vault!</template>
+                                <template v-else>👆 Tap to Claim +{{ vaultBonusXp }} XP!</template>
                             </span>
                         </div>
                     </div>
@@ -1272,7 +1501,7 @@ onMounted(() => {
                                         stroke-linejoin="round"
                                     />
                                 </svg>
-                                <span>Back to Realms</span>
+                                <span>Back to {{ backLabel }}</span>
                             </button>
                         </div>
                     </div>
@@ -1379,6 +1608,123 @@ onMounted(() => {
                 </div>
             </Transition>
         </Teleport>
+
+        <!-- =========================================================================
+             TREASURE VAULT REWARD / ALREADY-CLAIMED MODAL
+             ========================================================================= -->
+        <Teleport to="body">
+            <Transition name="vault-modal" :duration="{ enter: 560, leave: 200 }">
+                <div
+                    v-if="vaultModal"
+                    class="clay-modal-backdrop vault-reward-backdrop"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="vault-reward-title"
+                    aria-describedby="vault-reward-desc"
+                    @click.self="closeVaultModal"
+                    @keydown.esc="closeVaultModal"
+                >
+                    <div class="vault-reward-card" :class="`is-${vaultModal}`">
+                        <!-- Hero stage: god-rays, floating coins and an open clay chest -->
+                        <div class="reward-stage" aria-hidden="true">
+                            <span class="reward-rays"></span>
+                            <span class="reward-coin reward-coin--1"></span>
+                            <span class="reward-coin reward-coin--2"></span>
+                            <span class="reward-coin reward-coin--3"></span>
+                            <span class="reward-gem reward-gem--1"></span>
+                            <span class="reward-gem reward-gem--2"></span>
+
+                            <svg viewBox="0 0 160 120" class="reward-chest-svg">
+                                <defs>
+                                    <linearGradient id="pxRewardWood" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stop-color="#E08A3C" />
+                                        <stop offset="100%" stop-color="#7A3A10" />
+                                    </linearGradient>
+                                    <linearGradient id="pxRewardGold" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stop-color="#FFF1A6" />
+                                        <stop offset="50%" stop-color="#FCC93A" />
+                                        <stop offset="100%" stop-color="#C77D0A" />
+                                    </linearGradient>
+                                    <radialGradient id="pxRewardGlow" cx="50%" cy="100%" r="90%">
+                                        <stop offset="0%" stop-color="#FFFBE0" />
+                                        <stop offset="55%" stop-color="#FFD54A" />
+                                        <stop offset="100%" stop-color="#FFD54A" stop-opacity="0" />
+                                    </radialGradient>
+                                </defs>
+                                <ellipse cx="80" cy="113" rx="54" ry="6" fill="#2A1238" opacity="0.22" />
+                                <path d="M30 26 C30 12 50 4 80 4 C110 4 130 12 130 26 V44 H30 Z" fill="url(#pxRewardWood)" stroke="#5A2A0A" stroke-width="3" transform="rotate(-14 30 44)" />
+                                <rect x="54" y="4" width="11" height="40" rx="3" fill="url(#pxRewardGold)" transform="rotate(-14 30 44)" />
+                                <rect x="95" y="4" width="11" height="40" rx="3" fill="url(#pxRewardGold)" transform="rotate(-14 30 44)" />
+                                <path d="M34 56 L80 6 L126 56 Z" fill="url(#pxRewardGlow)" opacity="0.9" />
+                                <ellipse cx="80" cy="58" rx="48" ry="7" fill="#3B1606" />
+                                <circle cx="62" cy="54" r="8" fill="#FDD34A" stroke="#A86206" stroke-width="1.5" />
+                                <circle cx="80" cy="50" r="9" fill="#FDD34A" stroke="#A86206" stroke-width="1.5" />
+                                <circle cx="98" cy="54" r="8" fill="#FDD34A" stroke="#A86206" stroke-width="1.5" />
+                                <path d="M32 56 H128 V96 C128 104 122 108 114 108 H46 C38 108 32 104 32 96 Z" fill="url(#pxRewardWood)" stroke="#5A2A0A" stroke-width="3" />
+                                <rect x="54" y="56" width="11" height="52" rx="3" fill="url(#pxRewardGold)" />
+                                <rect x="95" y="56" width="11" height="52" rx="3" fill="url(#pxRewardGold)" />
+                                <circle cx="80" cy="74" r="10" fill="url(#pxRewardGold)" stroke="#9A5A06" stroke-width="2" />
+                                <path d="M80 68l1.9 3.9 4.3.6-3.1 3 .7 4.3-3.8-2-3.8 2 .7-4.3-3.1-3 4.3-.6z" fill="#7A3A10" />
+                                <ellipse cx="44" cy="66" rx="7" ry="3" fill="#FFFFFF" opacity="0.3" />
+                            </svg>
+
+                            <span v-if="vaultModal === 'claimed'" class="reward-stamp">CLAIMED</span>
+                        </div>
+
+                        <span class="reward-kicker">
+                            {{
+                                vaultModal === 'reward'
+                                    ? 'TREASURE UNLOCKED!'
+                                    : vaultModal === 'claimed'
+                                        ? 'VAULT ALREADY OPENED'
+                                        : 'VAULT STUCK'
+                            }}
+                        </span>
+
+                        <h3 id="vault-reward-title" class="reward-title">
+                            {{
+                                vaultModal === 'reward'
+                                    ? 'Treasure Claimed!'
+                                    : vaultModal === 'claimed'
+                                        ? 'Bonus XP Already Claimed'
+                                        : 'The Lid Won’t Budge!'
+                            }}
+                        </h3>
+
+                        <div
+                            v-if="vaultModal !== 'error'"
+                            class="reward-xp-medal"
+                            :aria-label="`${vaultBonusXp} bonus XP`"
+                        >
+                            <span class="xp-medal-gloss" aria-hidden="true"></span>
+                            <span class="xp-medal-plus" aria-hidden="true">+</span>
+                            <span class="xp-medal-number" aria-hidden="true">
+                                {{ vaultModal === 'reward' ? displayedBonusXp : vaultBonusXp }}
+                            </span>
+                            <span class="xp-medal-unit" aria-hidden="true">XP</span>
+                        </div>
+
+                        <p id="vault-reward-desc" class="reward-desc">
+                            <template v-if="vaultModal === 'reward'">
+                                You mastered <strong>{{ module?.title || 'this world' }}</strong>! Your bonus XP has been
+                                added to your adventure total.
+                            </template>
+                            <template v-else-if="vaultModal === 'claimed'">
+                                You already opened this vault<template v-if="bonusClaimedDate"> on <strong>{{ bonusClaimedDate }}</strong></template>.
+                                Each treasure can only be claimed once, so explore another world for more XP!
+                            </template>
+                            <template v-else>{{ vaultModalError }}</template>
+                        </p>
+
+                        <button ref="vaultModalCtaRef" type="button" class="reward-cta" @click="closeVaultModal">
+                            <span class="reward-cta-face">
+                                {{ vaultModal === 'reward' ? 'Awesome! 🎉' : vaultModal === 'claimed' ? 'Got it!' : 'Okay' }}
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
     </StudentLayout>
 </template>
 
@@ -1433,7 +1779,7 @@ onMounted(() => {
     border-radius: 9999px;
     background: linear-gradient(180deg, #6366F1 0%, #4338CA 100%);
     color: #FFFFFF;
-    border: 2px solid #FFFFFF;
+    border: 2px solid var(--px-card-border);
     box-shadow:
         0 3px 0 #312E81,
         0 6px 12px rgba(67, 56, 202, 0.28),
@@ -1504,7 +1850,7 @@ onMounted(() => {
     font-family: var(--font-display);
     font-size: 0.68rem;
     font-weight: 800;
-    border: 1.5px solid #FFFFFF;
+    border: 1.5px solid var(--px-card-border);
 }
 
 .clay-mini-xp-pill {
@@ -1535,9 +1881,9 @@ onMounted(() => {
     flex: 1 1 auto;
     height: 12px;
     border-radius: 9999px;
-    background: #E2E8F0;
-    border: 2px solid #CBD5E1;
-    box-shadow: inset 0 2px 4px rgba(15, 23, 42, 0.15);
+    background: var(--px-track);
+    border: 2px solid var(--px-line);
+    box-shadow: inset 0 2px 4px rgba(var(--px-shadow-rgb), 0.15);
     overflow: hidden;
     position: relative;
 }
@@ -1557,14 +1903,14 @@ onMounted(() => {
     right: 6px;
     height: 4px;
     border-radius: 9999px;
-    background: rgba(255, 255, 255, 0.6);
+    background: color-mix(in srgb, var(--px-surface-card) 60%, transparent);
 }
 
 .expedition-pct-badge {
     font-family: var(--font-display);
     font-size: 0.68rem;
     font-weight: 800;
-    color: #334155;
+    color: var(--px-ink);
     flex-shrink: 0;
 }
 
@@ -1577,7 +1923,7 @@ onMounted(() => {
     border-radius: 26px;
     padding: 0.95rem 1rem;
     background: linear-gradient(135deg, #059669 0%, #0EA5E9 55%, #4F46E5 100%);
-    border: 3px solid rgba(255, 255, 255, 0.92);
+    border: 3px solid var(--px-card-border);
     box-shadow:
         0 7px 0 #1E3A8A,
         0 16px 28px rgba(14, 165, 233, 0.28),
@@ -1661,7 +2007,7 @@ onMounted(() => {
     height: 7px;
     border-radius: 50%;
     background: #FDE047;
-    box-shadow: 0 0 8px #FDE047;
+    box-shadow: 0 0 8px var(--px-tint-warn-line);
 }
 
 .world-boss-pill {
@@ -1769,10 +2115,10 @@ onMounted(() => {
 }
 
 .clay-quest-tab.is-active {
-    background: #FFFFFF;
-    color: #1E1B4B;
-    border-color: #FFFFFF;
-    box-shadow: 0 3px 0 rgba(15, 23, 42, 0.25);
+    background: var(--px-surface-card);
+    color: var(--px-ink);
+    border-color: var(--px-card-border);
+    box-shadow: 0 3px 0 rgba(var(--px-shadow-rgb), 0.25);
     transform: translateY(-1px);
 }
 
@@ -1784,7 +2130,7 @@ onMounted(() => {
     border-radius: 9999px;
     background: linear-gradient(180deg, #FDE047 0%, #F59E0B 100%);
     color: #78350F;
-    border: 2px solid #FFFFFF;
+    border: 2px solid var(--px-card-border);
     box-shadow: 0 3px 0 #B45309;
     font-family: var(--font-display);
     font-size: 0.68rem;
@@ -1842,13 +2188,13 @@ onMounted(() => {
     text-align: center;
     max-width: 460px;
     width: 100%;
-    background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+    background: linear-gradient(180deg, var(--px-surface-card) 0%, var(--px-surface-soft) 100%);
     border-radius: 28px;
     padding: 2.25rem 1.75rem;
-    border: 3.5px solid #FFFFFF;
+    border: 3.5px solid var(--px-card-border);
     box-shadow:
-        0 10px 0 #CBD5E1,
-        0 20px 32px rgba(15, 23, 42, 0.12),
+        0 10px 0 var(--px-ledge),
+        0 20px 32px rgba(var(--px-shadow-rgb), 0.12),
         inset 0 3px 6px rgba(255, 255, 255, 0.95);
     position: relative;
     animation: clayEmptyFloat 4s ease-in-out infinite alternate;
@@ -1869,7 +2215,7 @@ onMounted(() => {
     height: 92px;
     border-radius: 50%;
     background: linear-gradient(180deg, #FEF3C7 0%, #FDE68A 65%, #F59E0B 100%);
-    border: 3.5px solid #FFFFFF;
+    border: 3.5px solid var(--px-card-border);
     box-shadow:
         0 6px 0 #D97706,
         0 12px 20px rgba(217, 119, 6, 0.25),
@@ -1910,15 +2256,15 @@ onMounted(() => {
 .empty-status-pill {
     display: inline-block;
     padding: 0.35rem 0.95rem;
-    background: #FEF3C7;
-    color: #92400E;
+    background: var(--px-tint-warn-bg);
+    color: var(--px-tint-warn-ink);
     font-family: var(--font-display);
     font-size: 0.75rem;
     font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     border-radius: 9999px;
-    border: 2px solid #FDE68A;
+    border: 2px solid var(--px-tint-warn-line);
     margin-bottom: 0.75rem;
 }
 
@@ -1926,7 +2272,7 @@ onMounted(() => {
     font-family: var(--font-display);
     font-size: 1.75rem;
     font-weight: 800;
-    color: #1E293B;
+    color: var(--px-ink);
     margin: 0 0 0.5rem;
     letter-spacing: -0.02em;
 }
@@ -1936,7 +2282,7 @@ onMounted(() => {
     font-size: 0.95rem;
     font-weight: 600;
     line-height: 1.55;
-    color: #64748B;
+    color: var(--px-ink-muted);
     margin: 0 0 1.5rem;
     max-width: 380px;
 }
@@ -1959,7 +2305,7 @@ onMounted(() => {
     font-weight: 800;
     letter-spacing: 0.02em;
     border-radius: 9999px;
-    border: 2px solid #FFFFFF;
+    border: 2px solid var(--px-card-border);
     box-shadow:
         0 5px 0 #0369A1,
         0 10px 18px rgba(2, 132, 199, 0.35),
@@ -1981,7 +2327,7 @@ onMounted(() => {
     box-shadow:
         0 2px 0 #0369A1,
         0 4px 8px rgba(2, 132, 199, 0.3),
-        inset 0 1px 2px rgba(0, 0, 0, 0.2);
+        inset 0 1px 2px rgba(var(--px-shadow-rgb), 0.2);
 }
 
 .empty-btn-icon {
@@ -1999,11 +2345,11 @@ onMounted(() => {
 
 .map-cloud {
     position: absolute;
-    background: rgba(255, 255, 255, 0.72);
+    background: color-mix(in srgb, var(--px-surface-card) 72%, transparent);
     border-radius: 9999px;
     box-shadow:
         0 6px 0 rgba(186, 230, 253, 0.6),
-        inset 0 3px 4px #FFFFFF;
+        inset 0 3px 4px var(--px-rim-top);
 }
 
 .map-cloud-1 { width: 95px; height: 32px; top: 8%; left: -12px; }
@@ -2086,16 +2432,16 @@ onMounted(() => {
     gap: 0.35rem;
     padding: 0.38rem 0.95rem;
     border-radius: 9999px;
-    background: linear-gradient(180deg, #FFFFFF 0%, #F1F5F9 100%);
-    border: 2.5px solid #FFFFFF;
+    background: linear-gradient(180deg, var(--px-surface-card) 0%, var(--px-surface-soft) 100%);
+    border: 2.5px solid var(--px-card-border);
     box-shadow:
-        0 4px 0 #94A3B8,
-        0 8px 16px rgba(15, 23, 42, 0.14);
+        0 4px 0 var(--px-ledge),
+        0 8px 16px rgba(var(--px-shadow-rgb), 0.14);
     font-family: var(--font-display);
     font-size: 0.72rem;
     font-weight: 800;
     letter-spacing: 0.05em;
-    color: #0F172A;
+    color: var(--px-ink);
 }
 
 .start-spark-dot {
@@ -2233,7 +2579,7 @@ onMounted(() => {
     border-radius: 9999px;
     background: linear-gradient(180deg, #F97316 0%, #EA580C 100%);
     color: #FFFFFF;
-    border: 1.5px solid #FFFFFF;
+    border: 1.5px solid var(--px-card-border);
     box-shadow: 0 3px 6px rgba(154, 52, 18, 0.35);
     font-family: var(--font-display);
     font-size: 0.54rem;
@@ -2256,12 +2602,12 @@ onMounted(() => {
     color: #FEF08A;
     padding: 0.25rem 0.6rem;
     border-radius: 9999px;
-    border: 1.5px solid #FFFFFF;
+    border: 1.5px solid var(--px-card-border);
     font-family: var(--font-display);
     font-size: 0.62rem;
     font-weight: 700;
     white-space: nowrap;
-    box-shadow: 0 6px 12px rgba(15, 23, 42, 0.3);
+    box-shadow: 0 6px 12px rgba(var(--px-shadow-rgb), 0.3);
 }
 
 /* Pulsing Ring on Active Island */
@@ -2289,7 +2635,7 @@ onMounted(() => {
     width: 62px;
     height: 62px;
     border-radius: 50%;
-    border: 3.5px solid #FFFFFF;
+    border: 3.5px solid var(--px-card-border);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2305,7 +2651,7 @@ onMounted(() => {
     right: 11px;
     height: 15px;
     border-radius: 50%;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0) 100%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, calc(0.78 * var(--px-gloss, 1))) 0%, rgba(255, 255, 255, 0) 100%);
     pointer-events: none;
 }
 
@@ -2332,10 +2678,10 @@ onMounted(() => {
 }
 
 .node-is-locked {
-    background: linear-gradient(180deg, #E2E8F0 0%, #CBD5E1 100%);
+    background: linear-gradient(180deg, var(--px-track) 0%, var(--px-track) 100%);
     box-shadow:
         0 5px 0 #64748B,
-        0 8px 14px rgba(71, 85, 105, 0.22);
+        0 8px 14px rgba(var(--px-shadow-rgb), 0.22);
 }
 
 .clay-island-node-btn:active {
@@ -2376,7 +2722,7 @@ onMounted(() => {
     border: 2.5px solid var(--island-rim, #A7F3D0);
     box-shadow:
         0 7px 0 var(--island-ledge, #065F46),
-        0 14px 20px rgba(15, 23, 42, 0.22),
+        0 14px 20px rgba(var(--px-shadow-rgb), 0.22),
         inset 0 3px 6px rgba(255, 255, 255, 0.65);
     z-index: 4;
     pointer-events: none;
@@ -2401,98 +2747,264 @@ onMounted(() => {
 /* ==========================================================================
    2. 3D CLAY SPEECH CALLOUT QUEST CARD (CRISP & FULL WIDTH ON MOBILE)
    ========================================================================== */
+/* ==========================================================================
+   3D CLAY QUEST CALLOUT — speech-bubble slab pointing at its island
+   One key light top-left; ledges and glows tinted by quest state.
+   ========================================================================== */
 .clay-quest-callout-card {
+    --callout-ledge: color-mix(in srgb, var(--px-secondary) 30%, var(--px-ledge));
+    --callout-glow: rgba(var(--px-shadow-rgb), 0.2);
+    --callout-bg-top: var(--px-surface-card);
+    --callout-bg-bottom: var(--px-surface-soft);
+    --medal-lit: #8FD3FF;
+    --medal-base: #3B82F6;
+    --medal-dark: #1E40AF;
+
     position: relative;
-    flex: 1 1 auto;
-    min-width: 0;
-    max-width: 275px;
-    border-radius: 22px;
-    padding: 0.72rem 0.82rem;
-    background: linear-gradient(165deg, #FFFFFF 0%, #F8FAFC 100%);
-    border: 2.5px solid #FFFFFF;
-    box-shadow:
-        0 6px 0 #94A3B8,
-        0 12px 22px rgba(15, 23, 42, 0.14),
-        inset 0 2px 4px #FFFFFF;
-    pointer-events: auto;
-    cursor: pointer;
-    transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s ease;
     display: flex;
     flex-direction: column;
-    gap: 0.32rem;
-}
-
-.clay-quest-callout-card.callout-is-active {
-    background: linear-gradient(165deg, #FFFFFF 0%, #FFFBEB 65%, #FEF3C7 100%);
-    border-color: #FDE047;
+    gap: 0.38rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 290px;
+    padding: 0.8rem 0.85rem 0.85rem;
+    border-radius: 24px;
+    background: linear-gradient(170deg, var(--callout-bg-top) 0%, var(--callout-bg-bottom) 100%);
+    border: 3px solid var(--px-card-border);
     box-shadow:
-        0 7px 0 #D97706,
-        0 14px 26px rgba(245, 158, 11, 0.28),
-        inset 0 2px 4px #FFFFFF;
+        0 6px 0 var(--callout-ledge),
+        0 16px 26px -10px var(--callout-glow),
+        inset 0 2px 0 var(--px-rim-top),
+        inset 0 -4px 0 rgba(var(--px-shadow-rgb), 0.05);
+    pointer-events: auto;
+    cursor: pointer;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: transform 0.3s var(--spring-bounce);
 }
 
-.clay-quest-callout-card.callout-is-completed {
-    border-color: #A7F3D0;
-    box-shadow:
-        0 6px 0 #059669,
-        0 12px 20px rgba(16, 185, 129, 0.18),
-        inset 0 2px 4px #FFFFFF;
+.callout-type-quiz {
+    --medal-lit: #FFE98A;
+    --medal-base: #F5B70F;
+    --medal-dark: #B86E05;
 }
 
-.clay-quest-callout-card.callout-is-locked {
-    opacity: 0.88;
+/* Speech-bubble tail pointing back at the island */
+.clay-quest-callout-card::before {
+    content: '';
+    position: absolute;
+    top: 42px;
+    width: 18px;
+    height: 18px;
+    background: var(--callout-bg-top);
+    border: 3px solid var(--px-card-border);
+    border-radius: 4px;
+    transform: rotate(45deg);
+    pointer-events: none;
+}
+
+.callout-from-left::before {
+    left: -10px;
+    border-top-color: transparent;
+    border-right-color: transparent;
+}
+
+.callout-from-right::before {
+    right: -10px;
+    border-bottom-color: transparent;
+    border-left-color: transparent;
+}
+
+.clay-quest-callout-card:focus-visible {
+    outline: 3px solid var(--px-focus-stroke);
+    outline-offset: 4px;
 }
 
 .clay-quest-callout-card:active {
-    transform: translateY(2px);
+    transform: translateY(3px) scale(0.985, 0.97);
+    transition-duration: 0.08s;
+}
+
+@media (hover: hover) {
+    .clay-quest-callout-card:hover {
+        transform: translateY(-5px) rotate(-0.4deg);
+    }
+
+    .clay-quest-callout-card:hover .cta-face {
+        transform: translateY(-6px);
+    }
+}
+
+/* Current quest: warm golden slab with a gentle "pick me" bob */
+.clay-quest-callout-card.callout-is-active {
+    --callout-ledge: #D97706;
+    --callout-glow: rgba(245, 158, 11, 0.55);
+    --callout-bg-bottom: color-mix(in srgb, var(--px-tint-warn-bg) 70%, var(--px-surface-card));
+    animation: calloutBob 3s ease-in-out infinite;
+}
+
+.clay-quest-callout-card.callout-is-active::before {
+    background: color-mix(in srgb, var(--px-tint-warn-bg) 35%, var(--px-surface-card));
+}
+
+.clay-quest-callout-card.callout-is-completed {
+    --callout-ledge: #059669;
+    --callout-glow: rgba(16, 185, 129, 0.4);
+    --callout-bg-bottom: color-mix(in srgb, var(--px-tint-success-bg) 55%, var(--px-surface-card));
+}
+
+.clay-quest-callout-card.callout-is-locked {
+    --callout-ledge: var(--px-ledge);
+    --callout-bg-top: var(--px-surface-soft);
+    --callout-bg-bottom: var(--px-surface-well);
+    --medal-lit: #E7E3F5;
+    --medal-base: #A7A1C8;
+    --medal-dark: #6E688F;
+}
+
+/* Untaken (locked) quests keep their details a mystery until the student reaches them */
+.clay-quest-callout-card.callout-is-locked .callout-quest-title,
+.clay-quest-callout-card.callout-is-locked .callout-quest-summary,
+.clay-quest-callout-card.callout-is-locked .callout-xp-pill,
+.clay-quest-callout-card.callout-is-locked .callout-meta-tags {
+    filter: blur(5px);
+    opacity: 0.75;
+    user-select: none;
+    pointer-events: none;
+}
+
+/* Uses the standalone `translate` property so hover / press transforms still compose with the bob. */
+@keyframes calloutBob {
+    0%, 100% { translate: 0 0; }
+    50% { translate: 0 -4px; }
+}
+
+/* Medallion sits on the corner away from the island so it never collides with it */
+.callout-from-left .callout-type-medal {
+    left: auto;
+    right: -12px;
+}
+
+.callout-from-left .callout-header-row {
+    padding-left: 0;
+    padding-right: 1.7rem;
+}
+
+.callout-from-left .callout-top-gloss {
+    left: 16px;
+    right: 44px;
 }
 
 .callout-top-gloss {
     position: absolute;
     top: 3px;
-    left: 14px;
-    right: 14px;
+    left: 44px;
+    right: 16px;
     height: 9px;
     border-radius: 9999px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 100%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, calc(0.9 * var(--px-gloss, 1))) 0%, rgba(255, 255, 255, 0) 100%);
     pointer-events: none;
 }
 
+/* Clay type medallion overlapping the top-left corner */
+.callout-type-medal {
+    position: absolute;
+    top: -15px;
+    left: -12px;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 32% 26%, #FFFFFF 0%, var(--medal-lit) 22%, var(--medal-base) 62%, var(--medal-dark) 100%);
+    border: 3px solid var(--px-surface-card);
+    box-shadow:
+        0 4px 0 var(--medal-dark),
+        0 8px 12px -4px rgba(var(--px-shadow-rgb), 0.45);
+    color: #FFFFFF;
+}
+
+.callout-type-quiz .callout-type-medal {
+    color: #7A3A10;
+}
+
+.callout-is-locked .callout-type-medal {
+    color: #FFFFFF;
+}
+
+.medal-glyph {
+    width: 20px;
+    height: 20px;
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.18));
+}
+
+.callout-is-active .callout-type-medal {
+    animation: medalWiggle 2.4s var(--spring-bounce) infinite;
+}
+
+@keyframes medalWiggle {
+    0%, 70%, 100% { transform: rotate(0deg) scale(1); }
+    78% { transform: rotate(-12deg) scale(1.12, 0.92); }
+    88% { transform: rotate(8deg) scale(0.96, 1.05); }
+}
+
+/* Header */
 .callout-header-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 0.35rem;
+    min-width: 0;
+    padding-left: 1.7rem;
 }
 
 .callout-biome-pill {
-    padding: 0.16rem 0.48rem;
-    border-radius: 8px;
+    min-width: 0;
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.08);
     font-family: var(--font-display);
-    font-size: 0.6rem;
-    font-weight: 800;
-    letter-spacing: 0.03em;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .callout-xp-pill {
-    padding: 0.15rem 0.48rem;
-    border-radius: 9999px;
-    background: #FFFBEB;
-    border: 1.5px solid #FDE68A;
-    color: #B45309;
-    font-family: var(--font-display);
-    font-size: 0.62rem;
-    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
     flex-shrink: 0;
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, #FFE98A 0%, #FBBF24 100%);
+    box-shadow: 0 2px 0 #B45309, inset 0 1.5px 0 rgba(255, 255, 255, 0.7);
+    font-family: var(--font-display);
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #5A2D00;
+    white-space: nowrap;
 }
 
+.callout-xp-bolt {
+    width: 11px;
+    height: 11px;
+    color: #92400E;
+}
+
+/* Copy */
 .callout-quest-title {
     margin: 0;
     font-family: var(--font-display);
-    font-size: 0.88rem;
-    font-weight: 800;
-    line-height: 1.2;
-    color: #1E1B4B;
+    font-size: 0.98rem;
+    font-weight: 700;
+    line-height: 1.22;
+    color: var(--px-ink);
+    overflow-wrap: anywhere;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -2502,74 +3014,176 @@ onMounted(() => {
 .callout-quest-summary {
     margin: 0;
     font-family: var(--font-body);
-    font-size: 0.72rem;
-    font-weight: 700;
-    line-height: 1.32;
-    color: #475569;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.38;
+    color: var(--px-ink-muted);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
 
+/* Footer */
 .callout-footer-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.35rem;
-    padding-top: 0.32rem;
-    border-top: 1.5px dashed #E2E8F0;
+    gap: 0.4rem;
+    margin-top: 0.1rem;
+    padding-top: 0.45rem;
+    border-top: 2px dashed var(--px-line);
 }
 
 .callout-meta-tags {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.25rem;
-    flex-wrap: wrap;
+    min-width: 0;
 }
 
 .meta-duration-chip,
-.meta-pass-chip {
-    padding: 0.14rem 0.42rem;
-    border-radius: 6px;
+.meta-pass-chip,
+.meta-done-chip {
+    padding: 0.18rem 0.5rem;
+    border-radius: 9999px;
+    box-shadow: inset 0 2px 3px rgba(var(--px-shadow-rgb), 0.1);
     font-family: var(--font-display);
-    font-size: 0.58rem;
+    font-size: 0.66rem;
     font-weight: 700;
+    white-space: nowrap;
 }
 
 .meta-duration-chip {
-    background: #F1F5F9;
-    color: #475569;
+    background: var(--px-surface-well);
+    color: var(--px-ink-muted);
 }
 
 .meta-pass-chip {
-    background: #FEF3C7;
-    color: #92400E;
+    background: var(--px-tint-warn-bg);
+    color: var(--px-tint-warn-ink);
 }
 
+.meta-done-chip {
+    background: var(--px-tint-success-bg);
+    color: var(--px-tint-success-ink);
+}
+
+/* Raised 3D action key: the span is the edge, the face rides above it */
 .callout-status-cta {
-    padding: 0.22rem 0.58rem;
-    border-radius: 9999px;
-    font-family: var(--font-display);
-    font-size: 0.64rem;
-    font-weight: 800;
     flex-shrink: 0;
+    border-radius: 9999px;
+    background: #9A3412;
 }
 
-.cta-start {
-    background: linear-gradient(180deg, #FB923C 0%, #EA580C 100%);
+.cta-face {
+    display: block;
+    min-height: 34px;
+    padding: 0.45rem 0.85rem;
+    border-radius: inherit;
+    background: linear-gradient(180deg, #FDBA74 0%, #F97316 55%, #EA580C 100%);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.45), inset 0 -2px 0 rgba(0, 0, 0, 0.12);
+    font-family: var(--font-display);
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    line-height: 1.2;
     color: #FFFFFF;
-    box-shadow: 0 2.5px 0 #9A3412;
+    text-shadow: 0 1px 0 rgba(154, 52, 18, 0.6);
+    white-space: nowrap;
+    transform: translateY(-4px);
+    transition: transform 0.25s var(--spring-bounce);
 }
 
 .cta-replay {
-    background: #DCFCE7;
-    color: #065F46;
+    background: #047857;
+}
+
+.cta-replay .cta-face {
+    background: linear-gradient(180deg, #6EE7B7 0%, #10B981 55%, #059669 100%);
+    text-shadow: 0 1px 0 rgba(4, 120, 87, 0.6);
 }
 
 .cta-locked {
-    background: #F1F5F9;
-    color: #94A3B8;
+    background: transparent;
+}
+
+.cta-locked .cta-face {
+    background: var(--px-surface-well);
+    box-shadow: var(--px-well-shadow);
+    color: var(--px-ink-subtle);
+    text-shadow: none;
+    transform: none;
+}
+
+.clay-quest-callout-card:active .cta-face {
+    transform: translateY(-1px) scale(0.97, 0.93);
+    transition-duration: 0.06s;
+}
+
+.clay-quest-callout-card.callout-is-locked:active .cta-face {
+    transform: none;
+}
+
+/* ==========================================================================
+   PHONE REFINEMENTS (≤ 480px): roomier callouts, truncating back label
+   ========================================================================== */
+.back-btn-label {
+    max-width: 9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+    .island-milestone-row {
+        padding: 0 0.55rem;
+        gap: 0.7rem;
+    }
+
+    .island-anchor-pod {
+        width: 80px;
+    }
+
+    .clay-island-node-btn {
+        width: 56px;
+        height: 56px;
+    }
+
+    .clay-quest-callout-card {
+        max-width: none;
+        padding: 0.75rem 0.75rem 0.8rem;
+        border-radius: 22px;
+    }
+
+    .back-btn-label {
+        max-width: 5.5rem;
+    }
+
+    .curve-bend-diorama {
+        width: 58px;
+        height: 58px;
+        top: -64px;
+    }
+}
+
+@media (max-width: 360px) {
+    .callout-footer-row {
+        flex-wrap: wrap;
+    }
+
+    .callout-status-cta {
+        margin-left: auto;
+    }
+
+    .callout-quest-summary {
+        -webkit-line-clamp: 1;
+    }
+
+    .back-btn-label {
+        display: none;
+    }
 }
 
 /* ==========================================================================
@@ -2601,7 +3215,7 @@ onMounted(() => {
     padding: 0.35rem 1.1rem;
     border-radius: 9999px;
     background: linear-gradient(180deg, #FEF08A 0%, #F59E0B 100%);
-    border: 2.5px solid #FFFFFF;
+    border: 2.5px solid var(--px-card-border);
     box-shadow:
         0 4px 0 #B45309,
         0 8px 16px rgba(180, 83, 9, 0.3);
@@ -2625,39 +3239,60 @@ onMounted(() => {
     max-width: 310px;
 }
 
+/* ==========================================================================
+   3D CLAY TREASURE CHEST — key light top-left, tinted shadows, springy lid
+   ========================================================================== */
 .clay-treasure-chest-stage {
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
+    padding: 0.4rem 0.6rem 0;
+    border-radius: 28px;
     cursor: pointer;
     user-select: none;
-    transition: transform 0.25s var(--spring-bounce);
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: transform 0.3s var(--spring-bounce);
+}
+
+.clay-treasure-chest-stage:focus-visible {
+    outline: 3px solid var(--px-focus-stroke);
+    outline-offset: 4px;
+}
+
+@media (hover: hover) {
+    .clay-treasure-chest-stage:hover {
+        transform: translateY(-4px);
+    }
 }
 
 .clay-treasure-chest-stage:active {
-    transform: scale(0.96);
+    transform: translateY(2px) scale(1.04, 0.94);
+    transition-duration: 0.08s;
 }
 
-.chest-is-shaking {
-    animation: nodeLockShake 0.45s ease-in-out;
-}
-
+/* Rotating god-rays behind an earned vault */
 .vault-golden-sunburst {
     position: absolute;
-    top: -28px;
-    width: 170px;
-    height: 170px;
+    top: -40px;
+    left: 50%;
+    width: 210px;
+    height: 210px;
+    margin-left: -105px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(250, 204, 21, 0.55) 0%, rgba(250, 204, 21, 0) 70%);
+    background: repeating-conic-gradient(rgba(255, 214, 74, 0.42) 0deg 10deg, rgba(255, 214, 74, 0) 10deg 30deg);
+    -webkit-mask: radial-gradient(circle, #000 22%, transparent 68%);
+    mask: radial-gradient(circle, #000 22%, transparent 68%);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.4s ease;
 }
 
 .vault-golden-sunburst.is-spinning {
-    opacity: 1;
-    animation: spinSunburst 12s linear infinite;
+    opacity: 0.95;
+    animation: spinSunburst 14s linear infinite;
 }
 
 @keyframes spinSunburst {
@@ -2665,113 +3300,108 @@ onMounted(() => {
     to { transform: rotate(360deg); }
 }
 
+.chest-sparkle {
+    position: absolute;
+    z-index: 12;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #FFFFFF 0%, #FFE48A 45%, rgba(255, 228, 138, 0) 72%);
+    pointer-events: none;
+    animation: chestTwinkle 2.4s ease-in-out infinite;
+}
+
+.chest-sparkle--1 { top: 10px; left: 6px; }
+.chest-sparkle--2 { top: 34px; right: 2px; animation-delay: -0.8s; }
+.chest-sparkle--3 { top: -4px; right: 30px; width: 14px; height: 14px; animation-delay: -1.6s; }
+
+@keyframes chestTwinkle {
+    0%, 100% { opacity: 0.2; transform: scale(0.6); }
+    50% { opacity: 1; transform: scale(1.25) rotate(45deg); }
+}
+
+.chest-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+}
+
 .clay-chest-assembly {
     position: relative;
-    width: 126px;
-    height: 92px;
     z-index: 5;
-    perspective: 500px;
+    width: 140px;
+    height: 104px;
+    perspective: 520px;
+    transform-origin: 50% 100%;
 }
 
-.clay-chest-lid {
+/* Claimable chest does a little "open me!" hop every few seconds */
+.chest-is-claimable .clay-chest-assembly {
+    animation: chestHop 3.2s var(--spring-bounce) infinite;
+}
+
+.chest-is-shaking .clay-chest-assembly {
+    animation: nodeLockShake 0.45s ease-in-out;
+}
+
+@keyframes chestHop {
+    0%, 70%, 100% { transform: none; }
+    76% { transform: translateY(-9px) scale(0.97, 1.04); }
+    84% { transform: translateY(0) scale(1.07, 0.92); }
+    91% { transform: scale(0.98, 1.02); }
+}
+
+.chest-contact-shadow {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 44px;
-    z-index: 9;
-    transform-origin: bottom center;
-    transition: transform 0.55s var(--spring-bounce);
-}
-
-.chest-is-open .clay-chest-lid {
-    transform: rotateX(-72deg) translateY(-16px);
-}
-
-.chest-lid-handle {
-    position: absolute;
-    top: -7px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 28px;
-    height: 10px;
-    border: 3px solid #FDE047;
-    border-bottom: none;
-    border-radius: 8px 8px 0 0;
-}
-
-.chest-lid-shell {
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(180deg, #B45309 0%, #78350F 100%);
-    border-radius: 28px 28px 8px 8px;
-    border: 3px solid #451A03;
-    box-shadow: inset 0 4px 6px rgba(255, 255, 255, 0.35);
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-}
-
-.chest-gold-strap {
-    width: 12px;
-    height: 100%;
-    background: linear-gradient(180deg, #FDE047 0%, #D97706 100%);
-}
-
-.clay-chest-loot {
-    position: absolute;
-    top: 4px;
     left: 6px;
     right: 6px;
-    height: 54px;
-    z-index: 7;
-    opacity: 0;
-    transform: scale(0.6) translateY(10px);
-    transition: all 0.5s var(--spring-bounce);
-    pointer-events: none;
+    bottom: -9px;
+    height: 16px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse, rgba(var(--px-shadow-rgb), 0.4) 0%, rgba(var(--px-shadow-rgb), 0) 70%);
 }
 
-.clay-chest-loot.loot-popped {
-    opacity: 1;
-    transform: scale(1.08) translateY(-14px);
-}
-
-.loot-treasure-svg {
-    width: 100%;
-    height: 100%;
-}
-
+/* Base */
 .clay-chest-base {
     position: absolute;
-    bottom: 0;
     left: 0;
-    width: 100%;
-    height: 54px;
-    background: linear-gradient(180deg, #92400E 0%, #451A03 100%);
-    border-radius: 8px 8px 18px 18px;
-    border: 3px solid #290E03;
-    box-shadow: 0 8px 0 #1E293B, 0 14px 22px rgba(15, 23, 42, 0.28);
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
+    bottom: 0;
     z-index: 6;
+    width: 100%;
+    height: 64px;
+}
+
+.chest-base-svg,
+.chest-lid-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    filter: drop-shadow(0 4px 0 #4A1F06);
+}
+
+.chest-mouth {
+    fill: #3B1606;
+}
+
+.chest-is-open .chest-mouth {
+    fill: url(#pxChestInnerGlow);
 }
 
 .chest-center-lock {
     position: absolute;
-    top: -10px;
+    top: 14px;
     left: 50%;
-    transform: translateX(-50%);
-    width: 30px;
-    height: 30px;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    margin-left: -16px;
     border-radius: 50%;
-    background: radial-gradient(circle, #FEF08A 0%, #F59E0B 100%);
-    border: 2.5px solid #FFFFFF;
-    box-shadow: 0 3px 0 #92400E;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 10;
+    background: radial-gradient(circle at 34% 30%, #FFF6C4 0%, #FCC93A 50%, #B86E05 100%);
+    border: 2.5px solid #7A3A10;
+    box-shadow: 0 3px 0 #5A2A0A, inset 0 2px 0 rgba(255, 255, 255, 0.6);
 }
 
 .lock-emblem-svg {
@@ -2779,17 +3409,130 @@ onMounted(() => {
     height: 16px;
 }
 
-.clay-chest-cta-pill {
-    margin-top: 0.7rem;
-    padding: 0.38rem 0.95rem;
-    border-radius: 9999px;
-    background: #FFFFFF;
-    border: 2px solid #FDE68A;
-    box-shadow: 0 4px 0 #CBD5E1, 0 8px 14px rgba(15, 23, 42, 0.12);
+/* Lid hinges from its back edge */
+.clay-chest-lid {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 9;
+    width: 100%;
+    height: 48px;
+    transform-origin: 50% 100%;
+    transition: transform 0.6s var(--spring-bounce);
+}
+
+.chest-is-open .clay-chest-lid {
+    transform: translateY(-20px) rotateX(-68deg);
+}
+
+/* Warm light pouring out once open */
+.chest-light-beam {
+    position: absolute;
+    top: -48px;
+    left: 18px;
+    right: 18px;
+    z-index: 7;
+    height: 98px;
+    background: linear-gradient(0deg, rgba(255, 236, 150, 0.9) 0%, rgba(255, 236, 150, 0) 100%);
+    clip-path: polygon(22% 100%, 78% 100%, 100% 0, 0 0);
+    opacity: 0;
+    transform: scaleY(0.3);
+    transform-origin: 50% 100%;
+    pointer-events: none;
+    transition: opacity 0.4s ease, transform 0.6s var(--spring-bounce);
+}
+
+.chest-is-open .chest-light-beam {
+    opacity: 1;
+    transform: scaleY(1);
+}
+
+/* Loot springs up out of the chest */
+.clay-chest-loot {
+    position: absolute;
+    top: 0;
+    left: 10px;
+    right: 10px;
+    z-index: 8;
+    height: 58px;
+    opacity: 0;
+    transform: translateY(26px) scale(0.5);
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.6s var(--spring-bounce) 0.08s;
+}
+
+.chest-is-open .clay-chest-loot {
+    opacity: 1;
+    transform: translateY(-20px) scale(1.05);
+}
+
+.loot-treasure-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    filter: drop-shadow(0 3px 3px rgba(122, 58, 16, 0.35));
+}
+
+.chest-is-claimed .loot-treasure-svg {
+    animation: lootBob 3.4s ease-in-out infinite;
+}
+
+@keyframes lootBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+}
+
+.loot-coin-mark {
     font-family: var(--font-display);
-    font-size: 0.72rem;
-    font-weight: 800;
-    color: #92400E;
+    font-size: 11px;
+    font-weight: 700;
+    fill: #A86206;
+}
+
+/* Status pill under the chest */
+.clay-chest-cta-pill {
+    position: relative;
+    z-index: 12;
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    margin-top: 0.9rem;
+    padding: 0.4rem 1rem;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, var(--px-surface-card) 0%, var(--px-surface-soft) 100%);
+    box-shadow:
+        0 4px 0 var(--px-ledge),
+        0 10px 16px -8px rgba(var(--px-shadow-rgb), 0.4),
+        inset 0 2px 0 var(--px-rim-top);
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--px-ink-muted);
+    white-space: nowrap;
+}
+
+.chest-is-claimable .clay-chest-cta-pill {
+    background: linear-gradient(180deg, #FFE98A 0%, #FCC93A 100%);
+    box-shadow:
+        0 4px 0 #B86E05,
+        0 10px 18px -6px rgba(252, 201, 58, 0.6),
+        inset 0 2px 0 rgba(255, 255, 255, 0.7);
+    color: #5A2D00;
+    animation: ctaBob 1.8s ease-in-out infinite;
+}
+
+.chest-is-claimed .clay-chest-cta-pill {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--px-tint-success-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-success-bg) 100%);
+    box-shadow:
+        0 4px 0 var(--px-tint-success-line),
+        inset 0 2px 0 var(--px-rim-top);
+    color: var(--px-tint-success-ink);
+}
+
+@keyframes ctaBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
 }
 
 /* ==========================================================================
@@ -2806,10 +3549,10 @@ onMounted(() => {
     padding: 0.55rem 0.7rem;
     border-radius: 22px;
     background: linear-gradient(180deg, rgba(30, 27, 75, 0.96) 0%, rgba(15, 23, 42, 0.96) 100%);
-    border: 2.5px solid rgba(255, 255, 255, 0.9);
+    border: 2.5px solid var(--px-card-border);
     box-shadow:
         0 6px 0 #0F172A,
-        0 14px 28px rgba(15, 23, 42, 0.35);
+        0 14px 28px rgba(var(--px-shadow-rgb), 0.35);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -2867,7 +3610,7 @@ onMounted(() => {
     border-radius: 14px;
     background: linear-gradient(180deg, #34D399 0%, #059669 100%);
     color: #FFFFFF;
-    border: 2px solid #FFFFFF;
+    border: 2px solid var(--px-card-border);
     box-shadow: 0 3.5px 0 #065F46;
     font-family: var(--font-display);
     font-size: 0.72rem;
@@ -2896,7 +3639,7 @@ onMounted(() => {
     border-radius: 22px;
     background: linear-gradient(135deg, #059669 0%, #10B981 100%);
     color: #FFFFFF;
-    border: 2.5px solid #FFFFFF;
+    border: 2.5px solid var(--px-card-border);
     box-shadow: 0 6px 0 #065F46, 0 16px 32px rgba(5, 150, 105, 0.38);
     display: flex;
     align-items: center;
@@ -2947,11 +3690,11 @@ onMounted(() => {
     width: 100%;
     max-width: 540px;
     max-height: 88vh;
-    background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+    background: linear-gradient(180deg, var(--px-surface-card) 0%, var(--px-surface-soft) 100%);
     border-radius: 32px 32px 0 0;
-    border-top: 3.5px solid #FFFFFF;
+    border-top: 3.5px solid var(--px-card-border);
     padding: 0.85rem 1.15rem 1.35rem;
-    box-shadow: 0 -12px 36px rgba(15, 23, 42, 0.32);
+    box-shadow: 0 -12px 36px rgba(var(--px-shadow-rgb), 0.32);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -2961,7 +3704,7 @@ onMounted(() => {
     width: 46px;
     height: 5px;
     border-radius: 9999px;
-    background: #CBD5E1;
+    background: var(--px-track);
     margin: 0 auto 0.65rem;
     flex-shrink: 0;
 }
@@ -2987,8 +3730,8 @@ onMounted(() => {
 .vault-status-pill {
     padding: 0.22rem 0.7rem;
     border-radius: 9999px;
-    background: #FEF3C7;
-    color: #B45309;
+    background: var(--px-tint-warn-bg);
+    color: var(--px-tint-warn-ink);
     font-family: var(--font-display);
     font-size: 0.66rem;
     font-weight: 800;
@@ -3000,7 +3743,7 @@ onMounted(() => {
     font-family: var(--font-display);
     font-size: 1.25rem;
     font-weight: 800;
-    color: #1E1B4B;
+    color: var(--px-ink);
 }
 
 .vault-sheet-desc {
@@ -3008,21 +3751,21 @@ onMounted(() => {
     font-family: var(--font-body);
     font-size: 0.84rem;
     font-weight: 700;
-    color: #475569;
+    color: var(--px-ink-muted);
     line-height: 1.45;
 }
 
 .vault-highlight {
-    color: #B45309;
-    background: #FEF3C7;
+    color: var(--px-tint-warn-ink);
+    background: var(--px-tint-warn-bg);
     padding: 0.1rem 0.38rem;
     border-radius: 6px;
 }
 
 .vault-progress-box {
     width: 100%;
-    background: #F1F5F9;
-    border: 2px solid #CBD5E1;
+    background: var(--px-surface-soft);
+    border: 2px solid var(--px-line);
     border-radius: 18px;
     padding: 0.75rem 0.9rem;
     margin-bottom: 1rem;
@@ -3033,7 +3776,7 @@ onMounted(() => {
     justify-content: space-between;
     font-family: var(--font-display);
     font-size: 0.68rem;
-    color: #475569;
+    color: var(--px-ink-muted);
     margin-bottom: 0.4rem;
 }
 
@@ -3041,7 +3784,7 @@ onMounted(() => {
     width: 100%;
     height: 12px;
     border-radius: 9999px;
-    background: #CBD5E1;
+    background: var(--px-track);
     overflow: hidden;
 }
 
@@ -3060,8 +3803,8 @@ onMounted(() => {
     padding: 0.68rem 0.95rem;
     border-radius: 16px;
     border: 2.5px solid #4F46E5;
-    background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
-    color: #312E81;
+    background: linear-gradient(135deg, var(--px-tint-info-bg) 0%, var(--px-tint-info-bg) 100%);
+    color: var(--px-tint-magic-ink);
     font-family: var(--font-display);
     font-size: 0.8rem;
     font-weight: 800;
@@ -3098,22 +3841,22 @@ onMounted(() => {
 .story-interactive-hint-pill {
     padding: 0.16rem 0.55rem;
     border-radius: 9999px;
-    background: #FEF3C7;
+    background: var(--px-tint-warn-bg);
     border: 1.5px solid #F59E0B;
     font-family: var(--font-display);
     font-size: 0.62rem;
     font-weight: 800;
-    color: #92400E;
+    color: var(--px-tint-warn-ink);
 }
 
 .clay-page-narration-box {
     margin: 0.45rem 0 0.7rem;
     padding: 0.65rem 0.8rem;
     border-radius: 16px;
-    background: linear-gradient(135deg, #EFF6FF 0%, #E0E7FF 100%);
-    border: 2px solid #93C5FD;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--px-tint-info-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-info-bg) 100%);
+    border: 2px solid var(--px-tint-info-line);
     box-shadow:
-        0 4px 0 #BFDBFE,
+        0 4px 0 var(--px-tint-info-line),
         0 8px 16px rgba(37, 99, 235, 0.12);
     display: flex;
     flex-direction: column;
@@ -3149,14 +3892,14 @@ onMounted(() => {
     font-family: var(--font-display);
     font-size: 0.78rem;
     font-weight: 800;
-    color: #1E3A8A;
+    color: var(--px-tint-info-ink);
 }
 
 .narration-head-copy span {
     font-family: var(--font-body);
     font-size: 0.68rem;
     font-weight: 700;
-    color: #3B82F6;
+    color: var(--px-tint-info-ink);
 }
 
 .narration-audio-element {
@@ -3172,7 +3915,7 @@ onMounted(() => {
     margin-bottom: 0.75rem;
     padding: 0.75rem 0.9rem;
     border-radius: 18px;
-    background: linear-gradient(180deg, #FFFBEB 0%, #FEF3C7 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-warn-bg) 100%);
     border: 2.5px solid #F59E0B;
     box-shadow:
         0 5px 0 #B45309,
@@ -3192,7 +3935,7 @@ onMounted(() => {
     font-size: 0.58rem;
     font-weight: 800;
     letter-spacing: 0.06em;
-    color: #B45309;
+    color: var(--px-tint-warn-ink);
 }
 
 .vocab-meaning-title-row {
@@ -3206,14 +3949,14 @@ onMounted(() => {
     font-family: var(--font-display);
     font-size: 1.02rem;
     font-weight: 900;
-    color: #78350F;
+    color: var(--px-tint-warn-ink);
 }
 
 .vocab-meaning-pron {
     font-family: var(--font-body);
     font-size: 0.74rem;
     font-weight: 800;
-    color: #92400E;
+    color: var(--px-tint-warn-ink);
 }
 
 .vocab-meaning-close-btn {
@@ -3221,8 +3964,8 @@ onMounted(() => {
     height: 24px;
     border-radius: 50%;
     border: 1.5px solid #F59E0B;
-    background: #FFFFFF;
-    color: #92400E;
+    background: var(--px-surface-card);
+    color: var(--px-tint-warn-ink);
     font-size: 0.7rem;
     font-weight: 900;
     cursor: pointer;
@@ -3236,12 +3979,12 @@ onMounted(() => {
     font-family: var(--font-body);
     font-size: 0.84rem;
     font-weight: 800;
-    color: #451A03;
+    color: var(--px-tint-warn-ink);
     line-height: 1.45;
 }
 
 .story-block-paragraph :deep(.vocab-gloss-token) {
-    background: linear-gradient(180deg, #FEF9C3 0%, #FDE047 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-warn-line) 100%);
     color: #78350F;
     font-weight: 900;
     padding: 0.06rem 0.38rem;
@@ -3264,22 +4007,22 @@ onMounted(() => {
     gap: 0.38rem;
     margin-top: 0.65rem;
     padding-top: 0.55rem;
-    border-top: 1.5px dashed #CBD5E1;
+    border-top: 1.5px dashed var(--px-line);
 }
 
 .vocab-chips-label {
     font-family: var(--font-display);
     font-size: 0.65rem;
     font-weight: 800;
-    color: #64748B;
+    color: var(--px-ink-muted);
 }
 
 .clay-vocab-word-chip {
     padding: 0.2rem 0.55rem;
     border-radius: 9999px;
     border: 1.5px solid #F59E0B;
-    background: #FFFBEB;
-    color: #92400E;
+    background: color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card));
+    color: var(--px-tint-warn-ink);
     font-family: var(--font-display);
     font-size: 0.68rem;
     font-weight: 800;
@@ -3293,6 +4036,369 @@ onMounted(() => {
     background: #FDE047;
     color: #78350F;
     transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   TREASURE VAULT REWARD / ALREADY-CLAIMED MODAL
+   ========================================================================== */
+.vault-reward-backdrop {
+    /* Teleported to <body>, so it re-declares the page's type & motion tokens */
+    --font-display: 'Fredoka', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-body: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
+    --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    align-items: center;
+    padding: 1rem;
+}
+
+.vault-reward-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    max-width: 400px;
+    max-height: calc(100dvh - 2rem);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0 1.25rem 1.4rem;
+    border-radius: 34px;
+    background: linear-gradient(180deg, var(--px-surface-card) 0%, var(--px-surface-soft) 100%);
+    border: 3px solid var(--px-card-border);
+    box-shadow:
+        0 8px 0 var(--px-ledge),
+        0 30px 60px -10px rgba(var(--px-shadow-rgb), 0.5),
+        inset 0 2px 0 var(--px-rim-top);
+    text-align: center;
+    color: var(--px-ink);
+    font-family: var(--font-body);
+}
+
+/* Hero stage */
+.reward-stage {
+    position: relative;
+    flex-shrink: 0;
+    display: grid;
+    place-items: end center;
+    width: calc(100% + 2.5rem);
+    height: 176px;
+    margin: 0 -1.25rem 0.2rem;
+    padding-bottom: 8px;
+    overflow: hidden;
+    border-radius: 31px 31px 50% 50% / 31px 31px 26px 26px;
+    background:
+        radial-gradient(circle at 50% 72%, rgba(255, 240, 170, 0.95) 0%, rgba(255, 240, 170, 0) 55%),
+        linear-gradient(180deg, #7C3AED 0%, #6366F1 48%, #F59E0B 135%);
+    box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.08);
+}
+
+.is-claimed .reward-stage {
+    background:
+        radial-gradient(circle at 50% 72%, rgba(200, 255, 225, 0.85) 0%, rgba(200, 255, 225, 0) 55%),
+        linear-gradient(180deg, #0EA5E9 0%, #14B8A6 60%, #34D399 130%);
+}
+
+.is-error .reward-stage {
+    background:
+        radial-gradient(circle at 50% 72%, rgba(255, 220, 230, 0.7) 0%, rgba(255, 220, 230, 0) 55%),
+        linear-gradient(180deg, #7C6FB0 0%, #B79AD9 120%);
+}
+
+.reward-rays {
+    position: absolute;
+    top: 64%;
+    left: 50%;
+    width: 440px;
+    height: 440px;
+    margin: -220px 0 0 -220px;
+    background: repeating-conic-gradient(rgba(255, 255, 255, 0.3) 0deg 9deg, rgba(255, 255, 255, 0) 9deg 24deg);
+    -webkit-mask: radial-gradient(circle, #000 18%, transparent 62%);
+    mask: radial-gradient(circle, #000 18%, transparent 62%);
+    animation: spinSunburst 18s linear infinite;
+}
+
+.is-error .reward-rays {
+    display: none;
+}
+
+.reward-chest-svg {
+    position: relative;
+    z-index: 2;
+    width: 152px;
+    height: 114px;
+    overflow: visible;
+    transform-origin: 50% 100%;
+    animation: rewardChestPop 0.7s var(--spring-bounce) 0.05s backwards;
+}
+
+.is-error .reward-chest-svg {
+    animation: nodeLockShake 0.5s ease-in-out 0.2s;
+}
+
+.reward-coin {
+    position: absolute;
+    z-index: 3;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 34% 30%, #FFFBEA 0%, #FDD34A 40%, #C47A06 100%);
+    box-shadow: 0 3px 0 #9A5A06;
+    animation: coinFloat 3s ease-in-out infinite;
+}
+
+.reward-coin--1 { top: 34px; left: 16%; }
+.reward-coin--2 { top: 52px; right: 15%; width: 17px; height: 17px; animation-delay: -1s; }
+.reward-coin--3 { top: 16px; left: 32%; width: 13px; height: 13px; animation-delay: -2s; }
+
+.reward-gem {
+    position: absolute;
+    z-index: 3;
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    animation: gemFloat 3.6s ease-in-out infinite;
+}
+
+.reward-gem--1 {
+    top: 24px;
+    right: 28%;
+    background: radial-gradient(circle at 30% 28%, #FFFFFF 0%, #7DD3FC 40%, #0369A1 100%);
+}
+
+.reward-gem--2 {
+    top: 70px;
+    left: 9%;
+    background: radial-gradient(circle at 30% 28%, #FFFFFF 0%, #FDA4AF 40%, #BE123C 100%);
+    animation-delay: -1.8s;
+}
+
+.is-error .reward-coin,
+.is-error .reward-gem {
+    display: none;
+}
+
+.reward-stamp {
+    position: absolute;
+    top: 22px;
+    right: 18px;
+    z-index: 4;
+    padding: 0.3rem 0.7rem;
+    border: 3px solid #FFFFFF;
+    border-radius: 12px;
+    background: #10B981;
+    box-shadow: 0 3px 0 #047857;
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #FFFFFF;
+    transform: rotate(12deg);
+    animation: stampSlam 0.5s var(--spring-bounce) 0.35s backwards;
+}
+
+/* Copy */
+.reward-kicker {
+    padding: 0.28rem 0.85rem;
+    border-radius: 9999px;
+    background: var(--px-tint-warn-bg);
+    box-shadow: inset 0 2px 3px rgba(var(--px-shadow-rgb), 0.1);
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--px-tint-warn-ink);
+}
+
+.is-claimed .reward-kicker {
+    background: var(--px-tint-success-bg);
+    color: var(--px-tint-success-ink);
+}
+
+.is-error .reward-kicker {
+    background: var(--px-tint-danger-bg);
+    color: var(--px-tint-danger-ink);
+}
+
+.reward-title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: clamp(1.45rem, 1.2rem + 1.5vw, 1.8rem);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    color: var(--px-ink);
+}
+
+/* Glossy gold XP medal */
+.reward-xp-medal {
+    position: relative;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.15rem;
+    padding: 0.55rem 1.4rem 0.65rem;
+    overflow: hidden;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, #FFE98A 0%, #FCC93A 55%, #E09A0B 100%);
+    box-shadow:
+        0 6px 0 #9A5A06,
+        0 14px 22px -8px rgba(224, 154, 11, 0.65),
+        inset 0 2px 0 rgba(255, 255, 255, 0.75),
+        inset 0 -3px 0 rgba(0, 0, 0, 0.1);
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: #4A2300;
+    animation: medalPop 0.6s var(--spring-bounce) 0.2s backwards;
+}
+
+.is-claimed .reward-xp-medal {
+    background: linear-gradient(180deg, #D1FAE5 0%, #6EE7B7 55%, #10B981 100%);
+    box-shadow:
+        0 6px 0 #047857,
+        0 14px 22px -8px rgba(16, 185, 129, 0.55),
+        inset 0 2px 0 rgba(255, 255, 255, 0.75),
+        inset 0 -3px 0 rgba(0, 0, 0, 0.1);
+    color: #064E3B;
+}
+
+.xp-medal-gloss {
+    position: absolute;
+    top: 3px;
+    left: 14%;
+    right: 14%;
+    height: 40%;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+}
+
+.xp-medal-plus {
+    font-size: 1.6rem;
+}
+
+.xp-medal-number {
+    min-width: 3ch;
+    font-size: 2.6rem;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.xp-medal-unit {
+    font-size: 1.1rem;
+}
+
+.reward-desc {
+    margin: 0.2rem 0 0;
+    max-width: 32ch;
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1.5;
+    color: var(--px-ink-muted);
+}
+
+.reward-desc strong {
+    color: var(--px-ink);
+}
+
+/* 3D CTA key */
+.reward-cta {
+    width: 100%;
+    margin-top: 0.4rem;
+    padding: 0;
+    border: 0;
+    border-radius: 9999px;
+    background: var(--px-secondary-pedestal);
+    cursor: pointer;
+    filter: drop-shadow(0 6px 8px rgba(var(--px-shadow-rgb), 0.3));
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+.reward-cta-face {
+    display: block;
+    min-height: 52px;
+    padding: 0.9rem 1.4rem;
+    border-radius: inherit;
+    background: linear-gradient(180deg, var(--px-secondary-lit) 0%, var(--px-secondary) 60%);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.45), inset 0 -3px 0 rgba(0, 0, 0, 0.12);
+    font-family: var(--font-display);
+    font-size: 1.02rem;
+    font-weight: 700;
+    color: var(--px-secondary-ink);
+    transform: translateY(-6px);
+    transition: transform 0.25s var(--spring-bounce);
+}
+
+@media (hover: hover) {
+    .reward-cta:hover .reward-cta-face {
+        transform: translateY(-8px);
+    }
+}
+
+.reward-cta:active .reward-cta-face {
+    transform: translateY(-2px) scale(0.98, 0.95);
+    transition-duration: 0.06s;
+}
+
+.reward-cta:focus-visible {
+    outline: 3px solid var(--px-focus-stroke);
+    outline-offset: 4px;
+}
+
+/* Motion */
+.vault-modal-enter-active,
+.vault-modal-leave-active {
+    transition: opacity 0.2s ease;
+}
+
+.vault-modal-enter-from,
+.vault-modal-leave-to {
+    opacity: 0;
+}
+
+.vault-modal-enter-active .vault-reward-card {
+    transition: transform 0.56s var(--spring-bounce);
+}
+
+.vault-modal-leave-active .vault-reward-card {
+    transition: transform 0.2s ease-in;
+}
+
+.vault-modal-enter-from .vault-reward-card {
+    transform: scale(0.6) translateY(40px);
+}
+
+.vault-modal-leave-to .vault-reward-card {
+    transform: scale(0.92) translateY(16px);
+}
+
+@keyframes rewardChestPop {
+    0% { transform: scale(0.3) translateY(30px); }
+    55% { transform: scale(1.12, 0.9); }
+    75% { transform: scale(0.95, 1.06); }
+    100% { transform: none; }
+}
+
+@keyframes medalPop {
+    0% { transform: scale(0.4); opacity: 0; }
+    60% { transform: scale(1.12, 0.92); opacity: 1; }
+    80% { transform: scale(0.96, 1.05); }
+    100% { transform: none; }
+}
+
+@keyframes coinFloat {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-8px) rotate(14deg); }
+}
+
+@keyframes gemFloat {
+    0%, 100% { transform: translateY(0) rotate(45deg); }
+    50% { transform: translateY(-7px) rotate(60deg); }
+}
+
+@keyframes stampSlam {
+    0% { transform: rotate(12deg) scale(2.2); opacity: 0; }
+    100% { transform: rotate(12deg) scale(1); opacity: 1; }
 }
 
 /* Transitions */
@@ -3361,7 +4467,7 @@ onMounted(() => {
 
     .clay-locked-vault-sheet {
         border-radius: 32px;
-        border: 3.5px solid #FFFFFF;
+        border: 3.5px solid var(--px-card-border);
     }
 }
 

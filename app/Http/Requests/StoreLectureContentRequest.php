@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\LectureContentType;
+use App\Enums\PaperTheme;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -27,6 +28,7 @@ class StoreLectureContentRequest extends FormRequest
         return [
             'type' => ['required', Rule::enum(LectureContentType::class)],
             'layout_style' => ['nullable', 'string', 'max:50'],
+            'paper_theme' => ['nullable', Rule::enum(PaperTheme::class)],
             'title' => ['nullable', 'string', 'max:255'],
             'content' => ['nullable', 'string'],
             'media_file' => ['nullable', 'file', 'max:51200'],

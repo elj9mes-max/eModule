@@ -2,6 +2,8 @@
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { defineWord, generateLectureAssist } from '@/Services/geminiAi.js';
+import { useSaveQueue } from '@/Composables/useSaveQueue.js';
+import { DEFAULT_PAPER_THEME_ID, findPaperTheme, paperThemes } from '@/Services/paperThemes.js';
 
 const props = defineProps({
     user: {
@@ -46,14 +48,6 @@ const props = defineProps({
 /* ==========================================================================
    PAPER THEMES, FONTS & HIGHLIGHT SWATCHES
    ========================================================================== */
-const paperThemes = [
-    { id: 'classic', label: 'Classic White', bg: '#FFFFFF', text: '#0F172A', border: '#E2E8F0', accent: '#2563EB' },
-    { id: 'parchment', label: 'Story Parchment', bg: '#FFFDF5', text: '#292524', border: '#FDE68A', accent: '#B45309' },
-    { id: 'emerald', label: 'Forest Scroll', bg: '#F0FDF4', text: '#064E3B', border: '#A7F3D0', accent: '#059669' },
-    { id: 'sky', label: 'Lagoon Breeze', bg: '#F0F9FF', text: '#0C4A6E', border: '#BAE6FD', accent: '#0284C7' },
-    { id: 'lined', label: 'Notebook Lines', bg: '#FFFFFF', text: '#1E293B', border: '#CBD5E1', accent: '#4F46E5', lined: true },
-];
-
 const fontFamilies = [
     { id: 'Nunito, sans-serif', label: 'Nunito (Story Sans)' },
     { id: 'Fredoka, sans-serif', label: 'Fredoka (Playful Display)' },
@@ -226,10 +220,17 @@ const isRightDeckOpen = ref(true);
 const isFocusMode = ref(false);
 const viewMode = ref('canvas'); // 'canvas' | 'preview'
 const canvasZoom = ref(100);
-const activePaperTheme = ref(paperThemes[0]);
 const selectedFontFamily = ref(fontFamilies[0].id);
 const editingContentId = ref(null);
 const saveSuccessToast = ref('');
+
+// Global background save queue (keeps uploading and showing progress even after leaving this page)
+const saveQueue = useSaveQueue();
+const pendingSaveCount = saveQueue.pendingCount;
+let draftCounter = 0;
+const newDraftKey = () => `lecture-${props.lecture.id}-${Date.now()}-${++draftCounter}`;
+const canvasDraftKey = ref(newDraftKey());
+let unsubscribeSaveQueue = null;
 
 // Full-Page Read-Aloud Narration Audio State (Specifically for the whole page!)
 const narrationFileInputRef = ref(null);
@@ -274,6 +275,7 @@ const selectedBlockTopPx = ref(0);
 const form = useForm({
     type: 'text',
     layout_style: 'interactive_story',
+    paper_theme: DEFAULT_PAPER_THEME_ID,
     title: '',
     content: '',
     media_file: null,
@@ -285,6 +287,9 @@ const form = useForm({
     alt_text: '',
     caption: '',
 });
+
+/** The paper the current page is drawn on; saved with the page and shown to students. */
+const activePaperTheme = computed(() => findPaperTheme(form.paper_theme));
 
 /* ==========================================================================
    MULTI-STEP UNDO & REDO HISTORY ENGINE
@@ -386,7 +391,28 @@ const resetHistoryWithCurrentState = () => {
         },
     ];
     historyIndex.value = 0;
+    markCanvasClean();
 };
+
+/* ==========================================================================
+   UNSAVED-CHANGES TRACKING (drives auto-save when leaving the page)
+   ========================================================================== */
+let canvasBaseline = { title: '', html: '', paperTheme: DEFAULT_PAPER_THEME_ID };
+
+const currentCanvasHtml = () => {
+    const html = editorSurfaceRef.value ? editorSurfaceRef.value.innerHTML : form.content || '';
+
+    return html.replace(/\s?is-selected-studio-block/g, '');
+};
+
+const markCanvasClean = () => {
+    canvasBaseline = { title: form.title || '', html: currentCanvasHtml(), paperTheme: form.paper_theme };
+};
+
+const isCanvasDirty = () =>
+    (form.title || '') !== canvasBaseline.title
+    || currentCanvasHtml() !== canvasBaseline.html
+    || form.paper_theme !== canvasBaseline.paperTheme;
 
 /* ==========================================================================
    INTERACTIVE WORD MEANING (VOCABULARY GLOSS) FUNCTIONS
@@ -680,7 +706,7 @@ const estimatedReadingMinutes = computed(() => {
 
 const activeEditingPageIndex = computed(() => {
     if (!editingContentId.value) {
-        return (props.existing_contents?.length || 0) + 1;
+        return (props.existing_contents?.length || 0) + backgroundDraftCards.value.length + 1;
     }
 
     const idx = (props.existing_contents || []).findIndex((c) => c.id === editingContentId.value);
@@ -894,56 +920,116 @@ const handleFileDrop = (event) => {
 };
 
 const insertMediaAssetOntoCanvas = (asset) => {
+    // Media still uploading in the background is tagged so its local preview URL can be swapped for the server URL.
+    const pendingAttr = asset.uploadJobId ? ` data-pending-upload="${asset.uploadJobId}"` : '';
     let mediaHtml = '';
     if (asset.kind === 'image') {
-        mediaHtml = `<figure class="studio-insert-block" data-studio-block="true" data-block-label="Illustration: ${asset.name}" style="margin: 18px auto; text-align: center; max-width: 520px; padding: 14px; border-radius: 18px; background: #F8FAFC; border: 2px solid #E2E8F0; box-shadow: 0 6px 16px rgba(15,23,42,0.06);"><img src="${asset.src}" alt="${asset.name}" style="max-width: 100%; max-height: 360px; border-radius: 12px; object-fit: contain; margin: 0 auto; display: block;" /><figcaption style="font-size: 0.84rem; color: #475569; font-weight: 700; margin-top: 8px;">🖼️ ${asset.caption || asset.name}</figcaption></figure><p><br/></p>`;
+        mediaHtml = `<figure class="studio-insert-block" data-studio-block="true" data-block-label="Illustration: ${asset.name}" style="margin: 18px auto; text-align: center; max-width: 520px; padding: 14px; border-radius: 18px; background: #F8FAFC; border: 2px solid #E2E8F0; box-shadow: 0 6px 16px rgba(15,23,42,0.06);"><img${pendingAttr} src="${asset.src}" alt="${asset.name}" style="max-width: 100%; max-height: 360px; border-radius: 12px; object-fit: contain; margin: 0 auto; display: block;" /><figcaption style="font-size: 0.84rem; color: #475569; font-weight: 700; margin-top: 8px;">🖼️ ${asset.caption || asset.name}</figcaption></figure><p><br/></p>`;
     } else if (asset.kind === 'audio') {
-        mediaHtml = `<div class="studio-insert-block" data-studio-block="true" data-block-label="Audio Clip: ${asset.name}" style="margin: 16px 0; padding: 14px 18px; border-radius: 16px; background: #FFFBEB; border: 2px solid #FDE68A;"><strong>🎧 Inline Sound Clip: ${asset.caption || asset.name}</strong><audio controls src="${asset.src}" style="width: 100%; margin-top: 8px;"></audio></div><p><br/></p>`;
+        mediaHtml = `<div class="studio-insert-block" data-studio-block="true" data-block-label="Audio Clip: ${asset.name}" style="margin: 16px 0; padding: 14px 18px; border-radius: 16px; background: #FFFBEB; border: 2px solid #FDE68A;"><strong>🎧 Inline Sound Clip: ${asset.caption || asset.name}</strong><audio${pendingAttr} controls src="${asset.src}" style="width: 100%; margin-top: 8px;"></audio></div><p><br/></p>`;
     } else {
-        mediaHtml = `<figure class="studio-insert-block" data-studio-block="true" data-block-label="Video: ${asset.name}" style="margin: 18px auto; text-align: center; max-width: 540px; padding: 14px; border-radius: 18px; background: #F5F3FF; border: 2px solid #DDD6FE;"><video controls src="${asset.src}" style="width: 100%; max-height: 340px; border-radius: 12px;"></video><figcaption style="font-size: 0.84rem; color: #5B21B6; font-weight: 700; margin-top: 8px;">🎬 ${asset.caption || asset.name}</figcaption></figure><p><br/></p>`;
+        mediaHtml = `<figure class="studio-insert-block" data-studio-block="true" data-block-label="Video: ${asset.name}" style="margin: 18px auto; text-align: center; max-width: 540px; padding: 14px; border-radius: 18px; background: #F5F3FF; border: 2px solid #DDD6FE;"><video${pendingAttr} controls src="${asset.src}" style="width: 100%; max-height: 340px; border-radius: 12px;"></video><figcaption style="font-size: 0.84rem; color: #5B21B6; font-weight: 700; margin-top: 8px;">🎬 ${asset.caption || asset.name}</figcaption></figure><p><br/></p>`;
     }
 
     appendHtmlToPresentation(mediaHtml, `Inserted "${asset.name}" into your presentation!`);
 };
 
+/**
+ * Uploads the file as its own background queue job (with progress) and inserts a local preview right away.
+ * The preview's blob URL is replaced with the stored file URL once the upload finishes.
+ */
 const processUploadedMediaFile = (file) => {
-    form.media_file = file;
-
     const isImg = file.type.startsWith('image/');
     const isAud = file.type.startsWith('audio/');
     const kind = isImg ? 'image' : isAud ? 'audio' : 'video';
+    const kindIcon = isImg ? '🖼️' : isAud ? '🎧' : '🎬';
 
-    if (isImg) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const dataUrl = e.target?.result;
-            if (typeof dataUrl === 'string') {
-                const newAsset = {
-                    id: Date.now(),
-                    name: file.name,
-                    kind: 'image',
-                    src: dataUrl,
-                    sizeKb: Math.max(1, Math.round(file.size / 1024)),
-                    caption: externalMediaCaptionInput.value || file.name.replace(/\.[^/.]+$/, ''),
-                };
-                uploadedAssetsTray.value.unshift(newAsset);
-                insertMediaAssetOntoCanvas(newAsset);
+    const uploadJobId = saveQueue.enqueue({
+        type: 'upload',
+        label: `${kindIcon} ${file.name}`,
+        baseUrl: `/teachers/modules/${props.module.slug}/lectures/${props.lecture.slug}/media`,
+        payload: { file },
+        meta: {
+            lectureId: props.lecture.id,
+            context: `Uploading to ${props.lecture.title}`,
+        },
+    });
+
+    const newAsset = {
+        id: Date.now(),
+        name: file.name,
+        kind,
+        src: URL.createObjectURL(file),
+        sizeKb: Math.max(1, Math.round(file.size / 1024)),
+        caption: externalMediaCaptionInput.value || file.name.replace(/\.[^/.]+$/, ''),
+        uploadJobId,
+    };
+    uploadedAssetsTray.value.unshift(newAsset);
+    insertMediaAssetOntoCanvas(newAsset);
+
+    // Auto-save right behind the upload so the page keeps this media even if the teacher leaves before saving.
+    nextTick(() => queuePageSave({ isAutoSave: true }));
+};
+
+/**
+ * Point every canvas element (and tray asset) for a finished upload at the stored file URL.
+ *
+ * @returns {boolean} Whether the canvas changed.
+ */
+const applyUploadedUrlToCanvas = (uploadJobId, url) => {
+    const wasClean = !isCanvasDirty();
+    let changed = false;
+
+    editorSurfaceRef.value?.querySelectorAll(`[data-pending-upload="${uploadJobId}"]`).forEach((el) => {
+        el.setAttribute('src', url);
+        el.removeAttribute('data-pending-upload');
+        changed = true;
+    });
+
+    uploadedAssetsTray.value
+        .filter((asset) => asset.uploadJobId === uploadJobId)
+        .forEach((asset) => {
+            if (asset.src?.startsWith('blob:')) {
+                URL.revokeObjectURL(asset.src);
             }
-        };
-        reader.readAsDataURL(file);
-    } else {
-        const blobUrl = URL.createObjectURL(file);
-        const newAsset = {
-            id: Date.now(),
-            name: file.name,
-            kind,
-            src: blobUrl,
-            sizeKb: Math.max(1, Math.round(file.size / 1024)),
-            caption: externalMediaCaptionInput.value || file.name.replace(/\.[^/.]+$/, ''),
-        };
-        uploadedAssetsTray.value.unshift(newAsset);
-        insertMediaAssetOntoCanvas(newAsset);
+            asset.src = url;
+            asset.uploadJobId = null;
+        });
+
+    if (changed && editorSurfaceRef.value) {
+        form.content = editorSurfaceRef.value.innerHTML;
     }
+
+    // Swapping a preview URL for the stored URL is not a teacher edit, so it must not trigger a leave auto-save.
+    if (changed && wasClean) {
+        markCanvasClean();
+    }
+
+    return changed;
+};
+
+/**
+ * Swap any already-finished uploads into the canvas, then return the page HTML with still-pending media
+ * pointing at pending-upload tokens (the queue resolves those before sending the save).
+ */
+const buildContentHtmlForSave = () => {
+    editorSurfaceRef.value?.querySelectorAll('[data-pending-upload]').forEach((el) => {
+        const uploadJobId = Number(el.getAttribute('data-pending-upload'));
+        const url = saveQueue.uploadedUrlFor(uploadJobId);
+        if (url) {
+            applyUploadedUrlToCanvas(uploadJobId, url);
+        }
+    });
+
+    const template = document.createElement('template');
+    template.innerHTML = currentCanvasHtml();
+    template.content.querySelectorAll('[data-pending-upload]').forEach((el) => {
+        const uploadJobId = Number(el.getAttribute('data-pending-upload'));
+        el.setAttribute('src', saveQueue.uploadedUrlFor(uploadJobId) || saveQueue.pendingUploadToken(uploadJobId));
+        el.removeAttribute('data-pending-upload');
+    });
+
+    return template.innerHTML;
 };
 
 const insertExternalMediaLinkOntoCanvas = () => {
@@ -976,6 +1062,7 @@ const insertExternalMediaLinkOntoCanvas = () => {
    PAGE / BLOCK MANAGEMENT (CREATE NEW, LOAD EXISTING, UPDATE, DUPLICATE, DELETE)
    ========================================================================== */
 const startNewBlankPage = () => {
+    canvasDraftKey.value = newDraftKey();
     clearSelectedCanvasBlock();
     activeVocabTooltip.value = null;
     editingContentId.value = null;
@@ -997,12 +1084,67 @@ const startNewBlankPage = () => {
     nextTick(() => resetHistoryWithCurrentState());
 };
 
+const draftThumbCardRef = ref(null);
+
+/**
+ * New pages that were auto-saved when the teacher moved on. They stay in the deck as "Saving…"
+ * cards until the background save lands in `existing_contents`, so a page never vanishes mid-save.
+ *
+ * @type {import('vue').Ref<Array<{ draftKey: string, title: string, snippet: string }>>}
+ */
+const backgroundDrafts = ref([]);
+
+const backgroundDraftCards = computed(() =>
+    backgroundDrafts.value
+        .map((draft) => ({
+            ...draft,
+            job: saveQueue.state.jobs.find((job) => job.type === 'save' && job.draftKey === draft.draftKey),
+        }))
+        .filter(({ job }) => job && !(job.status === 'done' && (props.existing_contents || []).some((c) => c.id === job.contentId))),
+);
+
+/** Auto-save the canvas in the background before it is replaced, so typed work is never thrown away. */
+const saveCanvasBeforeSwitching = () => {
+    if (!isCanvasDirty()) {
+        return;
+    }
+
+    if (!editingContentId.value) {
+        backgroundDrafts.value.push({
+            draftKey: canvasDraftKey.value,
+            title: form.title,
+            snippet: stripHtmlPreview(currentCanvasHtml()),
+        });
+    }
+
+    queuePageSave({ isAutoSave: true });
+};
+
+/** "+ New Page": save the current page, then open a blank canvas and show its card in the deck immediately. */
+const addNewBlankPage = () => {
+    saveCanvasBeforeSwitching();
+    startNewBlankPage();
+    nextTick(() => draftThumbCardRef.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+};
+
+/** Clicking a page card: keep any unsaved work on the current page, then open the chosen one. */
+const openSavedPage = (block) => {
+    if (block.id === editingContentId.value) {
+        return;
+    }
+
+    saveCanvasBeforeSwitching();
+    loadExistingPageOntoCanvas(block);
+};
+
 const loadExistingPageOntoCanvas = (block) => {
+    canvasDraftKey.value = newDraftKey();
     clearSelectedCanvasBlock();
     activeVocabTooltip.value = null;
     editingContentId.value = block.id;
     form.type = 'text';
     form.layout_style = block.layout_style || 'interactive_story';
+    form.paper_theme = block.paper_theme || DEFAULT_PAPER_THEME_ID;
     form.title = block.title || '';
 
     if (block.type === 'image' && block.media_url && !block.content) {
@@ -1053,35 +1195,107 @@ const deleteExistingBlock = (block) => {
 };
 
 const submitContent = () => {
+    queuePageSave();
+};
+
+/**
+ * Snapshot the canvas and queue it for a background save.
+ *
+ * @param {{ isAutoSave?: boolean }} options
+ */
+const queuePageSave = ({ isAutoSave = false } = {}) => {
     clearSelectedCanvasBlock();
+    const contentHtmlForSave = buildContentHtmlForSave();
     if (editorSurfaceRef.value) {
         form.content = editorSurfaceRef.value.innerHTML.replace(/is-selected-studio-block/g, '');
         syncGlossesListFromDom();
     }
     form.type = 'text';
+    form.clearErrors();
 
-    const targetUrl = editingContentId.value
-        ? `/teachers/modules/${props.module.slug}/lectures/${props.lecture.slug}/contents/${editingContentId.value}`
-        : `/teachers/modules/${props.module.slug}/lectures/${props.lecture.slug}/contents`;
+    const snapshot = { ...form.data(), content: contentHtmlForSave };
+    const canvasHtmlAtSave = form.content;
 
-    const wasEditing = Boolean(editingContentId.value);
+    saveQueue.enqueue({
+        label: `${isAutoSave ? 'Auto-save: ' : ''}${snapshot.title || 'Untitled Page'}`,
+        baseUrl: `/teachers/modules/${props.module.slug}/lectures/${props.lecture.slug}/contents`,
+        contentId: editingContentId.value,
+        draftKey: canvasDraftKey.value,
+        payload: {
+            ...snapshot,
+            vocabulary_glosses: JSON.stringify(snapshot.vocabulary_glosses || []),
+        },
+        meta: {
+            lectureId: props.lecture.id,
+            context: props.lecture.title,
+            contentSnapshot: canvasHtmlAtSave,
+        },
+    });
 
-    form.transform((data) => ({
-        ...data,
-        vocabulary_glosses: JSON.stringify(data.vocabulary_glosses || []),
-    })).post(targetUrl, {
-        forceFormData: true,
+    markCanvasClean();
+};
+
+/**
+ * Reacts to background saves finishing while this page is open: refreshes the page list,
+ * shows a toast, and links a freshly created page to the canvas draft it came from.
+ */
+const handleSaveJobFinished = (job, result) => {
+    if (job.meta.lectureId !== props.lecture.id) {
+        return;
+    }
+
+    if (job.type === 'upload') {
+        if (result.ok) {
+            applyUploadedUrlToCanvas(job.id, result.url);
+        }
+
+        return;
+    }
+
+    const isCurrentDraft = canvasDraftKey.value === job.draftKey;
+
+    if (!result.ok) {
+        if (isCurrentDraft && result.errors) {
+            form.setError(result.errors);
+        }
+
+        return;
+    }
+
+    triggerToast(result.wasCreate ? 'New page block published to lecture!' : 'Saved updates to page block!');
+
+    const shouldLinkDraft = result.wasCreate && isCurrentDraft && !editingContentId.value;
+    if (shouldLinkDraft) {
+        editingContentId.value = result.id;
+    }
+
+    router.reload({
+        only: ['existing_contents'],
         preserveScroll: true,
-        onSuccess: (page) => {
-            if (wasEditing) {
-                triggerToast('Saved updates to page block!');
-            } else {
-                triggerToast('New page block published to lecture!');
-                const updatedList = page?.props?.existing_contents || props.existing_contents || [];
-                if (updatedList.length > 0) {
-                    const latestBlock = updatedList[updatedList.length - 1];
-                    loadExistingPageOntoCanvas(latestBlock);
+        onSuccess: () => {
+            if (saveQueue.hasPendingForDraft(job.draftKey)) {
+                return;
+            }
+
+            const savedBlock = (props.existing_contents || []).find((block) => block.id === result.id);
+            if (!savedBlock) {
+                return;
+            }
+
+            if (shouldLinkDraft && canvasDraftKey.value === job.draftKey) {
+                const currentHtml = editorSurfaceRef.value ? editorSurfaceRef.value.innerHTML : form.content;
+                if (currentHtml === job.meta.contentSnapshot) {
+                    loadExistingPageOntoCanvas(savedBlock);
                 }
+
+                return;
+            }
+
+            // Teacher left and came back while this save was still queued: the canvas shows the stale copy,
+            // so swap in the saved version as long as they have not started editing it.
+            if (!isCurrentDraft && editingContentId.value === result.id && !isCanvasDirty()) {
+                loadExistingPageOntoCanvas(savedBlock);
+                triggerToast('Page refreshed with your latest saved changes!');
             }
         },
     });
@@ -1122,53 +1336,147 @@ const stripHtmlPreview = (html) => {
         .trim();
 };
 
-const isSelectionInEditableText = () => {
-    const activeEl = document.activeElement;
-    const activeTag = activeEl?.tagName?.toLowerCase();
+/* ==========================================================================
+   INSERTED BLOCK PROTECTION — blocks are removed only via the "✕ Remove" button
+   ========================================================================== */
+const STUDIO_BLOCK_SELECTOR = '[data-studio-block="true"], .studio-insert-block';
+const BLOCK_MEDIA_SELECTOR = 'img, audio, video, hr';
 
-    // If focused on an input, textarea, or select element
-    if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') {
-        return true;
+const isStudioBlock = (node) => node?.nodeType === Node.ELEMENT_NODE && node.matches(STUDIO_BLOCK_SELECTOR);
+
+/** The inserted block containing `node`, if any. */
+const closestStudioBlock = (node) => {
+    const el = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+    const block = el?.closest(STUDIO_BLOCK_SELECTOR);
+
+    return block && editorSurfaceRef.value?.contains(block) && block !== editorSurfaceRef.value ? block : null;
+};
+
+/** Whether nothing readable sits between the start (or end) of `container` and the caret. */
+const isCaretAtEdgeOf = (container, range, edge) => {
+    const probe = document.createRange();
+    probe.selectNodeContents(container);
+    if (edge === 'start') {
+        probe.setEnd(range.startContainer, range.startOffset);
+    } else {
+        probe.setStart(range.endContainer, range.endOffset);
+    }
+
+    return probe.toString().length === 0 && !probe.cloneContents().querySelector(BLOCK_MEDIA_SELECTOR);
+};
+
+/** The direct child of the editor surface holding the caret, plus its neighbours. */
+const topLevelContext = (range) => {
+    const surface = editorSurfaceRef.value;
+    if (range.startContainer === surface) {
+        return {
+            line: null,
+            previous: surface.childNodes[range.startOffset - 1] ?? null,
+            next: surface.childNodes[range.startOffset] ?? null,
+        };
+    }
+
+    let line = range.startContainer;
+    while (line && line.parentNode !== surface) {
+        line = line.parentNode;
+    }
+
+    return { line, previous: line?.previousSibling ?? null, next: line?.nextSibling ?? null };
+};
+
+const placeCaretAtEndOf = (el) => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+};
+
+const isLineEmpty = (el) => el.textContent.length === 0 && !el.querySelector?.(BLOCK_MEDIA_SELECTOR);
+
+const commitManualEdit = () => {
+    form.content = editorSurfaceRef.value.innerHTML;
+    syncGlossesListFromDom();
+    pushHistorySnapshot();
+};
+
+/**
+ * Stop the browser from deleting an inserted block while the teacher erases text.
+ * Text inside a block can still be edited and fully cleared; the block box itself stays.
+ */
+const protectStudioBlocksOnInput = (event) => {
+    if (!editorSurfaceRef.value || event.inputType.startsWith('format') || event.inputType.startsWith('history')) {
+        return;
     }
 
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
-        return false;
+        return;
     }
 
-    const anchorNode = selection.anchorNode;
-    if (!anchorNode) {
-        return false;
-    }
+    const range = selection.getRangeAt(0);
+    const isDelete = event.inputType.startsWith('delete');
+    const isBackward = event.inputType.includes('Backward');
 
-    // Check if the caret or selection is inside the rich editor surface
-    if (editorSurfaceRef.value && editorSurfaceRef.value.contains(anchorNode)) {
-        // Text node: user is actively editing text inside a paragraph, heading, or block
-        if (anchorNode.nodeType === Node.TEXT_NODE) {
-            return true;
+    if (!range.collapsed) {
+        const startBlock = closestStudioBlock(range.startContainer);
+        const endBlock = closestStudioBlock(range.endContainer);
+        const spansBlocks = startBlock !== endBlock
+            || Array.from(editorSurfaceRef.value.querySelectorAll(STUDIO_BLOCK_SELECTOR)).some(
+                (block) => block !== startBlock && range.intersectsNode(block),
+            );
+
+        if (spansBlocks) {
+            event.preventDefault();
+            triggerToast('Use the "✕ Remove" button to delete an inserted block');
+
+            return;
         }
 
-        // Element node: distinguish between media (img, audio, video, hr) and text containers
-        if (anchorNode.nodeType === Node.ELEMENT_NODE) {
-            const el = anchorNode;
-            const tag = el.tagName?.toLowerCase();
-
-            // Non-text media elements where deleting via keyboard is intended
-            if (['img', 'hr', 'audio', 'video'].includes(tag)) {
-                return false;
+        // Clearing every word inside a block: keep the (now empty) block on the page.
+        if (startBlock && isDelete) {
+            event.preventDefault();
+            range.deleteContents();
+            if (isLineEmpty(startBlock)) {
+                startBlock.innerHTML = '<br>';
+                placeCaretAtEndOf(startBlock);
             }
-
-            // Figure elements: treat as media unless the user is actively focused in figcaption
-            if (tag === 'figure' && !selection.focusNode?.closest?.('figcaption')) {
-                return false;
-            }
-
-            // Any other element inside contenteditable is an editable text container (p, div, span, strong, etc.)
-            return true;
+            commitManualEdit();
         }
+
+        return;
     }
 
-    return false;
+    if (!isDelete) {
+        return;
+    }
+
+    // Caret inside a block, at its first/last character: the browser would merge or drop the block.
+    const caretBlock = closestStudioBlock(range.startContainer);
+    if (caretBlock) {
+        if (isCaretAtEdgeOf(caretBlock, range, isBackward ? 'start' : 'end')) {
+            event.preventDefault();
+        }
+
+        return;
+    }
+
+    // Caret in a line right after (or before) a block: never let the block be swallowed.
+    const { line, previous, next } = topLevelContext(range);
+    const neighbour = isBackward ? previous : next;
+    if (!isStudioBlock(neighbour) || (line && !isCaretAtEdgeOf(line, range, isBackward ? 'start' : 'end'))) {
+        return;
+    }
+
+    event.preventDefault();
+    if (line && isLineEmpty(line)) {
+        line.remove();
+        if (isBackward) {
+            placeCaretAtEndOf(neighbour);
+        }
+        commitManualEdit();
+    }
 };
 
 const handleGlobalKeydown = (e) => {
@@ -1188,23 +1496,12 @@ const handleGlobalKeydown = (e) => {
     if (isMod && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         handleRedo();
-
-        return;
-    }
-
-    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCanvasBlockEl.value) {
-        // Never delete the entire block if the user is actively editing text inside the document or block
-        if (isSelectionInEditableText()) {
-            return;
-        }
-
-        e.preventDefault();
-        removeSelectedCanvasBlock();
     }
 };
 
 onMounted(() => {
     window.addEventListener('keydown', handleGlobalKeydown);
+    unsubscribeSaveQueue = saveQueue.onJobFinished(handleSaveJobFinished);
 
     let targetBlock = null;
     try {
@@ -1238,7 +1535,13 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+    // Leaving the studio with unsaved edits: hand them to the background queue instead of losing them.
+    if (isCanvasDirty()) {
+        queuePageSave({ isAutoSave: true });
+    }
+
     window.removeEventListener('keydown', handleGlobalKeydown);
+    unsubscribeSaveQueue?.();
 });
 </script>
 
@@ -1353,29 +1656,6 @@ onBeforeUnmount(() => {
                         />
                     </svg>
                     <span>{{ isFocusMode ? 'Exit Full Focus' : 'Full Screen' }}</span>
-                </button>
-            </div>
-
-            <!-- Right: New Page & Publish / Save Action Buttons -->
-            <div class="cmd-right-actions">
-                <button
-                    type="button"
-                    class="studio-new-page-btn"
-                    title="Start a fresh blank page block"
-                    @click="startNewBlankPage()"
-                >
-                    <span>+ New Page</span>
-                </button>
-
-                <button
-                    type="button"
-                    class="studio-publish-btn"
-                    :disabled="form.processing"
-                    @click="submitContent"
-                >
-                    <span v-if="form.processing">Saving...</span>
-                    <span v-else-if="editingContentId">💾 Save Page #{{ activeEditingPageIndex }}</span>
-                    <span v-else>✨ Publish Page to Lecture</span>
                 </button>
             </div>
         </header>
@@ -1533,7 +1813,7 @@ onBeforeUnmount(() => {
                         :class="{ 'is-active': activePaperTheme.id === pt.id }"
                         :style="{ backgroundColor: pt.bg, borderColor: pt.border }"
                         :title="pt.label"
-                        @click="activePaperTheme = pt"
+                        @click="form.paper_theme = pt.id"
                     >
                         {{ pt.label.split(' ')[0] }}
                     </button>
@@ -2092,6 +2372,7 @@ onBeforeUnmount(() => {
                                 aria-multiline="true"
                                 aria-label="Story presentation content editor"
                                 data-placeholder="Click here and start writing your story passage, select any word and click '+ Add Word Meaning' in the top bar, or insert layouts & images from the left panel..."
+                                @beforeinput="protectStudioBlocksOnInput"
                                 @input="onEditorInput"
                                 @click="handleCanvasClick"
                                 @mouseover="handleVocabHoverOrClick"
@@ -2106,7 +2387,11 @@ onBeforeUnmount(() => {
                             <span class="device-speaker"></span>
                         </div>
 
-                        <div class="device-screen-body">
+                        <div
+                            class="device-screen-body"
+                            :class="{ 'paper-is-lined': activePaperTheme.lined }"
+                            :style="{ backgroundColor: activePaperTheme.bg, color: activePaperTheme.text }"
+                        >
                             <span class="preview-kicker-pill">
                                 LIVE STUDENT VIEW • PAGE #{{ activeEditingPageIndex }}
                             </span>
@@ -2227,8 +2512,6 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div v-if="isRightDeckOpen" class="pages-deck-scroller">
-
-
                     <div
                         v-for="(block, idx) in existing_contents"
                         :key="block.id"
@@ -2236,7 +2519,7 @@ onBeforeUnmount(() => {
                         :class="{ 'is-selected-page': editingContentId === block.id }"
                         role="button"
                         tabindex="0"
-                        @click="loadExistingPageOntoCanvas(block)"
+                        @click="openSavedPage(block)"
                     >
                         <div class="thumb-card-top">
                             <span class="thumb-page-num">PAGE #{{ idx + 1 }}</span>
@@ -2277,13 +2560,75 @@ onBeforeUnmount(() => {
                             </button>
                         </div>
                     </div>
+
+                    <!-- New pages auto-saved when the teacher moved on, still uploading in the background -->
+                    <div
+                        v-for="(draft, draftIdx) in backgroundDraftCards"
+                        :key="draft.draftKey"
+                        class="page-thumb-card draft-thumb-card"
+                    >
+                        <div class="thumb-card-top">
+                            <span class="thumb-page-num">PAGE #{{ existing_contents.length + draftIdx + 1 }}</span>
+                            <span class="thumb-type-tag badge-draft">
+                                {{ draft.job.status === 'failed' ? 'Save failed' : 'Saving…' }}
+                            </span>
+                        </div>
+
+                        <strong class="thumb-page-title">
+                            {{ draft.title || `Story Page #${existing_contents.length + draftIdx + 1}` }}
+                        </strong>
+
+                        <p v-if="draft.snippet" class="thumb-page-snippet">{{ draft.snippet }}</p>
+                    </div>
+
+                    <!-- The unsaved page on the canvas shows up right away, before its first save -->
+                    <div
+                        v-if="!editingContentId"
+                        ref="draftThumbCardRef"
+                        class="page-thumb-card draft-thumb-card is-selected-page"
+                    >
+                        <div class="thumb-card-top">
+                            <span class="thumb-page-num">PAGE #{{ activeEditingPageIndex }}</span>
+                            <span class="thumb-type-tag badge-draft">
+                                {{ saveQueue.hasPendingForDraft(canvasDraftKey) ? 'Saving…' : 'Not saved yet' }}
+                            </span>
+                        </div>
+
+                        <strong class="thumb-page-title">
+                            {{ form.title || `Story Page #${activeEditingPageIndex}` }}
+                        </strong>
+
+                        <p class="thumb-page-snippet">
+                            {{ stripHtmlPreview(form.content) || 'Blank page • start writing on the canvas' }}
+                        </p>
+                    </div>
                 </div>
-<!-- 
-                <div v-if="isRightDeckOpen" class="pages-dock-footer">
-                    <button type="button" class="btn-finish-return-map" @click="goToModule">
-                        <span>✓ Done & Return to Journey Map</span>
+
+                <div class="pages-dock-footer" :class="{ 'is-compact': !isRightDeckOpen }">
+                    <button
+                        type="button"
+                        class="dock-new-page-btn"
+                        title="Start a fresh blank page block"
+                        @click="addNewBlankPage"
+                    >
+                        <span v-if="isRightDeckOpen">+ New Page</span>
+                        <span v-else aria-label="New Page">+</span>
                     </button>
-                </div> -->
+
+                    <button
+                        type="button"
+                        class="studio-publish-btn"
+                        :title="editingContentId ? `Save Page #${activeEditingPageIndex}` : 'Publish Page to Lecture'"
+                        @click="submitContent"
+                    >
+                        <span v-if="pendingSaveCount > 0" class="studio-save-queue-badge">{{ pendingSaveCount }}</span>
+                        <template v-if="isRightDeckOpen">
+                            <span v-if="editingContentId">💾 Save Page #{{ activeEditingPageIndex }}</span>
+                            <span v-else>✨ Publish Page to Lecture</span>
+                        </template>
+                        <span v-else aria-label="Save Page">💾</span>
+                    </button>
+                </div>
             </aside>
         </div>
 
@@ -2644,25 +2989,6 @@ onBeforeUnmount(() => {
 .mode-svg {
     width: 14px;
     height: 14px;
-}
-
-.cmd-right-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex-shrink: 0;
-}
-
-.studio-new-page-btn {
-    padding: 0.44rem 0.85rem;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.14);
-    border: 1.5px solid rgba(255, 255, 255, 0.3);
-    color: #FFFFFF;
-    font-family: var(--font-heading);
-    font-size: 0.76rem;
-    font-weight: 700;
-    cursor: pointer;
 }
 
 .studio-publish-btn {
@@ -3358,7 +3684,8 @@ onBeforeUnmount(() => {
     transition: background-color 0.25s ease, border-color 0.25s ease, transform 0.2s ease;
 }
 
-.paper-artboard-sheet.paper-is-lined {
+.paper-artboard-sheet.paper-is-lined,
+.device-screen-body.paper-is-lined {
     background-image: repeating-linear-gradient(
         transparent,
         transparent 31px,
@@ -3723,6 +4050,7 @@ onBeforeUnmount(() => {
 .device-screen-body {
     flex: 1 1 auto;
     background: #FFFFFF;
+    transition: background-color 0.25s ease;
     border-radius: 28px;
     padding: 1rem;
     display: flex;
@@ -4064,22 +4392,49 @@ onBeforeUnmount(() => {
 }
 
 .pages-dock-footer {
+    flex-shrink: 0;
     padding: 0.75rem;
     border-top: 1.5px solid #E2E8F0;
     background: #FFFFFF;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
 }
 
-.btn-finish-return-map {
+.pages-dock-footer.is-compact {
+    margin-top: auto;
+    padding: 0.5rem 0.3rem;
+    align-items: center;
+}
+
+.pages-dock-footer .studio-publish-btn {
     width: 100%;
-    padding: 0.62rem;
+}
+
+.pages-dock-footer.is-compact .studio-publish-btn,
+.pages-dock-footer.is-compact .dock-new-page-btn {
+    width: 36px;
+    padding: 0.4rem 0;
+}
+
+.dock-new-page-btn {
+    width: 100%;
+    padding: 0.5rem 0.85rem;
     border-radius: 12px;
-    background: #0F172A;
-    color: #FFFFFF;
-    border: none;
+    background: #F8FAFC;
+    border: 2px dashed #94A3B8;
+    color: #334155;
     font-family: var(--font-heading);
     font-size: 0.76rem;
     font-weight: 800;
     cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.dock-new-page-btn:hover {
+    background: #EFF6FF;
+    border-color: #2563EB;
+    color: #1D4ED8;
 }
 
 /* ==========================================================================
@@ -4232,6 +4587,24 @@ onBeforeUnmount(() => {
     font-family: var(--font-heading);
     font-size: 0.8rem;
     font-weight: 800;
+}
+
+/* ==========================================================================
+   SAVE QUEUE PROGRESS PANEL
+   ========================================================================== */
+.studio-save-queue-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    margin-right: 0.35rem;
+    padding: 0 0.3rem;
+    border-radius: 9999px;
+    background: #FDE047;
+    color: #0F172A;
+    font-size: 0.7rem;
+    font-weight: 900;
 }
 
 .studio-toast-pop-enter-active,

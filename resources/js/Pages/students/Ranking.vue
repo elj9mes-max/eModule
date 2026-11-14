@@ -1,8 +1,9 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import StudentLayout from '../../Components/StudentLayout.vue';
 import { useSound } from '@/Services/soundManager';
+import { spawnPixarBurst } from '@/Composables/usePixarTheme';
 
 const props = defineProps({
     user: {
@@ -10,17 +11,22 @@ const props = defineProps({
         default: () => ({
             id: null,
             name: 'Student Explorer',
-            email: 'student@example.com',
             role: 'student',
         }),
     },
+    /** Only the top of the leaderboard (the server never sends lower ranks). */
     classmates: {
         type: Array,
         default: () => [],
     },
-    classrooms: {
-        type: Array,
-        default: () => [],
+    classmatesCount: {
+        type: Number,
+        default: 0,
+    },
+    /** The student's own standing; `rank` is null when they are outside the top list. */
+    me: {
+        type: Object,
+        default: null,
     },
     active_classroom: {
         type: Object,
@@ -28,1160 +34,1080 @@ const props = defineProps({
     },
 });
 
-const { playPop, playSparkle, playBonus, playClick } = useSound();
+const { playPop, playBonus, playClick } = useSound();
 
-const activeFilter = ref('all_time');
-
-const filterOptions = [
-    { id: 'all_time', label: 'All-Time Champions', icon: '👑' },
-    { id: 'weekly', label: 'This Week', icon: '⚡' },
-    { id: 'streaks', label: 'Reading Streaks', icon: '🔥' },
-];
-
-// Dynamic gamified leaderboards data sourced from database
-const leaderboardData = computed(() => {
-    if (Array.isArray(props.classmates) && props.classmates.length > 0) {
-        return props.classmates.map((c, idx) => ({
-            id: c.id,
-            rank: c.rank || idx + 1,
-            name: c.name,
-            avatar: c.avatar || 'fox',
-            avatarBg: c.avatarBg || 'linear-gradient(145deg, #FFF7ED 0%, #FDBA74 100%)',
-            level: Number(c.level) || 1,
-            xp: Number(c.xp) || 0,
-            points: Number(c.points || c.xp) || 0,
-            stars: Number(c.stars) || 0,
-            streak: Number(c.streak) || 1,
-            title: c.title || `Explorer Tier ${c.level || 1}`,
-            badge: c.badge || (idx === 0 ? '🥇 Champion' : idx === 1 ? '🥈 Vanguard' : idx === 2 ? '🥉 Explorer' : '🌟 Pioneer'),
-            isCurrentUser: Boolean(c.is_current_user),
-        }));
-    }
-
-    const g = props.user?.gamification || {};
-    return [
-        {
-            id: props.user?.id || 1,
-            rank: 1,
-            name: props.user?.name || 'You',
-            avatar: 'knight',
-            avatarBg: 'linear-gradient(145deg, #ECFDF5 0%, #6EE7B7 100%)',
-            level: Number(g.level) || 1,
-            xp: Number(g.total_xp) || 0,
-            points: Number(g.total_xp) || 0,
-            stars: Number(g.total_stars) || 0,
-            streak: 1,
-            title: g.level_title || 'Novice Reader',
-            badge: '🥇 Champion',
-            isCurrentUser: true,
-        },
-    ];
-});
-
-const topThree = computed(() => {
-    return leaderboardData.value.slice(0, 3);
-});
-
-const currentUserRank = computed(() => {
-    return leaderboardData.value.find((item) => item.isCurrentUser) || leaderboardData.value[2];
-});
-
-const pointsToNextRank = computed(() => {
-    const current = currentUserRank.value;
-    if (current.rank === 1) return 0;
-    const ahead = leaderboardData.value.find((item) => item.rank === current.rank - 1);
-    if (!ahead) return 0;
-    return Math.max(0, ahead.xp - current.xp + 10);
-});
-
-const setFilter = (id) => {
-    activeFilter.value = id;
-    playPop(1.15);
+const AVATAR_EMOJI = {
+    fox: '🦊',
+    astro: '🐱',
+    knight: '🐻',
+    owl: '🦉',
+    bear: '🐼',
+    dragon: '🐲',
 };
 
-const switchClassroom = (classroomId) => {
+const leaders = computed(() =>
+    (props.classmates || []).map((c, idx) => ({
+        id: c.id,
+        rank: c.rank || idx + 1,
+        name: c.name,
+        emoji: AVATAR_EMOJI[c.avatar] || '🦊',
+        avatarBg: c.avatarBg || 'linear-gradient(145deg, #FFF7ED 0%, #FDBA74 100%)',
+        level: Number(c.level) || 1,
+        xp: Number(c.xp) || 0,
+        stars: Number(c.stars) || 0,
+        isCurrentUser: Boolean(c.is_current_user),
+    })),
+);
+
+/** Podium order left → right: 2nd, 1st, 3rd. */
+const podium = computed(() => [leaders.value[1], leaders.value[0], leaders.value[2]].filter(Boolean));
+const runnersUp = computed(() => leaders.value.slice(3));
+
+const myStats = computed(() => {
+    const g = props.user?.gamification || {};
+
+    return {
+        rank: props.me?.rank ?? null,
+        inTop: Boolean(props.me?.in_top),
+        xp: Number(props.me?.xp ?? g.total_xp ?? 0),
+        stars: Number(props.me?.stars ?? g.total_stars ?? 0),
+        level: Number(props.me?.level ?? g.level ?? 1),
+        xpToTop: Number(props.me?.xp_to_top ?? 0),
+    };
+});
+
+const podiumClass = (player) => ({ 1: 'is-gold', 2: 'is-silver', 3: 'is-bronze' })[player.rank] || '';
+
+const firstName = (name) => String(name || '').split(' ')[0];
+
+/** Tap a podium avatar: confetti + squash, a tiny celebration of a classmate. */
+const cheerFor = (event) => {
+    playBonus();
+    spawnPixarBurst(event.currentTarget, 14, document.documentElement.dataset.pixarTheme || 'toybox');
+};
+
+/** Back to the classroom whose leaderboard is showing (Ranking is no longer a nav tab). */
+const backToClassroomUrl = computed(() =>
+    props.active_classroom?.id ? `/students/classes/${props.active_classroom.id}` : '/students/classes',
+);
+
+const goBackToClassroom = () => {
     playClick();
-    router.get('/students/ranking', { class_id: classroomId }, { preserveState: true, preserveScroll: true });
+    router.visit(backToClassroomUrl.value);
 };
 </script>
 
 <template>
-    <Head :title="`Explorer Rankings • WEBREAD`" />
+    <Head :title="`Top Explorers • WEBREAD`" />
 
     <StudentLayout
         :user="user"
-        :level="currentUserRank.level"
-        :xp="currentUserRank.xp % 1000"
+        :level="myStats.level"
+        :xp="myStats.xp % 1000"
         :max-xp="1000"
-        :points="currentUserRank.points"
-        :stars="currentUserRank.stars"
-        :streak="currentUserRank.streak"
-        active-nav="ranking"
+        :points="myStats.xp"
+        :stars="myStats.stars"
+        active-nav="classes"
     >
         <section class="clay-ranking-page" aria-labelledby="ranking-heading">
+            <a
+                :href="backToClassroomUrl"
+                class="ranking-back-btn"
+                :aria-label="`Back to ${active_classroom?.name || 'All Classrooms'}`"
+                @click.prevent="goBackToClassroom"
+            >
+                <span class="ranking-back-face">
+                    <span aria-hidden="true">←</span>
+                    <span class="ranking-back-label">{{ active_classroom?.name || 'All Classrooms' }}</span>
+                </span>
+            </a>
 
-            <!-- CLASSROOM CONTEXT BANNER & ROOM SELECTOR -->
-            <div v-if="active_classroom || (classrooms && classrooms.length > 0)" class="clay-room-banner">
-                <div class="room-banner-main">
-                    <div class="room-icon-pod">
-                        <span>{{ active_classroom?.icon || '🏫' }}</span>
-                    </div>
-                    <div class="room-meta">
-                        <div class="room-kicker">CLASSROOM LEADERBOARD</div>
-                        <h2 class="room-heading">{{ active_classroom?.name || 'Classroom Room' }}</h2>
-                        <div class="room-badges">
-                            <span v-if="active_classroom?.grade_level" class="room-badge grade-badge">
-                                {{ active_classroom.grade_level }}
-                            </span>
-                            <span v-if="active_classroom?.teacher?.name" class="room-badge teacher-badge">
-                                👨‍🏫 {{ active_classroom.teacher.name }}
-                            </span>
-                            <span class="room-badge count-badge">
-                                👥 {{ leaderboardData.length }} {{ leaderboardData.length === 1 ? 'Classmate' : 'Classmates' }}
-                            </span>
-                        </div>
+            <!-- 1. HERO: lit trophy scene -->
+            <header class="ranking-hero">
+                <span class="hero-rays" aria-hidden="true"></span>
+                <span class="hero-confetti hero-confetti--1" aria-hidden="true"></span>
+                <span class="hero-confetti hero-confetti--2" aria-hidden="true"></span>
+                <span class="hero-confetti hero-confetti--3" aria-hidden="true"></span>
+                <span class="hero-confetti hero-confetti--4" aria-hidden="true"></span>
+
+                <svg viewBox="0 0 120 120" class="hero-trophy" aria-hidden="true">
+                    <defs>
+                        <linearGradient id="pxRankTrophy" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#FFF4B0" />
+                            <stop offset="45%" stop-color="#FCC93A" />
+                            <stop offset="100%" stop-color="#B86E05" />
+                        </linearGradient>
+                        <linearGradient id="pxRankPlinth" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#8B5CF6" />
+                            <stop offset="100%" stop-color="#4C1D95" />
+                        </linearGradient>
+                    </defs>
+                    <ellipse cx="60" cy="112" rx="34" ry="5" fill="#1E0F3A" opacity="0.3" />
+                    <path d="M38 24 H24 C20 24 18 28 20 34 C24 46 32 52 42 52" fill="none" stroke="#C47A06" stroke-width="6" stroke-linecap="round" />
+                    <path d="M82 24 H96 C100 24 102 28 100 34 C96 46 88 52 78 52" fill="none" stroke="#C47A06" stroke-width="6" stroke-linecap="round" />
+                    <path d="M36 12 H84 V40 C84 56 73 66 60 66 C47 66 36 56 36 40 Z" fill="url(#pxRankTrophy)" stroke="#8A4F05" stroke-width="3" />
+                    <ellipse cx="47" cy="26" rx="4.5" ry="9" fill="#FFFFFF" opacity="0.6" />
+                    <path d="M60 26 l4 8 8.8 1.3-6.4 6.2 1.5 8.8L60 46.1l-7.9 4.2 1.5-8.8-6.4-6.2 8.8-1.3z" fill="#FFF7D1" stroke="#B86E05" stroke-width="1.5" />
+                    <rect x="53" y="66" width="14" height="12" fill="#E3A008" stroke="#8A4F05" stroke-width="2" />
+                    <rect x="36" y="78" width="48" height="22" rx="7" fill="url(#pxRankPlinth)" stroke="#2E1065" stroke-width="3" />
+                    <rect x="42" y="83" width="16" height="4" rx="2" fill="#FFFFFF" opacity="0.35" />
+                </svg>
+
+                <div class="hero-copy">
+                    <span class="hero-kicker">{{ active_classroom ? 'CLASS LEADERBOARD' : 'EXPLORER LEADERBOARD' }}</span>
+                    <h1 id="ranking-heading" class="hero-title">Top {{ Math.max(leaders.length, 1) }} Explorers</h1>
+                    <p class="hero-room">
+                        <span aria-hidden="true">{{ active_classroom?.icon || '🌍' }}</span>
+                        {{ active_classroom?.name || 'All Explorers' }}
+                    </p>
+                    <div class="hero-chips">
+                        <span v-if="active_classroom?.grade_level" class="hero-chip">🎓 {{ active_classroom.grade_level }}</span>
+                        <span v-if="active_classroom?.teacher_name" class="hero-chip">👩‍🏫 {{ active_classroom.teacher_name }}</span>
+                        <span class="hero-chip">👥 {{ classmatesCount }} {{ classmatesCount === 1 ? 'explorer' : 'explorers' }}</span>
                     </div>
                 </div>
+            </header>
 
-                <!-- Multi-classroom switch pills if enrolled in > 1 room -->
-                <div v-if="classrooms && classrooms.length > 1" class="room-switcher-row">
-                    <span class="switcher-label">Your Rooms:</span>
+            <p v-if="!active_classroom" class="ranking-note">
+                🎒 Join a classroom with your teacher's code to see your own class's Top 5!
+            </p>
+
+            <!-- 2. PODIUM (top 3) -->
+            <ol v-if="podium.length" class="ranking-podium" aria-label="Top 3 explorers">
+                <li
+                    v-for="player in podium"
+                    :key="player.id"
+                    class="podium-col"
+                    :class="[podiumClass(player), { 'is-me': player.isCurrentUser }]"
+                    :style="{ '--rise': player.rank === 1 ? 0 : player.rank === 2 ? 1 : 2 }"
+                >
                     <button
-                        v-for="c in classrooms"
-                        :key="c.id"
                         type="button"
-                        class="room-switcher-pill"
-                        :class="{ 'is-active': c.id === active_classroom?.id }"
-                        @click="switchClassroom(c.id)"
+                        class="podium-avatar"
+                        :aria-label="`Cheer for ${player.name}, rank ${player.rank}`"
+                        @click="cheerFor"
                     >
-                        <span>{{ c.icon || '🏫' }}</span>
-                        <span>{{ c.name }}</span>
+                        <svg v-if="player.rank === 1" viewBox="0 0 48 30" class="podium-crown" aria-hidden="true">
+                            <path d="M4 26 L8 6 L18 16 L24 2 L30 16 L40 6 L44 26 Z" fill="#FCC93A" stroke="#9A5A06" stroke-width="2.5" stroke-linejoin="round" />
+                            <circle cx="24" cy="18" r="3" fill="#F43F5E" />
+                            <path d="M10 22 H38" stroke="#FFF4B0" stroke-width="2" stroke-linecap="round" opacity="0.8" />
+                        </svg>
+                        <span class="avatar-sphere" :style="{ background: player.avatarBg }">
+                            <span class="avatar-emoji" aria-hidden="true">{{ player.emoji }}</span>
+                        </span>
+                        <span class="podium-level">LV {{ player.level }}</span>
                     </button>
-                </div>
-            </div>
 
-            <!-- Fallback notice if student has 0 classrooms -->
-            <div v-else class="clay-room-empty-banner">
-                <div class="empty-icon">🎒</div>
-                <div class="empty-text">
-                    <strong>Global Explorer Stage:</strong> You haven't joined a classroom yet. Ask your teacher for your 6-digit class code to join your room on your Dashboard!
-                </div>
-            </div>
+                    <span class="podium-name">
+                        {{ firstName(player.name) }}
+                        <span v-if="player.isCurrentUser" class="you-tag">YOU</span>
+                    </span>
+                    <span class="podium-xp">⚡ {{ player.xp.toLocaleString() }}</span>
 
-            <!-- 2. PODIUM STAGE (TOP 3 EXPLORERS) -->
-            <div class="clay-podium-section" aria-label="Top 3 Ranked Explorers">
-                <div class="podium-grid">
-                    <!-- #2 Silver Podium (Left) -->
-                    <div v-if="topThree[1]" class="podium-col rank-second">
-                        <div class="podium-avatar-wrap">
-                            <span class="podium-medal-crown">🥈</span>
-                            <div class="podium-avatar-disc" :style="{ background: topThree[1].avatarBg }">
-                                <span class="podium-avatar-emoji">🐱</span>
-                            </div>
-                            <span class="podium-lvl-tag">LVL {{ topThree[1].level }}</span>
-                        </div>
-                        <h3 class="podium-player-name">{{ topThree[1].name }}</h3>
-                        <span class="podium-score-pill">{{ Number(topThree[1].xp).toLocaleString() }} XP</span>
-                        <div class="podium-block block-silver">
-                            <span class="podium-step-num">2</span>
-                        </div>
-                    </div>
+                    <span class="podium-block" aria-hidden="true">
+                        <span class="podium-block-shine"></span>
+                        <span class="podium-number">{{ player.rank }}</span>
+                    </span>
+                </li>
+            </ol>
 
-                    <!-- #1 Gold Podium (Center) -->
-                    <div v-if="topThree[0]" class="podium-col rank-first">
-                        <div class="podium-avatar-wrap">
-                            <span class="podium-medal-crown gold-crown">👑</span>
-                            <div class="podium-avatar-disc gold-glow" :style="{ background: topThree[0].avatarBg }">
-                                <span class="podium-avatar-emoji">🦊</span>
-                            </div>
-                            <span class="podium-lvl-tag gold-lvl">LVL {{ topThree[0].level }}</span>
-                        </div>
-                        <h3 class="podium-player-name">{{ topThree[0].name }}</h3>
-                        <span class="podium-score-pill gold-pill">{{ Number(topThree[0].xp).toLocaleString() }} XP</span>
-                        <div class="podium-block block-gold">
-                            <span class="podium-step-num">1</span>
-                        </div>
-                    </div>
+            <!-- 3. RUNNERS-UP (#4 – #5) -->
+            <ol v-if="runnersUp.length" class="ranking-runners" :start="4" aria-label="Explorers ranked 4 and 5">
+                <li
+                    v-for="(player, idx) in runnersUp"
+                    :key="player.id"
+                    class="runner-card"
+                    :class="{ 'is-me': player.isCurrentUser }"
+                    :style="{ '--i': idx }"
+                    @mouseenter="playPop(1.2)"
+                >
+                    <span class="runner-rank">{{ player.rank }}</span>
+                    <span class="runner-avatar" :style="{ background: player.avatarBg }" aria-hidden="true">{{ player.emoji }}</span>
+                    <span class="runner-identity">
+                        <span class="runner-name">
+                            {{ player.name }}
+                            <span v-if="player.isCurrentUser" class="you-tag">YOU</span>
+                        </span>
+                        <span class="runner-meta">LV {{ player.level }} • ⭐ {{ player.stars }}</span>
+                    </span>
+                    <span class="runner-xp">
+                        <strong>{{ player.xp.toLocaleString() }}</strong>
+                        <small>XP</small>
+                    </span>
+                </li>
+            </ol>
 
-                    <!-- #3 Bronze Podium (Right) -->
-                    <div v-if="topThree[2]" class="podium-col rank-third">
-                        <div class="podium-avatar-wrap">
-                            <span class="podium-medal-crown">🥉</span>
-                            <div class="podium-avatar-disc" :style="{ background: topThree[2].avatarBg }">
-                                <span class="podium-avatar-emoji">🐻</span>
-                            </div>
-                            <span class="podium-lvl-tag">LVL {{ topThree[2].level }}</span>
-                        </div>
-                        <h3 class="podium-player-name">
-                            {{ topThree[2].name }}
-                            <span v-if="topThree[2].isCurrentUser" class="you-badge">(You)</span>
-                        </h3>
-                        <span class="podium-score-pill">{{ Number(topThree[2].xp).toLocaleString() }} XP</span>
-                        <div class="podium-block block-bronze">
-                            <span class="podium-step-num">3</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <p v-if="!leaders.length" class="ranking-note">
+                🌱 No explorers have earned XP here yet. Finish a story or quiz to be the first on the board!
+            </p>
 
-            <!-- 3. CURRENT USER POSITION SPOTLIGHT BANNER -->
-            <div class="clay-user-spotlight-card" @mouseenter="playSparkle" @click="playBonus">
-                <span class="spotlight-gloss" aria-hidden="true"></span>
-                <div class="spotlight-left">
-                    <span class="spotlight-rank-badge">#{{ currentUserRank.rank }}</span>
-                    <div class="spotlight-text">
-                        <span class="spotlight-kicker">YOUR CURRENT STANDING</span>
-                        <h2 class="spotlight-title">{{ currentUserRank.name }} (You)</h2>
-                    </div>
+            <!-- 4. YOUR ADVENTURE: encouraging, never shows a low rank -->
+            <section class="my-standing" :class="{ 'is-top': myStats.inTop }" aria-labelledby="my-standing-title">
+                <span class="standing-gloss" aria-hidden="true"></span>
+
+                <span class="standing-medal" aria-hidden="true">
+                    <svg viewBox="0 0 40 40" class="standing-star">
+                        <path d="M20 3.5l5.2 10.6 11.6 1.7-8.4 8.2 2 11.6L20 30.1 9.6 35.6l2-11.6-8.4-8.2 11.6-1.7z" />
+                        <ellipse cx="15" cy="13" rx="3.2" ry="1.8" fill="#FFFFFF" opacity="0.85" transform="rotate(-30 15 13)" />
+                    </svg>
+                </span>
+
+                <div class="standing-copy">
+                    <span class="standing-kicker">YOUR ADVENTURE</span>
+                    <h2 id="my-standing-title" class="standing-title">
+                        <template v-if="myStats.inTop && myStats.rank === 1">You're #1! Champion reader! 👑</template>
+                        <template v-else-if="myStats.inTop">You're #{{ myStats.rank }} in the Top 5! 🎉</template>
+                        <template v-else>Keep climbing, {{ firstName(user?.name) || 'Explorer' }}! 🚀</template>
+                    </h2>
+                    <p class="standing-desc">
+                        <template v-if="myStats.inTop && myStats.rank === 1">Everyone's chasing you. Keep reading to stay on top!</template>
+                        <template v-else-if="myStats.inTop">Every story and quiz pushes you higher up the podium.</template>
+                        <template v-else-if="myStats.xpToTop > 0">
+                            Earn <strong>+{{ myStats.xpToTop.toLocaleString() }} XP</strong> to join the Top 5. Every story and quiz counts!
+                        </template>
+                        <template v-else>Finish stories and quizzes to earn XP and join the board!</template>
+                    </p>
                 </div>
 
-                <div class="spotlight-right">
-                    <div class="spotlight-stat-box">
-                        <span class="stat-label">EXPEDITION XP</span>
-                        <span class="stat-value">{{ Number(currentUserRank.xp).toLocaleString() }} XP</span>
-                    </div>
-
-                    <div v-if="pointsToNextRank > 0" class="spotlight-gap-pill">
-                        <span>🔥 Only <strong>+{{ pointsToNextRank }} XP</strong> to Rank #{{ currentUserRank.rank - 1 }}!</span>
-                    </div>
-                    <div v-else class="spotlight-gap-pill gold">
-                        <span>🏆 You are leading the realm! Keep reading!</span>
-                    </div>
+                <div class="standing-stats">
+                    <span class="standing-stat">
+                        <small>LEVEL</small>
+                        <strong>{{ myStats.level }}</strong>
+                    </span>
+                    <span class="standing-stat">
+                        <small>XP</small>
+                        <strong>{{ myStats.xp.toLocaleString() }}</strong>
+                    </span>
+                    <span class="standing-stat">
+                        <small>STARS</small>
+                        <strong>⭐ {{ myStats.stars }}</strong>
+                    </span>
                 </div>
-            </div>
-
-            <!-- 4. FULL EXPLORER LEADERBOARD LIST -->
-            <div class="clay-leaderboard-container">
-                <div class="leaderboard-table-header">
-                    <span class="th-rank">RANK</span>
-                    <span class="th-player">EXPLORER</span>
-                    <span class="th-streak">STREAK</span>
-                    <span class="th-stars">STARS</span>
-                    <span class="th-xp">TOTAL XP</span>
-                </div>
-
-                <div class="leaderboard-rows-list">
-                    <article
-                        v-for="player in leaderboardData"
-                        :key="player.id"
-                        class="clay-leaderboard-row"
-                        :class="{ 'is-current-user': player.isCurrentUser }"
-                        @mouseenter="playPop(1.2)"
-                    >
-                        <!-- Rank Number & Ribbon -->
-                        <div class="td-rank">
-                            <span
-                                class="rank-badge-disc"
-                                :class="{
-                                    'badge-gold': player.rank === 1,
-                                    'badge-silver': player.rank === 2,
-                                    'badge-bronze': player.rank === 3,
-                                }"
-                            >
-                                {{ player.rank }}
-                            </span>
-                        </div>
-
-                        <!-- Player Identity -->
-                        <div class="td-player">
-                            <div class="player-avatar-circle" :style="{ background: player.avatarBg }">
-                                <span v-if="player.avatar === 'fox'">🦊</span>
-                                <span v-else-if="player.avatar === 'astro'">🐱</span>
-                                <span v-else-if="player.avatar === 'knight'">🐻</span>
-                                <span v-else>🦉</span>
-                            </div>
-                            <div class="player-name-col">
-                                <span class="player-name-text">
-                                    {{ player.name }}
-                                    <span v-if="player.isCurrentUser" class="you-indicator">YOU</span>
-                                </span>
-                                <span class="player-title-text">{{ player.title }} • LVL {{ player.level }}</span>
-                            </div>
-                        </div>
-
-                        <!-- Streak Flame -->
-                        <div class="td-streak">
-                            <span class="streak-flame-pill">
-                                🔥 {{ player.streak }}d
-                            </span>
-                        </div>
-
-                        <!-- Stars -->
-                        <div class="td-stars">
-                            <span class="stars-stat-pill">
-                                ⭐ {{ player.stars }}
-                            </span>
-                        </div>
-
-                        <!-- XP Points Total -->
-                        <div class="td-xp">
-                            <span class="xp-val-text">{{ Number(player.xp).toLocaleString() }}</span>
-                            <span class="xp-lbl-text">XP</span>
-                        </div>
-                    </article>
-                </div>
-            </div>
+            </section>
         </section>
     </StudentLayout>
 </template>
 
 <style scoped>
-/* ==========================================================================
-   CLAYMORPHIC LEADERBOARD TOKENS & STYLES
-   ========================================================================== */
 .clay-ranking-page {
-    --ink-primary: #1E1B4B;
-    --ink-secondary: #475569;
+    --font-display: 'Fredoka', ui-rounded, 'Nunito', system-ui, sans-serif;
+    --font-body: 'Nunito', ui-rounded, system-ui, sans-serif;
     --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
-    --font-display: 'Fredoka', -apple-system, sans-serif;
-    --font-ui: 'Nunito', -apple-system, sans-serif;
 
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
-    padding-bottom: 5rem;
+    gap: 1rem;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+    padding-bottom: 1.5rem;
+    font-family: var(--font-body);
+    color: var(--px-ink);
 }
 
-/* 1. TOP HERO BANNER */
-.clay-ranking-hero {
-    position: relative;
-    overflow: hidden;
-    border-radius: 28px;
-    background: linear-gradient(145deg, #FFFBEB 0%, #FEF3C7 60%, #FDE68A 100%);
-    border: 3px solid #FFFFFF;
-    box-shadow:
-        0 8px 0 #D97706,
-        0 18px 36px rgba(217, 119, 6, 0.2),
-        inset 0 3px 6px rgba(255, 255, 255, 0.95);
-    padding: 1.5rem 1.6rem 1.2rem;
+/* ---------- Back key ---------- */
+.ranking-back-btn {
+    align-self: flex-start;
+    display: inline-flex;
+    max-width: 100%;
+    border-radius: 999px;
+    background: var(--px-ledge);
+    text-decoration: none;
+    filter: drop-shadow(0 4px 5px rgba(var(--px-shadow-rgb), 0.22));
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
 }
 
-.hero-gloss-shine {
-    position: absolute;
-    top: 4px;
-    left: 20px;
-    right: 20px;
-    height: 14px;
-    border-radius: 9999px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 100%);
-    pointer-events: none;
-}
-
-.hero-confetti-sparkle {
-    position: absolute;
-    font-size: 1.4rem;
-    pointer-events: none;
-    opacity: 0.55;
-    animation: sparkleFloat 4s infinite alternate ease-in-out;
-}
-
-.c-1 { top: 12%; right: 18%; animation-delay: 0s; }
-.c-2 { bottom: 18%; left: 32%; animation-delay: -1.5s; font-size: 1.1rem; }
-.c-3 { top: 40%; right: 5%; animation-delay: -2.8s; font-size: 1.6rem; }
-
-@keyframes sparkleFloat {
-    0% { transform: translateY(0) rotate(-6deg); }
-    100% { transform: translateY(-10px) rotate(8deg); }
-}
-
-.hero-top-meta {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    margin-bottom: 0.6rem;
-}
-
-.ranking-season-chip {
+.ranking-back-face {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
+    min-width: 0;
+    min-height: 42px;
+    padding: 0 1rem;
+    border-radius: inherit;
+    background: linear-gradient(180deg, var(--px-surface-card) 0%, var(--px-surface-soft) 100%);
+    box-shadow: inset 0 2px 0 var(--px-rim-top);
     font-family: var(--font-display);
-    font-size: 0.72rem;
-    font-weight: 800;
-    color: #92400E;
-    background: rgba(255, 255, 255, 0.85);
-    padding: 0.22rem 0.65rem;
-    border-radius: 9999px;
-    border: 1.5px solid #FCD34D;
-    box-shadow: 0 2px 0 rgba(146, 64, 14, 0.15);
-}
-
-.season-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #F59E0B;
-}
-
-.ranking-reset-tag {
-    font-family: var(--font-ui);
-    font-size: 0.72rem;
+    font-size: 0.85rem;
     font-weight: 700;
-    color: #B45309;
+    color: var(--px-ink);
+    transform: translateY(-4px);
+    transition: transform 0.25s var(--spring-bounce);
 }
 
-.hero-content-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-}
-
-.hero-main-title {
-    margin: 0;
-    font-family: var(--font-display);
-    font-size: clamp(1.4rem, 3.2vw, 1.95rem);
-    font-weight: 900;
-    color: #78350F;
-    line-height: 1.15;
-}
-
-.hero-description {
-    margin: 0.45rem 0 0;
-    font-family: var(--font-ui);
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: #92400E;
-    max-width: 520px;
-    line-height: 1.45;
-}
-
-.hero-trophy-pod {
-    position: relative;
-    width: 80px;
-    height: 80px;
-    flex-shrink: 0;
-}
-
-.clay-trophy-svg {
-    width: 100%;
-    height: 100%;
-    filter: drop-shadow(0 8px 16px rgba(180, 83, 9, 0.35));
-    animation: trophyBob 4s infinite alternate ease-in-out;
-}
-
-@keyframes trophyBob {
-    0% { transform: translateY(0) rotate(-2deg); }
-    100% { transform: translateY(-6px) rotate(2deg); }
-}
-
-/* Tabs */
-.ranking-filter-tabs {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-top: 1.15rem;
-    overflow-x: auto;
-    padding-bottom: 0.25rem;
-}
-
-.clay-filter-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.38rem 0.85rem;
-    border-radius: 9999px;
-    border: 2px solid #FFFFFF;
-    background: rgba(255, 255, 255, 0.7);
-    color: #78350F;
-    font-family: var(--font-display);
-    font-size: 0.8rem;
-    font-weight: 800;
-    cursor: pointer;
-    box-shadow: 0 3px 0 #D97706;
-    transition: transform 0.16s var(--spring-bounce), background 0.16s ease;
+.ranking-back-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.clay-filter-pill:hover {
-    transform: translateY(-2px);
-    background: #FFFFFF;
+.ranking-back-btn:active .ranking-back-face {
+    transform: translateY(-1px) scale(0.98, 0.94);
+    transition-duration: 0.06s;
 }
 
-.clay-filter-pill.is-active {
-    background: linear-gradient(180deg, #F59E0B 0%, #D97706 100%);
+.ranking-back-btn:focus-visible {
+    outline: 3px solid var(--px-focus-stroke);
+    outline-offset: 3px;
+}
+
+/* ---------- Hero ---------- */
+.ranking-hero {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    min-height: 150px;
+    padding: 1rem 1.1rem;
+    overflow: hidden;
+    border-radius: 30px;
+    background:
+        radial-gradient(circle at 18% 70%, rgba(255, 236, 150, 0.85) 0%, rgba(255, 236, 150, 0) 45%),
+        var(--px-hero-banner-grad, linear-gradient(135deg, #6366F1 0%, #8B5CF6 55%, #EC4899 100%));
+    border: 3px solid var(--px-card-border);
+    box-shadow:
+        0 6px 0 var(--px-hero-banner-ledge, #312E81),
+        0 18px 30px -12px rgba(var(--px-shadow-rgb), 0.5),
+        inset 0 2px 0 rgba(255, 255, 255, 0.45);
     color: #FFFFFF;
-    border-color: #FEF3C7;
-    box-shadow: 0 4px 0 #92400E, 0 6px 12px rgba(180, 83, 9, 0.3);
+    animation: rankPop 0.6s var(--spring-bounce) backwards;
 }
 
-/* 2. PODIUM STAGE */
-.clay-podium-section {
-    padding: 1.25rem 0.5rem 0.5rem;
+.hero-rays {
+    position: absolute;
+    top: 50%;
+    left: 70px;
+    width: 360px;
+    height: 360px;
+    margin: -180px 0 0 -180px;
+    background: repeating-conic-gradient(rgba(255, 255, 255, 0.2) 0deg 9deg, rgba(255, 255, 255, 0) 9deg 24deg);
+    -webkit-mask: radial-gradient(circle, #000 15%, transparent 60%);
+    mask: radial-gradient(circle, #000 15%, transparent 60%);
+    pointer-events: none;
+    animation: rankSpin 20s linear infinite;
 }
 
-.podium-grid {
-    display: grid;
-    grid-template-columns: 1fr 1.15fr 1fr;
-    gap: 0.75rem;
-    align-items: flex-end;
-    max-width: 650px;
-    margin: 0 auto;
+.hero-confetti {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    pointer-events: none;
+    animation: rankFloat 3.4s ease-in-out infinite;
 }
 
-.podium-col {
+.hero-confetti--1 { top: 14px; right: 18%; background: #FDE047; transform: rotate(20deg); }
+.hero-confetti--2 { top: 62%; right: 6%; background: #34D399; border-radius: 50%; animation-delay: -1s; }
+.hero-confetti--3 { top: 18%; right: 40%; width: 7px; height: 7px; background: #F472B6; animation-delay: -2s; }
+.hero-confetti--4 { bottom: 12px; right: 30%; width: 8px; height: 8px; background: #7DD3FC; border-radius: 50%; animation-delay: -0.5s; }
+
+.hero-trophy {
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+    width: 96px;
+    height: 96px;
+    filter: drop-shadow(0 6px 10px rgba(30, 15, 58, 0.35));
+    animation: rankBob 3.6s ease-in-out infinite;
+}
+
+.hero-copy {
+    position: relative;
+    z-index: 1;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.hero-kicker {
+    align-self: flex-start;
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.22);
+    font-family: var(--font-display);
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+}
+
+.hero-title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: clamp(1.6rem, 1.2rem + 2.4vw, 2.2rem);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    text-shadow: 0 3px 0 rgba(30, 15, 58, 0.35);
+}
+
+.hero-room {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.hero-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-top: 0.15rem;
+}
+
+.hero-chip {
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 2px 0 rgba(30, 15, 58, 0.25);
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #2B245C;
+    white-space: nowrap;
+}
+
+.ranking-note {
+    margin: 0;
+    padding: 0.75rem 1rem;
+    border-radius: 20px;
+    background: var(--px-surface-card);
+    box-shadow: 0 3px 0 var(--px-ledge), inset 0 2px 0 var(--px-rim-top);
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: var(--px-ink-muted);
     text-align: center;
 }
 
-.podium-avatar-wrap {
+/* ---------- Podium ---------- */
+.ranking-podium {
+    display: grid;
+    grid-template-columns: 1fr 1.15fr 1fr;
+    align-items: end;
+    gap: 0.5rem;
+    margin: 0.4rem 0 0;
+    padding: 1.2rem 0.6rem 0;
+    list-style: none;
+    border-radius: 30px;
+    background:
+        radial-gradient(ellipse at 50% 100%, color-mix(in srgb, var(--px-accent) 30%, transparent) 0%, transparent 65%),
+        linear-gradient(180deg, var(--px-surface-card) 0%, var(--px-surface-soft) 100%);
+    border: 3px solid var(--px-card-border);
+    box-shadow:
+        0 6px 0 var(--px-ledge),
+        0 16px 26px -12px rgba(var(--px-shadow-rgb), 0.4),
+        inset 0 2px 0 var(--px-rim-top);
+    overflow: hidden;
+}
+
+.podium-col {
+    --medal: #CBD5F5;
+    --medal-dark: #7C86B8;
+    --block-top: #E4E8FB;
+    --block-mid: #B9C1EC;
+    --block-edge: #8590C8;
+    --block-height: 78px;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    min-width: 0;
+    text-align: center;
+    animation: rankPop 0.6s var(--spring-bounce) backwards;
+    animation-delay: calc(0.15s + var(--rise) * 0.12s);
+}
+
+.podium-col.is-gold {
+    --medal: #FCC93A;
+    --medal-dark: #B86E05;
+    --block-top: #FFF1A6;
+    --block-mid: #FCC93A;
+    --block-edge: #B86E05;
+    --block-height: 112px;
+}
+
+.podium-col.is-bronze {
+    --medal: #F0A36B;
+    --medal-dark: #9A4A12;
+    --block-top: #FFD9B8;
+    --block-mid: #E8915A;
+    --block-edge: #9A4A12;
+    --block-height: 60px;
+}
+
+.podium-avatar {
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-bottom: 0.45rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: transform 0.3s var(--spring-bounce);
 }
 
-.podium-medal-crown {
-    position: absolute;
-    top: -18px;
-    font-size: 1.55rem;
-    z-index: 2;
+.podium-avatar:active {
+    transform: scale(1.08, 0.9);
+    transition-duration: 0.08s;
 }
 
-.gold-crown {
-    font-size: 1.95rem;
-    top: -24px;
-    animation: crownFloat 2.5s infinite alternate ease-in-out;
-}
-
-@keyframes crownFloat {
-    0% { transform: translateY(0) scale(1); }
-    100% { transform: translateY(-4px) scale(1.08); }
-}
-
-.podium-avatar-disc {
-    width: 60px;
-    height: 60px;
+.podium-avatar:focus-visible {
+    outline: 3px solid var(--px-focus-stroke);
+    outline-offset: 4px;
     border-radius: 50%;
-    border: 3.5px solid #FFFFFF;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.85rem;
 }
 
-.gold-glow {
-    width: 74px;
-    height: 74px;
-    font-size: 2.25rem;
-    border-color: #FEF08A;
-    box-shadow: 0 0 0 3px #F59E0B, 0 10px 22px rgba(245, 158, 11, 0.35);
-}
-
-.podium-lvl-tag {
+.podium-crown {
     position: absolute;
-    bottom: -6px;
+    top: -22px;
+    z-index: 2;
+    width: 40px;
+    height: 26px;
+    filter: drop-shadow(0 3px 2px rgba(154, 90, 6, 0.4));
+    animation: crownBob 2.4s ease-in-out infinite;
+}
+
+.avatar-sphere {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 4px solid var(--medal);
+    box-shadow:
+        0 4px 0 var(--medal-dark),
+        0 10px 14px -6px rgba(var(--px-shadow-rgb), 0.5),
+        inset 0 -6px 10px rgba(0, 0, 0, 0.12),
+        inset 0 4px 6px rgba(255, 255, 255, 0.6);
+}
+
+.is-gold .avatar-sphere {
+    width: 78px;
+    height: 78px;
+}
+
+.avatar-emoji {
+    font-size: 2rem;
+    line-height: 1;
+    filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.15));
+}
+
+.is-gold .avatar-emoji {
+    font-size: 2.4rem;
+}
+
+.podium-level {
+    margin-top: -10px;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--px-secondary-lit) 0%, var(--px-secondary) 100%);
+    box-shadow: 0 2px 0 var(--px-secondary-pedestal);
     font-family: var(--font-display);
-    font-size: 0.62rem;
-    font-weight: 800;
-    color: #1E293B;
-    background: #FFFFFF;
-    border: 1.5px solid #CBD5E1;
-    border-radius: 9999px;
-    padding: 0.08rem 0.42rem;
-    box-shadow: 0 2px 0 #94A3B8;
+    font-size: 0.66rem;
+    font-weight: 700;
+    color: var(--px-secondary-ink);
 }
 
-.gold-lvl {
-    background: #FEF3C7;
-    border-color: #F59E0B;
-    color: #92400E;
-    box-shadow: 0 2px 0 #D97706;
-}
-
-.podium-player-name {
-    margin: 0.2rem 0;
+.podium-name {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.2rem;
+    max-width: 100%;
+    margin-top: 0.15rem;
     font-family: var(--font-display);
-    font-size: 0.95rem;
-    font-weight: 800;
-    color: var(--px-stage-ink, var(--ink-primary));
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 140px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--px-ink);
+    overflow-wrap: anywhere;
 }
 
-.you-badge {
-    color: #059669;
-    font-size: 0.76rem;
-}
-
-.podium-score-pill {
+.podium-xp {
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #FFE98A 0%, #FBBF24 100%);
+    box-shadow: 0 2px 0 #B45309, inset 0 1.5px 0 rgba(255, 255, 255, 0.7);
     font-family: var(--font-display);
     font-size: 0.72rem;
-    font-weight: 900;
-    color: #4338CA;
-    background: #EEF2FF;
-    border-radius: 9999px;
-    padding: 0.15rem 0.55rem;
-    margin-bottom: 0.5rem;
-    border: 1.5px solid #C7D2FE;
-}
-
-.gold-pill {
-    background: #FEF3C7;
-    color: #B45309;
-    border-color: #FCD34D;
-}
-
-.podium-block {
-    width: 100%;
-    border-radius: 20px 20px 6px 6px;
-    border: 3px solid #FFFFFF;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.podium-step-num {
-    font-family: var(--font-display);
-    font-size: 2.2rem;
-    font-weight: 900;
-    color: rgba(255, 255, 255, 0.9);
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.block-first { height: 130px; }
-.block-second { height: 95px; }
-.block-third { height: 75px; }
-
-.block-gold {
-    height: 130px;
-    background: linear-gradient(180deg, #FBBF24 0%, #D97706 100%);
-    box-shadow: 0 6px 0 #92400E, 0 12px 24px rgba(180, 83, 9, 0.25);
-}
-
-.block-silver {
-    height: 95px;
-    background: linear-gradient(180deg, #E2E8F0 0%, #94A3B8 100%);
-    box-shadow: 0 5px 0 #475569, 0 10px 20px rgba(71, 85, 105, 0.2);
-}
-
-.block-bronze {
-    height: 75px;
-    background: linear-gradient(180deg, #FDBA74 0%, #C2410C 100%);
-    box-shadow: 0 5px 0 #7C2D12, 0 10px 20px rgba(194, 65, 12, 0.2);
-}
-
-/* 3. CURRENT USER SPOTLIGHT BANNER */
-.clay-user-spotlight-card {
-    position: relative;
-    overflow: hidden;
-    border-radius: 22px;
-    background: linear-gradient(145deg, #ECFDF5 0%, #D1FAE5 100%);
-    border: 3px solid #FFFFFF;
-    box-shadow:
-        0 6px 0 #34D399,
-        0 14px 28px rgba(16, 185, 129, 0.16),
-        inset 0 3px 5px rgba(255, 255, 255, 0.9);
-    padding: 1rem 1.4rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    cursor: pointer;
-    transition: transform 0.18s var(--spring-bounce);
-}
-
-.clay-user-spotlight-card:hover {
-    transform: translateY(-2px);
-}
-
-.spotlight-gloss {
-    position: absolute;
-    top: 4px;
-    left: 20px;
-    right: 20px;
-    height: 10px;
-    border-radius: 9999px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 100%);
-    pointer-events: none;
-}
-
-.spotlight-left {
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
-}
-
-.spotlight-rank-badge {
-    width: 46px;
-    height: 46px;
-    border-radius: 14px;
-    background: linear-gradient(145deg, #10B981 0%, #047857 100%);
-    border: 2px solid #FFFFFF;
-    box-shadow: 0 3px 0 #064E3B;
-    color: #FFFFFF;
-    font-family: var(--font-display);
-    font-size: 1.25rem;
-    font-weight: 900;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.spotlight-kicker {
-    display: block;
-    font-family: var(--font-display);
-    font-size: 0.65rem;
-    font-weight: 900;
-    color: #065F46;
-    letter-spacing: 0.04em;
-}
-
-.spotlight-title {
-    margin: 0;
-    font-family: var(--font-display);
-    font-size: 1.12rem;
-    font-weight: 900;
-    color: #064E3B;
-}
-
-.spotlight-right {
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
-}
-
-.spotlight-stat-box {
-    display: flex;
-    flex-direction: column;
-    text-align: right;
-}
-
-.stat-label {
-    font-family: var(--font-display);
-    font-size: 0.62rem;
-    font-weight: 800;
-    color: #047857;
-}
-
-.stat-value {
-    font-family: var(--font-display);
-    font-size: 1.05rem;
-    font-weight: 900;
-    color: #064E3B;
-}
-
-.spotlight-gap-pill {
-    font-family: var(--font-ui);
-    font-size: 0.78rem;
     font-weight: 700;
-    color: #9A3412;
-    background: #FFEDD5;
-    border: 1.5px solid #FDBA74;
-    padding: 0.35rem 0.75rem;
-    border-radius: 9999px;
+    color: #5A2D00;
     white-space: nowrap;
 }
 
-.spotlight-gap-pill.gold {
-    background: #FEF3C7;
-    border-color: #FCD34D;
-    color: #92400E;
-}
-
-/* 4. FULL LEADERBOARD TABLE */
-.clay-leaderboard-container {
-    border-radius: 24px;
-    background: linear-gradient(176deg, var(--px-surface-card, #FFFFFF) 0%, var(--px-surface-card-bottom, #FFFFFF) 100%);
-    border: 2.5px solid var(--px-card-border, #FFFFFF);
-    box-shadow:
-        0 8px 0 var(--px-hud-ledge, #C7D2FE),
-        0 18px 36px rgba(var(--px-shadow-rgb, 49, 46, 129), 0.16),
-        inset 0 2px 4px var(--px-rim-top, rgba(255, 255, 255, 0.95));
-    padding: 0.85rem 1rem;
-}
-
-.leaderboard-table-header {
+/* Clay podium steps: lit top face, front face, dark edge */
+.podium-block {
+    position: relative;
     display: grid;
-    grid-template-columns: 50px 1fr 90px 90px 100px;
-    gap: 0.5rem;
-    padding: 0.45rem 0.85rem;
-    font-family: var(--font-display);
-    font-size: 0.68rem;
-    font-weight: 800;
-    color: var(--px-ink-subtle, #64748B);
-    letter-spacing: 0.05em;
-    border-bottom: 2px dashed rgba(var(--px-shadow-rgb, 148, 163, 184), 0.18);
+    place-items: center;
+    width: 100%;
+    height: var(--block-height);
+    margin-top: 0.4rem;
+    overflow: hidden;
+    border-radius: 18px 18px 0 0;
+    background: linear-gradient(180deg, var(--block-top) 0%, var(--block-mid) 30%, var(--block-mid) 70%, var(--block-edge) 100%);
+    box-shadow:
+        inset 0 3px 0 rgba(255, 255, 255, 0.7),
+        inset 0 -6px 0 rgba(0, 0, 0, 0.12);
+    transform-origin: 50% 100%;
+    animation: blockRise 0.7s var(--spring-bounce) backwards;
+    animation-delay: calc(0.1s + var(--rise) * 0.12s);
 }
 
-.leaderboard-rows-list {
+.podium-block-shine {
+    position: absolute;
+    top: 0;
+    left: -60%;
+    width: 40%;
+    height: 100%;
+    background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: skewX(-12deg);
+}
+
+.is-gold .podium-block-shine {
+    animation: blockShine 3.2s ease-in-out 1s infinite;
+}
+
+.podium-number {
+    position: relative;
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    text-shadow: 0 3px 0 var(--block-edge);
+}
+
+.is-gold .podium-number {
+    font-size: 2.6rem;
+}
+
+.you-tag {
+    padding: 0.08rem 0.4rem;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #34D399 0%, #059669 100%);
+    box-shadow: 0 2px 0 #065F46;
+    font-family: var(--font-display);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: #FFFFFF;
+}
+
+.podium-col.is-me .avatar-sphere {
+    outline: 3px dashed #34D399;
+    outline-offset: 4px;
+}
+
+/* ---------- Runners-up ---------- */
+.ranking-runners {
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
-    margin-top: 0.55rem;
+    gap: 0.65rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
 }
 
-.clay-leaderboard-row {
+.runner-card {
     display: grid;
-    grid-template-columns: 50px 1fr 90px 90px 100px;
-    gap: 0.5rem;
-    align-items: center;
-    padding: 0.65rem 0.85rem;
-    border-radius: 18px;
-    background: var(--px-surface-well, #F8FAFC);
-    border: 2px solid var(--px-card-border, #F1F5F9);
-    transition: transform 0.16s var(--spring-bounce), background 0.16s ease, border-color 0.16s ease;
-}
-
-.clay-leaderboard-row:hover {
-    transform: translateY(-2px);
-    background: var(--px-surface-elevated, #F1F5F9);
-}
-
-.clay-leaderboard-row.is-current-user {
-    background: linear-gradient(145deg, #F0FDF4 0%, #DCFCE7 100%);
-    border-color: #86EFAC;
-    box-shadow: 0 4px 0 #4ADE80, 0 6px 14px rgba(34, 197, 94, 0.18);
-}
-
-.clay-leaderboard-row.is-current-user .player-name-text {
-    color: #064E3B;
-}
-
-.clay-leaderboard-row.is-current-user .player-title-text {
-    color: #047857;
-}
-
-.td-rank {
-    display: flex;
-    align-items: center;
-}
-
-.rank-badge-disc {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: #E2E8F0;
-    color: #475569;
-    font-family: var(--font-display);
-    font-size: 0.88rem;
-    font-weight: 900;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.badge-gold {
-    background: linear-gradient(145deg, #FEF08A 0%, #F59E0B 100%);
-    color: #78350F;
-    box-shadow: 0 2px 0 #D97706;
-}
-
-.badge-silver {
-    background: linear-gradient(145deg, #F1F5F9 0%, #94A3B8 100%);
-    color: #1E293B;
-    box-shadow: 0 2px 0 #64748B;
-}
-
-.badge-bronze {
-    background: linear-gradient(145deg, #FFEDD5 0%, #EA580C 100%);
-    color: #FFFFFF;
-    box-shadow: 0 2px 0 #C2410C;
-}
-
-.td-player {
-    display: flex;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.65rem;
-    min-width: 0;
+    padding: 0.65rem 0.85rem 0.65rem 0.65rem;
+    border-radius: 24px;
+    background: linear-gradient(180deg, var(--px-surface-card) 0%, var(--px-surface-soft) 100%);
+    border: 3px solid var(--px-card-border);
+    box-shadow:
+        0 5px 0 var(--px-ledge),
+        0 12px 20px -12px rgba(var(--px-shadow-rgb), 0.4),
+        inset 0 2px 0 var(--px-rim-top);
+    transition: transform 0.3s var(--spring-bounce);
+    animation: rankPop 0.55s var(--spring-bounce) backwards;
+    animation-delay: calc(0.55s + var(--i) * 0.08s);
 }
 
-.player-avatar-circle {
+.runner-card.is-me {
+    background: linear-gradient(180deg, var(--px-surface-card) 0%, color-mix(in srgb, var(--px-tint-success-bg) 60%, var(--px-surface-card)) 100%);
+    box-shadow:
+        0 5px 0 #059669,
+        0 12px 20px -10px rgba(16, 185, 129, 0.45),
+        inset 0 2px 0 var(--px-rim-top);
+}
+
+@media (hover: hover) {
+    .runner-card:hover {
+        transform: translateY(-4px) rotate(-0.4deg);
+    }
+}
+
+.runner-rank {
+    display: grid;
+    place-items: center;
     width: 38px;
     height: 38px;
     border-radius: 50%;
-    border: 2px solid #FFFFFF;
-    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-    flex-shrink: 0;
+    background: radial-gradient(circle at 32% 26%, #FFFFFF 0%, var(--px-secondary-lit) 30%, var(--px-secondary) 100%);
+    box-shadow: 0 3px 0 var(--px-secondary-pedestal);
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--px-secondary-ink);
 }
 
-.player-name-col {
+.runner-avatar {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 3px solid var(--px-surface-card);
+    box-shadow: 0 3px 0 var(--px-ledge), inset 0 -4px 6px rgba(0, 0, 0, 0.1);
+    font-size: 1.5rem;
+}
+
+.runner-identity {
     display: flex;
     flex-direction: column;
+    gap: 0.1rem;
     min-width: 0;
 }
 
-.player-name-text {
+.runner-name {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 0;
     font-family: var(--font-display);
-    font-size: 0.92rem;
-    font-weight: 800;
-    color: var(--px-ink, var(--ink-primary));
-    white-space: nowrap;
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: var(--px-ink);
     overflow: hidden;
+    white-space: nowrap;
     text-overflow: ellipsis;
 }
 
-.you-indicator {
-    display: inline-block;
-    background: #10B981;
-    color: #FFFFFF;
-    font-size: 0.58rem;
-    font-weight: 900;
-    padding: 0.05rem 0.35rem;
-    border-radius: 9999px;
-    margin-left: 0.3rem;
+.runner-meta {
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: var(--px-ink-muted);
 }
 
-.player-title-text {
-    font-family: var(--font-ui);
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: var(--px-ink-muted, #64748B);
-}
-
-.td-streak {
-    display: flex;
-    align-items: center;
-}
-
-.streak-flame-pill {
-    font-family: var(--font-display);
-    font-size: 0.75rem;
-    font-weight: 800;
-    color: #C2410C;
-    background: #FFF7ED;
-    border: 1.5px solid #FDBA74;
-    border-radius: 9999px;
-    padding: 0.15rem 0.5rem;
-    box-shadow: 0 2px 0 #EA580C;
-}
-
-.td-stars {
-    display: flex;
-    align-items: center;
-}
-
-.stars-stat-pill {
-    font-family: var(--font-display);
-    font-size: 0.75rem;
-    font-weight: 800;
-    color: #B45309;
-    background: #FEF3C7;
-    border: 1.5px solid #FCD34D;
-    border-radius: 9999px;
-    padding: 0.15rem 0.5rem;
-    box-shadow: 0 2px 0 #F59E0B;
-}
-
-.td-xp {
-    display: flex;
-    align-items: baseline;
-    gap: 0.2rem;
-    text-align: right;
-    justify-content: flex-end;
-}
-
-.xp-val-text {
-    font-family: var(--font-display);
-    font-size: 0.95rem;
-    font-weight: 900;
-    color: #1E1B4B;
-}
-
-.xp-lbl-text {
-    font-family: var(--font-display);
-    font-size: 0.65rem;
-    font-weight: 800;
-    color: #6366F1;
-}
-
-/* CLASSROOM CONTEXT BANNER */
-.clay-room-banner {
+.runner-xp {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%);
-    border: 2px solid #E2E8F0;
-    border-radius: 20px;
-    padding: 1rem 1.25rem;
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05), 0 2px 0 #CBD5E1;
-    margin-bottom: 0.75rem;
+    align-items: flex-end;
+    line-height: 1.05;
+    font-family: var(--font-display);
 }
 
-.room-banner-main {
-    display: flex;
+.runner-xp strong {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--px-ink);
+}
+
+.runner-xp small {
+    font-size: 0.66rem;
+    font-weight: 700;
+    color: var(--px-ink-subtle);
+}
+
+/* ---------- Your adventure ---------- */
+.my-standing {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.6rem 0.8rem;
     align-items: center;
-    gap: 1rem;
+    padding: 1rem 1rem 1.05rem;
+    border-radius: 28px;
+    background: linear-gradient(170deg, var(--px-surface-card) 0%, color-mix(in srgb, var(--px-tint-info-bg) 60%, var(--px-surface-card)) 100%);
+    border: 3px solid var(--px-card-border);
+    box-shadow:
+        0 6px 0 color-mix(in srgb, var(--px-secondary) 40%, var(--px-ledge)),
+        0 16px 26px -12px rgba(var(--px-shadow-rgb), 0.4),
+        inset 0 2px 0 var(--px-rim-top);
+    animation: rankPop 0.6s var(--spring-bounce) 0.7s backwards;
 }
 
-.room-icon-pod {
-    width: 52px;
-    height: 52px;
-    border-radius: 16px;
-    background: linear-gradient(145deg, #EEF2FF 0%, #C7D2FE 100%);
-    border: 2px solid #818CF8;
-    box-shadow: 0 4px 0 #6366F1, inset 0 2px 2px rgba(255, 255, 255, 0.9);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.8rem;
-    flex-shrink: 0;
+.my-standing.is-top {
+    background: linear-gradient(170deg, var(--px-surface-card) 0%, color-mix(in srgb, var(--px-tint-warn-bg) 70%, var(--px-surface-card)) 100%);
+    box-shadow:
+        0 6px 0 #D97706,
+        0 16px 26px -10px rgba(245, 158, 11, 0.5),
+        inset 0 2px 0 var(--px-rim-top);
 }
 
-.room-meta {
+.standing-gloss {
+    position: absolute;
+    top: 3px;
+    left: 18px;
+    right: 18px;
+    height: 10px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, calc(0.9 * var(--px-gloss, 1))) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+}
+
+.standing-medal {
+    display: grid;
+    place-items: center;
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 32% 26%, #FFFFFF 0%, var(--px-secondary-lit) 30%, var(--px-secondary) 70%, var(--px-secondary-pedestal) 100%);
+    border: 4px solid var(--px-surface-card);
+    box-shadow: 0 4px 0 var(--px-secondary-pedestal), 0 10px 14px -6px rgba(var(--px-shadow-rgb), 0.45);
+    animation: rankBob 3s ease-in-out infinite;
+}
+
+.is-top .standing-medal {
+    background: radial-gradient(circle at 32% 26%, #FFFFFF 0%, #FFE98A 30%, #FCC93A 70%, #B86E05 100%);
+    box-shadow: 0 4px 0 #9A5A06, 0 10px 14px -6px rgba(245, 158, 11, 0.55);
+}
+
+.standing-star {
+    width: 30px;
+    height: 30px;
+    fill: #FFFFFF;
+    filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.18));
+}
+
+.is-top .standing-star {
+    fill: #FFF7D1;
+}
+
+.standing-copy {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.15rem;
+    min-width: 0;
 }
 
-.room-kicker {
+.standing-kicker {
     font-family: var(--font-display);
-    font-size: 0.68rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    color: #4F46E5;
-    text-transform: uppercase;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--px-ink-subtle);
 }
 
-.room-heading {
+.standing-title {
     margin: 0;
     font-family: var(--font-display);
-    font-size: 1.25rem;
-    font-weight: 900;
-    color: #0F172A;
+    font-size: 1.15rem;
+    font-weight: 700;
     line-height: 1.2;
+    color: var(--px-ink);
 }
 
-.room-badges {
+.standing-desc {
+    margin: 0;
+    font-size: 0.84rem;
+    font-weight: 600;
+    line-height: 1.45;
+    color: var(--px-ink-muted);
+}
+
+.standing-desc strong {
+    color: var(--px-tint-warn-ink);
+}
+
+.standing-stats {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
+}
+
+.standing-stat {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-top: 0.2rem;
-}
-
-.room-badge {
-    font-family: var(--font-ui);
-    font-size: 0.72rem;
-    font-weight: 700;
-    padding: 0.2rem 0.6rem;
-    border-radius: 9999px;
-    border: 1.5px solid transparent;
-}
-
-.grade-badge {
-    background: #FEF3C7;
-    color: #92400E;
-    border-color: #FCD34D;
-}
-
-.teacher-badge {
-    background: #E0E7FF;
-    color: #3730A3;
-    border-color: #A5B4FC;
-}
-
-.count-badge {
-    background: #F1F5F9;
-    color: #475569;
-    border-color: #CBD5E1;
-}
-
-.room-switcher-row {
-    display: flex;
+    flex-direction: column;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    padding-top: 0.6rem;
-    border-top: 1px dashed #E2E8F0;
+    gap: 0.05rem;
+    padding: 0.5rem 0.3rem;
+    border-radius: 18px;
+    background: var(--px-surface-well);
+    box-shadow: var(--px-well-shadow);
 }
 
-.switcher-label {
-    font-family: var(--font-ui);
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #64748B;
+.standing-stat small {
+    font-size: 0.62rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    color: var(--px-ink-subtle);
 }
 
-.room-switcher-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.3rem 0.75rem;
+.standing-stat strong {
     font-family: var(--font-display);
-    font-size: 0.78rem;
-    font-weight: 800;
-    color: #334155;
-    background: #F8FAFC;
-    border: 1.5px solid #CBD5E1;
-    border-radius: 9999px;
-    cursor: pointer;
-    box-shadow: 0 2px 0 #94A3B8;
-    transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--px-ink);
+    white-space: nowrap;
 }
 
-.room-switcher-pill:hover {
-    transform: translateY(-1px);
-    background: #FFFFFF;
-    border-color: #818CF8;
+/* ---------- Motion ---------- */
+@keyframes rankPop {
+    0% { transform: scale(0.7); opacity: 0; }
+    60% { transform: scale(1.04, 0.96); opacity: 1; }
+    80% { transform: scale(0.99, 1.02); }
+    100% { transform: none; }
 }
 
-.room-switcher-pill.is-active {
-    background: #4F46E5;
-    color: #FFFFFF;
-    border-color: #3730A3;
-    box-shadow: 0 2px 0 #1E1B4B;
+@keyframes blockRise {
+    0% { transform: scaleY(0); }
+    65% { transform: scaleY(1.08); }
+    100% { transform: scaleY(1); }
 }
 
-.clay-room-empty-banner {
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
-    background: #FFFBEB;
-    border: 2px dashed #FCD34D;
-    border-radius: 16px;
-    padding: 0.85rem 1.15rem;
-    margin-bottom: 0.75rem;
-    font-family: var(--font-ui);
-    font-size: 0.82rem;
-    color: #92400E;
+@keyframes blockShine {
+    0%, 60% { transform: translateX(0) skewX(-12deg); }
+    100% { transform: translateX(420%) skewX(-12deg); }
 }
 
-.empty-icon {
-    font-size: 1.6rem;
-    flex-shrink: 0;
+@keyframes crownBob {
+    0%, 100% { transform: translateY(0) rotate(-4deg); }
+    50% { transform: translateY(-4px) rotate(4deg); }
 }
 
-/* Responsive adjustments */
-@media (max-width: 640px) {
-    .leaderboard-table-header {
-        grid-template-columns: 40px 1fr 85px;
+@keyframes rankBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
+@keyframes rankFloat {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-8px) rotate(40deg); }
+}
+
+@keyframes rankSpin {
+    to { transform: rotate(360deg); }
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 400px) {
+    .ranking-hero {
+        gap: 0.6rem;
+        padding: 0.9rem;
     }
-    .th-streak, .th-stars {
-        display: none;
+
+    .hero-trophy {
+        width: 74px;
+        height: 74px;
     }
-    .clay-leaderboard-row {
-        grid-template-columns: 40px 1fr 85px;
+
+    .ranking-podium {
+        gap: 0.35rem;
+        padding: 1.1rem 0.4rem 0;
     }
-    .td-streak, .td-stars {
-        display: none;
+
+    .avatar-sphere {
+        width: 54px;
+        height: 54px;
     }
-    .hero-content-row {
-        flex-direction: column-reverse;
-        align-items: flex-start;
+
+    .is-gold .avatar-sphere {
+        width: 66px;
+        height: 66px;
     }
-    .hero-trophy-pod {
-        width: 60px;
-        height: 60px;
+
+    .avatar-emoji {
+        font-size: 1.7rem;
     }
-    .clay-user-spotlight-card {
-        flex-direction: column;
-        align-items: flex-start;
+
+    .is-gold .avatar-emoji {
+        font-size: 2rem;
     }
-    .spotlight-right {
-        width: 100%;
-        justify-content: space-between;
+
+    .podium-name {
+        font-size: 0.82rem;
+    }
+
+    .podium-xp {
+        font-size: 0.66rem;
+        padding: 0.15rem 0.4rem;
+    }
+
+    .runner-card {
+        gap: 0.5rem;
+        padding: 0.55rem 0.7rem 0.55rem 0.55rem;
+    }
+
+    .runner-rank {
+        width: 32px;
+        height: 32px;
+        font-size: 0.95rem;
+    }
+
+    .runner-avatar {
+        width: 38px;
+        height: 38px;
+        font-size: 1.25rem;
+    }
+
+    .standing-medal {
+        width: 48px;
+        height: 48px;
+    }
+}
+
+@media (min-width: 640px) {
+    .ranking-hero {
+        min-height: 180px;
+        padding: 1.3rem 1.6rem;
+        gap: 1.4rem;
+    }
+
+    .hero-trophy {
+        width: 124px;
+        height: 124px;
+    }
+
+    .ranking-podium {
+        gap: 0.9rem;
+        padding: 1.6rem 1.4rem 0;
+    }
+
+    .podium-col.is-gold {
+        --block-height: 132px;
+    }
+
+    .podium-col {
+        --block-height: 96px;
+    }
+
+    .podium-col.is-bronze {
+        --block-height: 74px;
+    }
+
+    .my-standing {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        padding: 1.2rem 1.4rem;
+    }
+
+    .standing-stats {
+        grid-column: auto;
+        grid-template-columns: repeat(3, 5.2rem);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .clay-ranking-page *,
+    .clay-ranking-page *::before,
+    .clay-ranking-page *::after,
+    .clay-ranking-page {
+        animation: none !important;
+        transition-duration: 0.01ms !important;
     }
 }
 </style>
-

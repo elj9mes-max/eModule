@@ -11,7 +11,7 @@ test('login screen can be rendered', function () {
     $response->assertStatus(200);
 });
 
-test('teacher login redirects to teachers dashboard', function () {
+test('teacher login lands on the classrooms page', function () {
     $teacher = User::factory()->teacher()->create([
         'email' => 'teacher@example.com',
         'password' => 'secret123',
@@ -23,7 +23,7 @@ test('teacher login redirects to teachers dashboard', function () {
     ]);
 
     $this->assertAuthenticatedAs($teacher);
-    $response->assertRedirect(route('teachers.dashboard'));
+    $response->assertRedirect(route('teachers.classes.index'));
 });
 
 test('student login redirects to students welcome page', function () {
@@ -134,7 +134,7 @@ test('new student can register and is redirected to student dashboard', function
     $response->assertRedirect(route('students.dashboard'));
 });
 
-test('new teacher can register and is redirected to teacher dashboard', function () {
+test('new teacher can register and lands on the classrooms page', function () {
     $response = $this->post('/register', [
         'name' => 'New Teacher',
         'email' => 'newteacher@example.com',
@@ -147,5 +147,5 @@ test('new teacher can register and is redirected to teacher dashboard', function
     $user = auth()->user();
     expect($user->isTeacher())->toBeTrue();
     expect($user->email)->toBe('newteacher@example.com');
-    $response->assertRedirect(route('teachers.dashboard'));
+    $response->assertRedirect(route('teachers.classes.index'));
 });

@@ -1,12 +1,13 @@
 <script setup>
 import { router } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useSound } from '@/Services/soundManager';
-import { flushAllClientCache, prefetchRoute } from '@/Composables/usePrefetch';
-import { usePixarTheme } from '@/Composables/usePixarTheme';
+import { prefetchRoute } from '@/Composables/usePrefetch';
+import { usePixarTheme, useWorldOnDocument } from '@/Composables/usePixarTheme';
 
 const { playPop, playBoing, playSparkle, playClick, playBonus } = useSound();
 const { activeWorld } = usePixarTheme();
+useWorldOnDocument(activeWorld);
 
 const props = defineProps({
     user: {
@@ -91,12 +92,50 @@ const avatarProfiles = [
     },
 ];
 
-const selectedAvatarIndex = ref(0);
+const resolveInitialAvatarIndex = () => {
+    if (typeof window === 'undefined') {
+        return 0;
+    }
+    const stored = window.localStorage?.getItem('emodule_companion');
+    const idx = avatarProfiles.findIndex((a) => a.id === stored);
+    return idx >= 0 ? idx : 0;
+};
+
+const selectedAvatarIndex = ref(resolveInitialAvatarIndex());
 const isAvatarBouncing = ref(false);
 const currentAvatar = computed(() => avatarProfiles[selectedAvatarIndex.value]);
 
+const syncCompanionFromEvent = (event) => {
+    const nextId = event?.detail?.id || window.localStorage?.getItem('emodule_companion');
+    const idx = avatarProfiles.findIndex((a) => a.id === nextId);
+    if (idx >= 0 && idx !== selectedAvatarIndex.value) {
+        selectedAvatarIndex.value = idx;
+        isAvatarBouncing.value = true;
+        window.setTimeout(() => {
+            isAvatarBouncing.value = false;
+        }, 320);
+    }
+};
+
+onMounted(() => {
+    if (typeof window !== 'undefined') {
+        window.addEventListener('emodule:companion-changed', syncCompanionFromEvent);
+    }
+});
+
+onBeforeUnmount(() => {
+    if (typeof window !== 'undefined') {
+        window.removeEventListener('emodule:companion-changed', syncCompanionFromEvent);
+    }
+});
+
 const cycleAvatar = () => {
     selectedAvatarIndex.value = (selectedAvatarIndex.value + 1) % avatarProfiles.length;
+    const nextId = avatarProfiles[selectedAvatarIndex.value].id;
+    if (typeof window !== 'undefined') {
+        window.localStorage?.setItem('emodule_companion', nextId);
+        window.dispatchEvent(new CustomEvent('emodule:companion-changed', { detail: { id: nextId } }));
+    }
     isAvatarBouncing.value = true;
     playBoing();
     window.setTimeout(() => {
@@ -129,14 +168,9 @@ const formattedStars = computed(() => Number(effectiveStars.value || 0).toLocale
 const formattedXp = computed(() => Number(effectiveXp.value || 0).toLocaleString());
 const formattedMaxXp = computed(() => Number(effectiveMaxXp.value || 200).toLocaleString());
 
-const goToModules = () => {
+const goToClassrooms = () => {
     playClick();
-    router.visit('/students/dashboard');
-};
-
-const goToRanking = () => {
-    playClick();
-    router.visit('/students/ranking');
+    router.visit('/students/classes');
 };
 
 const goToSettings = () => {
@@ -147,12 +181,6 @@ const goToSettings = () => {
 const goToWelcome = () => {
     playClick();
     router.visit('/students/welcome');
-};
-
-const handleLogout = () => {
-    playClick();
-    flushAllClientCache();
-    router.post('/logout');
 };
 </script>
 
@@ -452,41 +480,21 @@ const handleLogout = () => {
             <button
                 type="button"
                 class="clay-dock-btn"
-                :class="{ 'is-active': activeNav === 'modules' }"
-                :aria-current="activeNav === 'modules' ? 'page' : undefined"
-                @mouseenter="playPop(1.1); prefetchRoute('/students/dashboard', ['student-nav', 'student-modules'])"
-                @focus="prefetchRoute('/students/dashboard', ['student-nav', 'student-modules'])"
-                @click="goToModules"
+                :class="{ 'is-active': activeNav === 'classes' }"
+                :aria-current="activeNav === 'classes' ? 'page' : undefined"
+                aria-label="View My Classrooms"
+                @mouseenter="playPop(1.1); prefetchRoute('/students/classes', ['student-nav', 'student-classes'])"
+                @focus="prefetchRoute('/students/classes', ['student-nav', 'student-classes'])"
+                @click="goToClassrooms"
             >
                 <span class="clay-dock-pill pill-realms" aria-hidden="true">
                     <svg viewBox="0 0 28 28" class="dock-svg-icon">
-                        <path d="M4 7.5C4 6.12 5.12 5 6.5 5H13v17H6.5C5.12 22 4 20.88 4 19.5v-12z" fill="currentColor" opacity="0.95" />
-                        <path d="M24 7.5C24 6.12 22.88 5 21.5 5H15v17h6.5c1.38 0 2.5-1.12 2.5-2.5v-12z" fill="currentColor" opacity="0.7" />
-                        <rect x="13" y="5" width="2" height="17" rx="1" fill="currentColor" />
+                        <path d="M4 12.5L14 5l10 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M6.5 11.5V22a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V11.5" fill="currentColor" opacity="0.85" />
+                        <rect x="11.5" y="16" width="5" height="7" rx="1" fill="#FFFFFF" opacity="0.9" />
                     </svg>
                 </span>
-                <span class="clay-dock-label">Modules</span>
-            </button>
-
-            <button
-                type="button"
-                class="clay-dock-btn"
-                :class="{ 'is-active': activeNav === 'ranking' }"
-                :aria-current="activeNav === 'ranking' ? 'page' : undefined"
-                aria-label="View Leaderboard and Explorer Rankings"
-                @mouseenter="playPop(1.1); prefetchRoute('/students/ranking', ['student-nav', 'student-ranking'])"
-                @focus="prefetchRoute('/students/ranking', ['student-nav', 'student-ranking'])"
-                @click="goToRanking"
-            >
-                <span class="clay-dock-pill pill-ranking" aria-hidden="true">
-                    <svg viewBox="0 0 28 28" class="dock-svg-icon">
-                        <path d="M7 6h14v7a7 7 0 0 1-14 0V6z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" />
-                        <path d="M7 9H4a2 2 0 0 0-2 2v1a4 4 0 0 0 4 4h1M21 9h3a2 2 0 0 1 2 2v1a4 4 0 0 1-4 4h-1" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
-                        <path d="M14 20v4M9 24h10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
-                        <circle cx="14" cy="11" r="2.2" fill="currentColor" />
-                    </svg>
-                </span>
-                <span class="clay-dock-label">Ranking</span>
+                <span class="clay-dock-label">Classes</span>
             </button>
 
             <button
@@ -513,25 +521,6 @@ const handleLogout = () => {
                 </span>
                 <span class="clay-dock-label">Settings</span>
             </button>
-
-            <span class="clay-dock-divider" aria-hidden="true"></span>
-
-            <button
-                type="button"
-                class="clay-dock-btn dock-exit-btn"
-                aria-label="Log out of student portal"
-                @mouseenter="playPop(1.1)"
-                @click="handleLogout"
-            >
-                <span class="clay-dock-pill pill-exit" aria-hidden="true">
-                    <svg viewBox="0 0 28 28" class="dock-svg-icon">
-                        <path d="M11 6H7.5A2.5 2.5 0 0 0 5 8.5v11A2.5 2.5 0 0 0 7.5 22H11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-                        <path d="M18 10l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-                        <line x1="11" y1="14" x2="21.5" y2="14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-                    </svg>
-                </span>
-                <span class="clay-dock-label">Exit</span>
-            </button>
         </nav>
     </div>
 </template>
@@ -556,7 +545,7 @@ const handleLogout = () => {
     color: var(--px-ink);
     position: relative;
     isolation: isolate;
-    padding-bottom: calc(6.75rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
     overflow-x: hidden;
     box-sizing: border-box;
     -webkit-tap-highlight-color: transparent;
@@ -610,8 +599,8 @@ const handleLogout = () => {
     animation: shellCloudDrift var(--_cdur, 30s) ease-in-out infinite alternate;
 }
 
-.px-shell-cloud--1 { width: clamp(140px, 16vw, 230px); top: 10%; left: 3%; --_cdur: 28s; }
-.px-shell-cloud--2 { width: clamp(130px, 15vw, 210px); top: 18%; right: 4%; --_cdur: 34s; animation-delay: -10s; }
+.px-shell-cloud--1 { width: clamp(104px, 14vw, 196px); top: 10%; left: 3%; --_cdur: 28s; }
+.px-shell-cloud--2 { width: clamp(96px, 13vw, 178px); top: 18%; right: 4%; --_cdur: 34s; animation-delay: -10s; }
 
 @keyframes shellCloudDrift {
     0% { transform: translate3d(-12px, 0, 0); }
@@ -628,14 +617,14 @@ const handleLogout = () => {
         inset 0 -8px 18px rgba(var(--px-shadow-rgb), 0.2),
         inset 0 3px 8px rgba(255, 255, 255, 0.65),
         0 14px 32px -6px rgba(var(--px-shadow-rgb), 0.2);
-    opacity: 0.72;
+    opacity: 0.68;
     will-change: transform;
     animation: shellOrbFloat var(--_dur, 18s) ease-in-out infinite alternate;
 }
 
-.px-shell-orb--1 { width: 112px; height: 112px; top: 16%; left: 4%; --_orb: var(--px-orb-1); --_dur: 17s; }
-.px-shell-orb--2 { width: 84px; height: 84px; top: 32%; right: 5%; --_orb: var(--px-orb-2); --_dur: 14s; animation-delay: -4s; }
-.px-shell-orb--3 { width: 96px; height: 96px; bottom: 18%; left: 7%; --_orb: var(--px-orb-3); --_dur: 20s; animation-delay: -7s; }
+.px-shell-orb--1 { width: clamp(64px, 9vw, 96px); height: clamp(64px, 9vw, 96px); top: 16%; left: 3%; --_orb: var(--px-orb-1); --_dur: 17s; }
+.px-shell-orb--2 { width: clamp(50px, 7.5vw, 74px); height: clamp(50px, 7.5vw, 74px); top: 32%; right: 4%; --_orb: var(--px-orb-2); --_dur: 14s; animation-delay: -4s; }
+.px-shell-orb--3 { width: clamp(58px, 8.2vw, 84px); height: clamp(58px, 8.2vw, 84px); bottom: 18%; left: 6%; --_orb: var(--px-orb-3); --_dur: 20s; animation-delay: -7s; }
 
 @keyframes shellOrbFloat {
     0% { transform: translate3d(0, 0, 0) scale(1); }
@@ -690,23 +679,23 @@ const handleLogout = () => {
     position: relative;
     overflow: hidden;
     background: linear-gradient(180deg, var(--px-surface-card) 0%, var(--px-surface-card-bottom) 100%);
-    padding: 0.72rem 0.85rem;
-    border: 2.5px solid var(--px-card-border);
+    padding: 0.52rem 0.72rem;
+    border-bottom: 2.5px solid var(--px-card-border);
     box-shadow:
-        0 6px 0 var(--px-hud-ledge),
-        0 16px 32px rgba(var(--px-shadow-rgb), 0.16),
+        0 4px 0 var(--px-hud-ledge),
+        0 12px 24px rgba(var(--px-shadow-rgb), 0.14),
         inset 0 2px 3px var(--px-rim-top);
     display: flex;
     flex-direction: column;
-    gap: 0.58rem;
+    gap: 0.42rem;
 }
 
 .clay-console-gloss {
     position: absolute;
-    top: 4px;
-    left: 20px;
-    right: 20px;
-    height: 12px;
+    top: 3px;
+    left: 16px;
+    right: 16px;
+    height: 10px;
     border-radius: 9999px;
     background: linear-gradient(180deg, var(--px-rim-top) 0%, rgba(255, 255, 255, 0) 100%);
     opacity: 0.65;
@@ -717,13 +706,13 @@ const handleLogout = () => {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
+    gap: 0.45rem;
 }
 
 .hud-player-block {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.5rem;
     min-width: 0;
     flex: 1 1 auto;
 }
@@ -731,15 +720,15 @@ const handleLogout = () => {
 /* 3D Clay Avatar Pod */
 .clay-avatar-pod {
     position: relative;
-    width: 58px;
-    height: 58px;
+    width: 48px;
+    height: 48px;
     padding: 0;
     border-radius: 50%;
     background: var(--px-surface-elevated);
-    border: 2.5px solid var(--px-card-border);
+    border: 2px solid var(--px-card-border);
     box-shadow:
-        0 4px 0 var(--px-hud-ledge),
-        0 8px 16px rgba(var(--px-shadow-rgb), 0.2),
+        0 3px 0 var(--px-hud-ledge),
+        0 6px 12px rgba(var(--px-shadow-rgb), 0.18),
         inset 0 2px 4px var(--px-rim-top);
     cursor: pointer;
     flex-shrink: 0;
@@ -751,12 +740,12 @@ const handleLogout = () => {
 }
 
 .clay-avatar-pod:focus-visible {
-    box-shadow: 0 0 0 3px #4F46E5, 0 4px 0 #C7D2FE;
+    box-shadow: 0 0 0 3px var(--px-focus-stroke), 0 4px 0 var(--px-tint-info-line);
 }
 
 .clay-avatar-pod:active {
-    transform: translateY(3px) scale(0.95);
-    box-shadow: 0 1px 0 #C7D2FE;
+    transform: translateY(2px) scale(0.95);
+    box-shadow: 0 1px 0 var(--px-tint-info-line);
 }
 
 .clay-avatar-pod.is-popping {
@@ -783,13 +772,13 @@ const handleLogout = () => {
 }
 
 .clay-portrait-medallion {
-    width: 44px;
-    height: 44px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
-    border: 2.5px solid #EA580C;
+    border: 2px solid #EA580C;
     box-shadow:
-        inset 0 3px 5px rgba(255, 255, 255, 0.8),
-        inset 0 -3px 5px rgba(15, 23, 42, 0.16);
+        inset 0 2px 4px rgba(255, 255, 255, 0.8),
+        inset 0 -2px 4px rgba(var(--px-shadow-rgb), 0.16);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -798,29 +787,29 @@ const handleLogout = () => {
 }
 
 .avatar-character-svg {
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
     display: block;
     filter: drop-shadow(0 2px 2px rgba(15, 23, 42, 0.15));
 }
 
 .clay-lvl-pill {
     position: absolute;
-    bottom: -5px;
+    bottom: -4px;
     left: 50%;
     transform: translateX(-50%);
     background: linear-gradient(180deg, #6366F1 0%, #4338CA 100%);
     color: #FFFFFF;
     font-family: var(--font-display);
-    font-size: 0.56rem;
+    font-size: 0.5rem;
     font-weight: 800;
     letter-spacing: 0.04em;
-    padding: 0.08rem 0.44rem;
+    padding: 0.05rem 0.36rem;
     border-radius: 9999px;
-    border: 2px solid #FFFFFF;
+    border: 1.5px solid var(--px-card-border);
     box-shadow:
         0 2px 0 #312E81,
-        0 4px 8px rgba(67, 56, 202, 0.3);
+        0 3px 6px rgba(67, 56, 202, 0.3);
     white-space: nowrap;
     z-index: 2;
 }
@@ -829,69 +818,69 @@ const handleLogout = () => {
 .player-meta {
     display: flex;
     flex-direction: column;
-    gap: 0.16rem;
+    gap: 0.12rem;
     min-width: 0;
 }
 
 .player-badges-line {
     display: flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.25rem;
 }
 
 .clay-companion-tag {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    padding: 0.12rem 0.48rem;
+    gap: 0.22rem;
+    padding: 0.08rem 0.42rem;
     border-radius: 9999px;
-    font-size: 0.56rem;
+    font-size: 0.52rem;
     font-weight: 900;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    border: 1.5px solid rgba(255, 255, 255, 0.9);
+    border: 1.5px solid var(--px-card-border);
     box-shadow:
-        0 2px 0 rgba(99, 102, 241, 0.18),
+        0 2px 0 rgba(var(--px-shadow-rgb), 0.14),
         inset 0 1px 2px rgba(255, 255, 255, 0.8);
 }
 
 .companion-dot {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
 }
 
 .clay-streak-pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.16rem;
-    padding: 0.12rem 0.44rem;
+    gap: 0.14rem;
+    padding: 0.08rem 0.38rem;
     border-radius: 9999px;
-    background: linear-gradient(180deg, #FFF7ED 0%, #FFEDD5 100%);
-    border: 1.5px solid #FDBA74;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-warn-bg) 100%);
+    border: 1.5px solid var(--px-tint-warn-line);
     box-shadow: 0 2px 0 #F97316;
     font-family: var(--font-display);
-    font-size: 0.58rem;
+    font-size: 0.54rem;
     font-weight: 800;
-    color: #C2410C;
+    color: var(--px-tint-warn-ink);
 }
 
 .streak-flame-svg {
-    width: 11px;
-    height: 11px;
+    width: 10px;
+    height: 10px;
     display: block;
 }
 
 .player-display-name {
     margin: 0;
     font-family: var(--font-display);
-    font-size: 1.02rem;
+    font-size: 0.92rem;
     font-weight: 800;
     color: var(--ink-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.18;
+    line-height: 1.15;
 }
 
 /* ==========================================================================
@@ -900,58 +889,60 @@ const handleLogout = () => {
 .hud-currency-group {
     display: flex;
     align-items: center;
-    gap: 0.42rem;
+    gap: 0.36rem;
     flex-shrink: 0;
 }
 
 .clay-currency-pill {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
-    padding: 0.25rem 0.55rem 0.25rem 0.28rem;
-    border-radius: 18px;
-    border: 2px solid #FFFFFF;
+    gap: 0.3rem;
+    padding: 0.2rem 0.46rem 0.2rem 0.24rem;
+    border-radius: 15px;
+    border: 1.5px solid var(--px-card-border);
     cursor: pointer;
     transition: transform 0.18s var(--spring-bounce), box-shadow 0.18s ease;
 }
 
-.clay-currency-pill:hover {
-    transform: translateY(-2px) scale(1.04);
+@media (hover: hover) {
+    .clay-currency-pill:hover {
+        transform: translateY(-2px) scale(1.04);
+    }
 }
 
 .clay-points-pill {
-    background: linear-gradient(180deg, #ECFDF5 0%, #D1FAE5 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--px-tint-success-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-success-bg) 100%);
     box-shadow:
-        0 4px 0 #6EE7B7,
-        0 6px 12px rgba(16, 185, 129, 0.15),
+        0 3px 0 var(--px-tint-success-line),
+        0 5px 10px rgba(16, 185, 129, 0.14),
         inset 0 2px 3px rgba(255, 255, 255, 0.9);
 }
 
 .clay-stars-pill {
-    background: linear-gradient(180deg, #FEFCE8 0%, #FEF08A 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-warn-bg) 100%);
     box-shadow:
-        0 4px 0 #FACC15,
-        0 6px 12px rgba(245, 158, 11, 0.16),
+        0 3px 0 var(--px-tint-warn-line),
+        0 5px 10px rgba(245, 158, 11, 0.14),
         inset 0 2px 3px rgba(255, 255, 255, 0.9);
 }
 
 .currency-icon-badge {
-    width: 28px;
-    height: 28px;
-    border-radius: 11px;
-    background: #FFFFFF;
+    width: 24px;
+    height: 24px;
+    border-radius: 9px;
+    background: var(--px-surface-card);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
     box-shadow:
-        0 2px 4px rgba(15, 23, 42, 0.08),
+        0 2px 4px rgba(var(--px-shadow-rgb), 0.08),
         inset 0 1px 2px rgba(255, 255, 255, 0.9);
 }
 
 .currency-svg {
-    width: 18px;
-    height: 18px;
+    width: 15px;
+    height: 15px;
     display: block;
 }
 
@@ -963,23 +954,23 @@ const handleLogout = () => {
 
 .currency-val {
     font-family: var(--font-display);
-    font-size: 0.84rem;
+    font-size: 0.78rem;
     font-weight: 800;
 }
 
 .points-color {
-    color: #065F46;
+    color: var(--px-tint-success-ink);
 }
 
 .stars-color {
-    color: #92400E;
+    color: var(--px-tint-warn-ink);
 }
 
 .currency-lbl {
-    font-size: 0.48rem;
+    font-size: 0.45rem;
     font-weight: 900;
     letter-spacing: 0.06em;
-    color: #475569;
+    color: var(--px-ink-muted);
 }
 
 /* ==========================================================================
@@ -988,31 +979,31 @@ const handleLogout = () => {
 .hud-xp-bar-container {
     display: flex;
     flex-direction: column;
-    gap: 0.24rem;
+    gap: 0.18rem;
 }
 
 .xp-bar-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 0.66rem;
+    font-size: 0.62rem;
     font-weight: 800;
     color: var(--px-ink-muted);
-    padding: 0 0.15rem;
+    padding: 0 0.1rem;
 }
 
 .xp-level-label {
     display: inline-flex;
     align-items: center;
-    gap: 0.22rem;
+    gap: 0.2rem;
     font-family: var(--font-display);
     font-weight: 700;
     color: var(--px-ink);
 }
 
 .xp-bolt-svg {
-    width: 13px;
-    height: 13px;
+    width: 11px;
+    height: 11px;
 }
 
 .xp-numbers-readout strong {
@@ -1022,14 +1013,14 @@ const handleLogout = () => {
 
 .clay-xp-track {
     width: 100%;
-    height: 13px;
+    height: 10px;
     border-radius: 9999px;
     background: var(--px-xp-track-bg);
-    border: 2px solid var(--px-card-border);
+    border: 1.5px solid var(--px-card-border);
     box-shadow:
         inset 0 2px 4px rgba(var(--px-shadow-rgb), 0.2),
-        0 2px 0 rgba(var(--px-shadow-rgb), 0.14);
-    padding: 1.5px;
+        0 2px 0 rgba(var(--px-shadow-rgb), 0.12);
+    padding: 1px;
     overflow: hidden;
     box-sizing: border-box;
 }
@@ -1048,9 +1039,9 @@ const handleLogout = () => {
     top: 1px;
     left: 6px;
     right: 6px;
-    height: 3px;
+    height: 2.5px;
     border-radius: 9999px;
-    background: rgba(255, 255, 255, 0.72);
+    background: color-mix(in srgb, var(--px-surface-card) 72%, transparent);
 }
 
 /* ==========================================================================
@@ -1059,9 +1050,9 @@ const handleLogout = () => {
 .clay-game-stage {
     position: relative;
     z-index: 10;
-    max-width: 1040px;
-    margin: 0.4rem auto 1.5rem;
-    padding: 0 0.8rem;
+    max-width: 960px;
+    margin: 0.45rem auto 1.25rem;
+    padding: 0 0.72rem;
 }
 
 /* ==========================================================================
@@ -1069,31 +1060,31 @@ const handleLogout = () => {
    ========================================================================== */
 .clay-bottom-dock {
     position: fixed;
-    bottom: max(0.75rem, env(safe-area-inset-bottom, 0.75rem));
+    bottom: max(0.6rem, env(safe-area-inset-bottom, 0.6rem));
     left: 50%;
     transform: translateX(-50%);
     z-index: 50;
     background: linear-gradient(180deg, var(--px-surface-card) 0%, var(--px-surface-card-bottom) 100%);
     backdrop-filter: blur(14px) saturate(145%);
     -webkit-backdrop-filter: blur(14px) saturate(145%);
-    border-radius: 30px;
-    padding: 0.4rem 0.75rem;
+    border-radius: 26px;
+    padding: 0.3rem 0.55rem;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    border: 2.5px solid var(--px-card-border);
+    gap: 0.38rem;
+    border: 2px solid var(--px-card-border);
     box-shadow:
-        0 7px 0 var(--px-hud-ledge),
-        0 18px 34px rgba(var(--px-shadow-rgb), 0.28),
-        inset 0 2px 4px var(--px-rim-top);
+        0 5px 0 var(--px-hud-ledge),
+        0 14px 28px rgba(var(--px-shadow-rgb), 0.26),
+        inset 0 2px 3px var(--px-rim-top);
     max-width: calc(100vw - 1.25rem);
 }
 
 .clay-dock-btn {
-    min-width: 62px;
-    min-height: 52px;
-    padding: 0.2rem 0.48rem;
-    border-radius: 20px;
+    min-width: 68px;
+    min-height: 46px;
+    padding: 0.16rem 0.55rem;
+    border-radius: 18px;
     border: none;
     background: transparent;
     cursor: pointer;
@@ -1101,7 +1092,7 @@ const handleLogout = () => {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.18rem;
+    gap: 0.14rem;
     color: var(--px-ink-muted);
     transition: transform 180ms var(--spring-bounce), color 150ms ease;
     outline: none;
@@ -1112,17 +1103,17 @@ const handleLogout = () => {
 }
 
 .clay-dock-btn:active {
-    transform: translateY(3px) scale(0.92);
+    transform: translateY(2px) scale(0.94);
 }
 
 .clay-dock-pill {
-    width: 40px;
-    height: 34px;
-    border-radius: 14px;
+    width: 36px;
+    height: 29px;
+    border-radius: 12px;
     background: var(--px-surface-well);
     border: 1.5px solid var(--px-card-border);
     box-shadow:
-        0 3px 0 rgba(var(--px-shadow-rgb), 0.18),
+        0 2px 0 rgba(var(--px-shadow-rgb), 0.16),
         inset 0 2px 3px var(--px-rim-top);
     display: flex;
     align-items: center;
@@ -1134,29 +1125,19 @@ const handleLogout = () => {
     color: var(--px-link-ink);
 }
 
-.pill-ranking {
-    color: #F59E0B;
-}
-
 .pill-settings {
-    color: #A78BFA;
+    color: var(--px-tint-magic-ink);
 }
 
-.clay-dock-btn:hover .pill-ranking {
-    color: #FBBF24;
-}
-
-.clay-dock-btn:hover .pill-settings {
-    color: var(--px-secondary-lit);
-}
-
-.pill-exit {
-    color: #FB7185;
+@media (hover: hover) {
+    .clay-dock-btn:hover .pill-settings {
+        color: var(--px-secondary-lit);
+    }
 }
 
 .dock-svg-icon {
-    width: 19px;
-    height: 19px;
+    width: 17px;
+    height: 17px;
     display: block;
 }
 
@@ -1169,29 +1150,17 @@ const handleLogout = () => {
     color: var(--px-secondary-ink);
     border-color: var(--px-card-border);
     box-shadow:
-        0 4px 0 var(--px-secondary-pedestal),
-        0 6px 14px var(--px-secondary-glow),
-        inset 0 2px 4px rgba(255, 255, 255, 0.55);
+        0 3px 0 var(--px-secondary-pedestal),
+        0 5px 12px var(--px-secondary-glow),
+        inset 0 2px 3px rgba(255, 255, 255, 0.55);
     transform: translateY(-2px);
 }
 
 .clay-dock-label {
     font-family: var(--font-display);
-    font-size: 0.64rem;
+    font-size: 0.62rem;
     font-weight: 700;
     letter-spacing: 0.02em;
-}
-
-.clay-dock-divider {
-    width: 2px;
-    height: 32px;
-    border-radius: 9999px;
-    background: var(--px-card-border);
-}
-
-.dock-exit-btn:hover .pill-exit {
-    background: linear-gradient(180deg, #FFE4E6 0%, #FECDD3 100%);
-    box-shadow: 0 3px 0 #FDA4AF;
 }
 
 /* ==========================================================================
@@ -1199,18 +1168,23 @@ const handleLogout = () => {
    ========================================================================== */
 @media (max-width: 380px) {
     .clay-avatar-pod {
-        width: 52px;
-        height: 52px;
+        width: 44px;
+        height: 44px;
     }
 
     .clay-portrait-medallion {
-        width: 38px;
-        height: 38px;
+        width: 32px;
+        height: 32px;
+    }
+
+    .avatar-character-svg {
+        width: 26px;
+        height: 26px;
     }
 
     .player-display-name {
-        font-size: 0.9rem;
-        max-width: 88px;
+        font-size: 0.84rem;
+        max-width: 96px;
     }
 
     .clay-streak-pill {
@@ -1218,36 +1192,50 @@ const handleLogout = () => {
     }
 
     .clay-currency-pill {
-        padding: 0.22rem 0.42rem 0.22rem 0.22rem;
-        gap: 0.26rem;
+        padding: 0.18rem 0.38rem 0.18rem 0.2rem;
+        gap: 0.24rem;
     }
 
     .currency-icon-badge {
-        width: 24px;
-        height: 24px;
+        width: 22px;
+        height: 22px;
     }
 
     .currency-val {
-        font-size: 0.78rem;
+        font-size: 0.74rem;
     }
 
     .clay-dock-btn {
-        min-width: 54px;
-        padding: 0.18rem 0.35rem;
+        min-width: 60px;
+        padding: 0.14rem 0.42rem;
     }
 }
 
 @media (min-width: 768px) {
-    .clay-hud-header {
-        /* padding: 1rem 1.5rem 0.6rem; */
-    }
-
     .clay-hud-console {
-        padding: 0.85rem 1.25rem;
+        padding: 0.68rem 1.15rem;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
-        gap: 1.5rem;
+        gap: 1.25rem;
+        border-radius: 0 0 22px 22px;
+        border-left: 2px solid var(--px-card-border);
+        border-right: 2px solid var(--px-card-border);
+    }
+
+    .clay-avatar-pod {
+        width: 52px;
+        height: 52px;
+    }
+
+    .clay-portrait-medallion {
+        width: 40px;
+        height: 40px;
+    }
+
+    .avatar-character-svg {
+        width: 32px;
+        height: 32px;
     }
 
     .hud-primary-row {
@@ -1255,13 +1243,13 @@ const handleLogout = () => {
     }
 
     .hud-xp-bar-container {
-        width: 310px;
+        width: 280px;
         flex-shrink: 0;
     }
 
     .clay-game-stage {
-        padding: 0 1.5rem;
-        margin-top: 0.6rem;
+        padding: 0 1.25rem;
+        margin-top: 0.55rem;
     }
 }
 

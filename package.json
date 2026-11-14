@@ -4,7 +4,8 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "dev:lan": "vite --mode lan"
     },
     "devDependencies": {
         "@inertiajs/vue3": "^3.9.1",

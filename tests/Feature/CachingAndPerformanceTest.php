@@ -136,7 +136,7 @@ test('module, lecture, content, and quiz mutations invalidate student and teache
     $module->enrollments()->create(['user_id' => $student->id]);
 
     // Warm student and teacher dashboards
-    $this->actingAs($student)->get(route('students.dashboard'))
+    $this->actingAs($student)->get(route('students.classes.code-adventures'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page->has('modules', 1));
 
@@ -157,7 +157,7 @@ test('module, lecture, content, and quiz mutations invalidate student and teache
     $secondModule->enrollments()->create(['user_id' => $student->id]);
 
     // Both dashboards immediately reflect the newly created module
-    $this->actingAs($student)->get(route('students.dashboard'))
+    $this->actingAs($student)->get(route('students.classes.code-adventures'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page->has('modules', 2));
 
@@ -358,14 +358,14 @@ test('cached modules recompute is_new dynamically as time advances and ranking i
     ]);
     $freshModule->enrollments()->create(['user_id' => $student->id]);
 
-    $this->actingAs($student)->get(route('students.dashboard'))
+    $this->actingAs($student)->get(route('students.classes.code-adventures'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page->where('modules.0.is_new', true));
 
     // Travel past the 2-day is_new window without invalidating the module cache
     $this->travel(3)->days();
 
-    $this->actingAs($student)->get(route('students.dashboard'))
+    $this->actingAs($student)->get(route('students.classes.code-adventures'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page->where('modules.0.is_new', false));
 

@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import { flushCacheTags, prefetchRoute } from '@/Composables/usePrefetch';
 import QuizAnswerInspector from '@/Components/QuizAnswerInspector.vue';
+import { csrfHeaders } from '@/Services/csrf';
 
 const props = defineProps({
     user: {
@@ -286,7 +287,7 @@ const submitGrade = () => {
         headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            ...csrfHeaders(),
         },
         body: JSON.stringify(payload),
     })

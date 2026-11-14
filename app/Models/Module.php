@@ -198,4 +198,28 @@ class Module extends Model
     {
         return $query->where('status', ModuleStatus::Published);
     }
+
+    /**
+     * Scope to the published modules a student can currently see: modules assigned to an active classroom
+     * the student belongs to, plus modules the student joined directly with the module's own join code.
+     *
+     * Classroom access is resolved live from classroom membership, so removing a student or a module
+     * from a classroom immediately hides it.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    #[Scope]
+    protected function visibleToStudent(Builder $query, int $studentId): Builder
+    {
+        return $query
+            ->where('status', ModuleStatus::Published)
+            ->where(function (Builder $access) use ($studentId): void {
+                $access
+                    ->whereHas('classrooms', fn (Builder $classroom) => $classroom
+                        ->where('classrooms.is_active', true)
+                        ->whereHas('studentEnrollments', fn (Builder $membership) => $membership->where('user_id', $studentId)))
+                    ->orWhereHas('enrollments', fn (Builder $directJoin) => $directJoin->where('user_id', $studentId));
+            });
+    }
 }

@@ -3,7 +3,8 @@ import { Head, router } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import SoundController from '@/Components/SoundController.vue';
 import { useSound } from '@/Services/soundManager';
-import { usePixarTheme } from '@/Composables/usePixarTheme';
+import { shouldReduceEffects } from '@/Composables/usePerformanceMode';
+import { usePixarTheme, useWorldOnDocument } from '@/Composables/usePixarTheme';
 
 const {
     soundManager,
@@ -20,6 +21,7 @@ const {
     setWorldTheme,
     spawnPixarBurst,
 } = usePixarTheme();
+useWorldOnDocument(activeWorld);
 
 const props = defineProps({
     user: {
@@ -34,9 +36,7 @@ const props = defineProps({
     },
 });
 
-const prefersReducedMotion = () =>
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const prefersReducedMotion = shouldReduceEffects;
 
 const isMounted = ref(false);
 const isLaunching = ref(false);
@@ -164,7 +164,7 @@ const exploreDashboard = () => {
     spawnPixarBurst(exploreBtnRef.value || heroCardRef.value, 20, activeWorld.value);
 
     launchTimeoutId = window.setTimeout(() => {
-        router.visit('/students/dashboard', {
+        router.visit('/students/classes', {
             onFinish: () => {
                 isLaunching.value = false;
             },
@@ -1251,7 +1251,7 @@ onBeforeUnmount(() => {
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.9);
+    border: 2px solid var(--px-card-border);
     padding: 0;
     cursor: pointer;
     box-shadow:
@@ -1656,7 +1656,7 @@ onBeforeUnmount(() => {
     width: 13px;
     height: 13px;
     background: radial-gradient(circle at 35% 35%, #FFF4A8 0%, #FFB814 62%, #B86B00 100%);
-    border: 1.5px solid rgba(255, 255, 255, 0.78);
+    border: 1.5px solid var(--px-card-border);
     border-radius: 50%;
     box-shadow:
         0 2px 4px rgba(var(--px-shadow-rgb), 0.24),

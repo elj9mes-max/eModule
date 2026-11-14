@@ -313,7 +313,7 @@ onBeforeUnmount(() => {
     gap: 0.5rem;
     padding: 0.45rem 0.85rem;
     border-radius: 999px;
-    background: linear-gradient(145deg, #FFFFFF 0%, #F5EFE0 100%);
+    background: linear-gradient(145deg, var(--px-surface-card) 0%, var(--px-tint-warn-bg) 100%);
     border: 2.5px solid #2B3354;
     box-shadow:
         0 4px 0 #1D2440,
@@ -345,13 +345,13 @@ onBeforeUnmount(() => {
 
 .sound-trigger-btn:focus-visible {
     box-shadow:
-        0 0 0 3px #FFFFFF,
+        0 0 0 3px var(--px-rim-top),
         0 0 0 5px var(--clay-blue),
         0 4px 0 #1D2440;
 }
 
 .sound-trigger-btn.is-bgm-active {
-    background: linear-gradient(145deg, #FFFBEB 0%, #FEF3C7 100%);
+    background: linear-gradient(145deg, color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-warn-bg) 100%);
     border-color: #D97706;
     box-shadow:
         0 4px 0 #92400E,
@@ -360,12 +360,12 @@ onBeforeUnmount(() => {
 }
 
 .sound-trigger-btn.is-muted {
-    background: linear-gradient(145deg, #F3F4F6 0%, #E5E7EB 100%);
+    background: linear-gradient(145deg, var(--px-surface-soft) 0%, var(--px-track) 100%);
     border-color: #6B7280;
-    color: #4B5563;
+    color: var(--px-ink-muted);
     box-shadow:
         0 4px 0 #374151,
-        0 4px 10px rgba(0, 0, 0, 0.1);
+        0 4px 10px rgba(var(--px-shadow-rgb), 0.1);
 }
 
 /* Equalizer Bars Animation */
@@ -451,7 +451,7 @@ onBeforeUnmount(() => {
     width: 310px;
     padding: 1.15rem;
     border-radius: 1.25rem;
-    background: linear-gradient(150deg, #FFFFFF 0%, #FAF6EE 100%);
+    background: linear-gradient(150deg, var(--px-surface-card) 0%, color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card)) 100%);
     border: 3px solid #2B3354;
     box-shadow:
         0 10px 0 #1D2440,
@@ -468,7 +468,7 @@ onBeforeUnmount(() => {
     right: 12px;
     height: 14px;
     border-radius: 999px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 100%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, calc(0.85 * var(--px-gloss, 1))) 0%, rgba(255, 255, 255, 0) 100%);
     pointer-events: none;
 }
 
@@ -477,7 +477,7 @@ onBeforeUnmount(() => {
     align-items: center;
     justify-content: space-between;
     padding-bottom: 0.8rem;
-    border-bottom: 2px dashed #E2DAC8;
+    border-bottom: 2px dashed var(--px-tint-warn-line);
     margin-bottom: 0.85rem;
 }
 
@@ -504,7 +504,7 @@ onBeforeUnmount(() => {
     font-size: 0.75rem;
     font-weight: 700;
     border: 2px solid #2B3354;
-    background: #FFF;
+    background: var(--px-surface-card);
     color: var(--clay-navy);
     cursor: pointer;
     box-shadow: 0 2px 0 #1D2440;
@@ -513,7 +513,7 @@ onBeforeUnmount(() => {
 
 .mute-chip-btn:hover {
     transform: translateY(-1px);
-    background: #FEE2E2;
+    background: var(--px-tint-danger-bg);
 }
 
 .mute-chip-btn.is-active {
@@ -525,8 +525,8 @@ onBeforeUnmount(() => {
 
 /* Setting Cards */
 .setting-card {
-    background: rgba(255, 255, 255, 0.85);
-    border: 2px solid #E8DFCC;
+    background: color-mix(in srgb, var(--px-surface-card) 85%, transparent);
+    border: 2px solid var(--px-tint-warn-line);
     border-radius: 0.85rem;
     padding: 0.75rem;
     margin-bottom: 0.7rem;
@@ -562,7 +562,7 @@ onBeforeUnmount(() => {
     display: block;
     font-size: 0.72rem;
     font-family: var(--font-ui);
-    color: #64748B;
+    color: var(--px-ink-muted);
     font-weight: 600;
 }
 
@@ -573,8 +573,8 @@ onBeforeUnmount(() => {
     height: 25px;
     border-radius: 999px;
     border: 2px solid #2B3354;
-    background: #CBD5E1;
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15), 0 2px 0 #1D2440;
+    background: var(--px-track);
+    box-shadow: inset 0 2px 4px rgba(var(--px-shadow-rgb), 0.15), 0 2px 0 #1D2440;
     cursor: pointer;
     transition: background 0.25s ease;
     padding: 0;
@@ -592,9 +592,9 @@ onBeforeUnmount(() => {
     width: 17px;
     height: 17px;
     border-radius: 50%;
-    background: #FFFFFF;
+    background: var(--px-surface-card);
     border: 1.5px solid #2B3354;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 4px rgba(var(--px-shadow-rgb), 0.2);
     transition: transform 0.25s var(--spring-bounce);
 }
 
@@ -613,8 +613,8 @@ onBeforeUnmount(() => {
     border-radius: 999px;
     font-size: 0.74rem;
     font-weight: 800;
-    color: #1E40AF;
-    background: #DBEAFE;
+    color: var(--px-tint-info-ink);
+    background: var(--px-tint-info-bg);
     border: 1.5px solid #3B82F6;
     box-shadow: 0 2px 0 #1D4ED8;
     cursor: pointer;
@@ -654,10 +654,10 @@ onBeforeUnmount(() => {
     -webkit-appearance: none;
     height: 8px;
     border-radius: 999px;
-    background: #E2E8F0;
+    background: var(--px-track);
     outline: none;
-    border: 1px solid #CBD5E1;
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--px-line);
+    box-shadow: inset 0 1px 3px rgba(var(--px-shadow-rgb), 0.1);
 }
 
 .sound-range-slider::-webkit-slider-thumb {
@@ -667,7 +667,7 @@ onBeforeUnmount(() => {
     border-radius: 50%;
     background: linear-gradient(145deg, #FFC000 0%, #F59E0B 100%);
     border: 2px solid #2B3354;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 4px rgba(var(--px-shadow-rgb), 0.2);
     cursor: pointer;
     transition: transform 0.15s var(--spring-bounce);
 }
@@ -697,7 +697,7 @@ onBeforeUnmount(() => {
 
 .footer-tip {
     font-size: 0.72rem;
-    color: #64748B;
+    color: var(--px-ink-muted);
     font-family: var(--font-ui);
     font-weight: 600;
 }

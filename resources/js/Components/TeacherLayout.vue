@@ -1,10 +1,11 @@
 <script setup>
-import { router } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { flushAllClientCache, prefetchRoute } from '@/Composables/usePrefetch';
 import { useSound } from '@/Services/soundManager';
 
 const { playClick, playPop, playBoing } = useSound();
+const page = usePage();
 
 const props = defineProps({
     user: {
@@ -66,8 +67,12 @@ onBeforeUnmount(() => {
     window.removeEventListener('keydown', handleKeyDown);
 });
 
-const navigateTo = (routeUrl, navKey) => {
-    if (props.activeNav === navKey) return;
+/**
+ * Only skip navigation when already on that exact page. A highlighted tab is not enough:
+ * e.g. a classroom's modules page highlights CLASSES but must still go back to the list.
+ */
+const navigateTo = (routeUrl) => {
+    if (page.url === routeUrl) return;
     playPop(1.1);
     router.visit(routeUrl);
 };
@@ -188,22 +193,7 @@ const navigateTo = (routeUrl, navKey) => {
                 <span class="emblem-sparkle">🏰</span>
             </div> -->
 
-            <!-- Dock Item: Modules -->
-            <button
-                type="button"
-                class="dock-item"
-                :class="{ active: activeNav === 'modules' }"
-                @mouseenter="prefetchTeacherRoute('/teachers/dashboard', ['teacher-modules'])"
-                @click="navigateTo('/teachers/dashboard', 'modules')"
-                title="Your Modules"
-            >
-                <div class="dock-bubble">
-                    <span class="dock-icon">🏰</span>
-                </div>
-                <span class="dock-label">MODULES</span>
-            </button>
-
-            <!-- Dock Item: Classrooms -->
+            <!-- Dock Item: Classrooms (home — modules are reached through a classroom) -->
             <button
                 type="button"
                 class="dock-item"

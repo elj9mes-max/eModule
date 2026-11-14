@@ -36,8 +36,7 @@ class StoreModuleRequest extends FormRequest
             'boss_name' => ['nullable', 'string', 'max:120'],
             'max_students' => ['nullable', 'integer', 'min:1', 'max:500'],
             'status' => ['required', Rule::enum(ModuleStatus::class)],
-            'classroom_ids' => ['nullable', 'array'],
-            'classroom_ids.*' => ['integer', 'exists:classrooms,id'],
+            'classroom_id' => ['nullable', 'integer', 'exists:classrooms,id'],
         ];
     }
 }

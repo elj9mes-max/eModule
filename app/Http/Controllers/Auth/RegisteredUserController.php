@@ -21,7 +21,7 @@ class RegisteredUserController extends Controller
     {
         if (Auth::check()) {
             return Auth::user()->isTeacher()
-                ? redirect()->route('teachers.dashboard')
+                ? redirect()->route('teachers.classes.index')
                 : redirect()->route('students.dashboard');
         }
 
@@ -50,7 +50,7 @@ class RegisteredUserController extends Controller
         $request->session()->regenerate();
 
         if ($user->isTeacher()) {
-            return redirect()->intended(route('teachers.dashboard'));
+            return redirect()->intended(route('teachers.classes.index'));
         }
 
         return redirect()->intended(route('students.dashboard'));

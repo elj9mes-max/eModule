@@ -3,6 +3,8 @@
 namespace App\Services\Gamification;
 
 use App\Models\Lecture;
+use App\Models\Module;
+use App\Models\ModuleBonusClaim;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use App\Models\StudentLectureCompletion;
@@ -263,6 +265,78 @@ class LevelProgressionService
     }
 
     /**
+     * Atomically claim a module's one-time Treasure Vault bonus and award its XP.
+     *
+     * Repeat claims never award XP again; they return the original claim details instead.
+     *
+     * @return array{
+     *     xp_awarded: int,
+     *     xp_delta: int,
+     *     total_xp: int,
+     *     level: int,
+     *     leveled_up: bool,
+     *     already_claimed: bool,
+     *     claimed_at: string
+     * }
+     */
+    public function claimModuleBonus(User $student, Module $module): array
+    {
+        return DB::transaction(function () use ($student, $module): array {
+            $profile = StudentProfile::query()->lockForUpdate()->find($student->id);
+
+            if (! $profile) {
+                $profile = StudentProfile::create(['user_id' => $student->id]);
+            }
+
+            $existingClaim = ModuleBonusClaim::query()
+                ->where('user_id', $student->id)
+                ->where('module_id', $module->id)
+                ->first();
+
+            if ($existingClaim) {
+                return [
+                    'xp_awarded' => $existingClaim->xp_awarded,
+                    'xp_delta' => 0,
+                    'total_xp' => $profile->total_xp,
+                    'level' => $profile->level,
+                    'leveled_up' => false,
+                    'already_claimed' => true,
+                    'claimed_at' => $existingClaim->claimed_at->toIso8601String(),
+                ];
+            }
+
+            $xpAwarded = max(0, (int) $module->xp_bonus);
+            $oldLevel = $profile->level;
+            $newTotalXp = $profile->total_xp + $xpAwarded;
+            $newLevel = $this->calculateLevel($newTotalXp);
+
+            $claim = ModuleBonusClaim::create([
+                'user_id' => $student->id,
+                'module_id' => $module->id,
+                'xp_awarded' => $xpAwarded,
+                'claimed_at' => now(),
+            ]);
+
+            $profile->total_xp = $newTotalXp;
+            $profile->level = $newLevel;
+            $profile->last_active_at = now();
+            $profile->save();
+
+            $this->cache->invalidateRanking();
+
+            return [
+                'xp_awarded' => $xpAwarded,
+                'xp_delta' => $xpAwarded,
+                'total_xp' => $newTotalXp,
+                'level' => $newLevel,
+                'leveled_up' => $newLevel > $oldLevel,
+                'already_claimed' => false,
+                'claimed_at' => $claim->claimed_at->toIso8601String(),
+            ];
+        });
+    }
+
+    /**
      * Self-healing full recalculation of a student's high-water mark XP and Stars.
      */
     public function recalculateStudentProfile(int $userId): StudentProfile
@@ -287,7 +361,11 @@ class LevelProgressionService
             $quizXp = (int) $quizStats->sum('max_xp');
             $quizzesPassed = (int) $quizStats->filter(fn ($s) => (bool) $s->passed)->count();
 
-            $totalXp = $lectureXp + $quizXp;
+            $bonusXp = (int) ModuleBonusClaim::query()
+                ->where('user_id', $userId)
+                ->sum('xp_awarded');
+
+            $totalXp = $lectureXp + $quizXp + $bonusXp;
             $level = $this->calculateLevel($totalXp);
 
             $profile = StudentProfile::query()->find($userId);

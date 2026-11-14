@@ -53,6 +53,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/teachers/modules/{module:slug}/lectures/{lecture:slug}/contents', [TeacherLectureController::class, 'storeContent'])->name('teachers.lectures.contents.store');
     Route::post('/teachers/modules/{module:slug}/lectures/{lecture:slug}/contents/{content}', [TeacherLectureController::class, 'updateContent'])->name('teachers.lectures.contents.update');
     Route::delete('/teachers/modules/{module:slug}/lectures/{lecture:slug}/contents/{content}', [TeacherLectureController::class, 'destroyContent'])->name('teachers.lectures.contents.destroy');
+    Route::post('/teachers/modules/{module:slug}/lectures/{lecture:slug}/media', [TeacherLectureController::class, 'uploadContentMedia'])->name('teachers.lectures.media.store');
 
     Route::get('/teachers/modules/{module:slug}/quizzes/studio', [TeacherModuleController::class, 'quizStudio'])->name('teachers.quizzes.studio');
     Route::delete('/teachers/modules/{module:slug}/quizzes/{quiz}', [TeacherModuleController::class, 'destroyQuiz'])->name('teachers.quizzes.destroy');
@@ -90,6 +91,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/students/welcome', [StudentDashboardController::class, 'welcome'])->name('students.welcome');
     Route::get('/students/dashboard', [StudentDashboardController::class, 'index'])->name('students.dashboard');
     Route::get('/students/Dashboard', fn () => redirect()->route('students.dashboard'));
+    Route::get('/students/classes', [StudentDashboardController::class, 'classrooms'])->name('students.classes.index');
+    Route::get('/students/classes/code-adventures', [StudentDashboardController::class, 'codeAdventures'])->name('students.classes.code-adventures');
+    Route::get('/students/classes/{classroom}', [StudentDashboardController::class, 'showClassroom'])->whereNumber('classroom')->name('students.classes.show');
     Route::post('/students/modules/join', [StudentDashboardController::class, 'joinModule'])->name('students.modules.join');
     Route::get('/students/progress', [StudentDashboardController::class, 'progress'])->name('students.progress');
     Route::get('/students/Progress', fn () => redirect()->route('students.progress'));
@@ -99,6 +103,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/students/Settings', fn () => redirect()->route('students.settings'));
     Route::patch('/students/settings/theme', [StudentDashboardController::class, 'updateTheme'])->name('students.settings.theme');
     Route::get('/students/modules/{module:slug}', [StudentDashboardController::class, 'progress'])->name('students.modules.show');
+    Route::post('/students/modules/{module:slug}/bonus/claim', [StudentDashboardController::class, 'claimModuleBonus'])->name('students.modules.bonus.claim');
     Route::get('/students/modules/{module:slug}/lectures/{lecture:slug}', [StudentDashboardController::class, 'showLecture'])->name('students.lectures.show');
     Route::post('/students/modules/{module:slug}/lectures/{lecture:slug}/complete', [StudentDashboardController::class, 'completeLecture'])->name('students.lectures.complete');
     Route::get('/students/lecture-reader', [StudentDashboardController::class, 'showLecture'])->name('students.lectures.reader');

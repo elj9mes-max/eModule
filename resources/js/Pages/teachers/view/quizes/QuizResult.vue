@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import { flushAllClientCache, flushCacheTags, prefetchRoute } from '@/Composables/usePrefetch';
 import QuizAnswerInspector from '@/Components/QuizAnswerInspector.vue';
+import { csrfHeaders } from '@/Services/csrf';
 
 const props = defineProps({
     user: {
@@ -287,7 +288,7 @@ const submitGrade = () => {
         headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            ...csrfHeaders(),
         },
         body: JSON.stringify(payload),
     })
@@ -377,9 +378,7 @@ const submitGrade = () => {
                     <span class="teacher-avatar">🧙‍♂️</span>
                     <span class="teacher-name">{{ user.name }}</span>
                 </div>
-                <button type="button" class="btn-logout-mini" @click="handleLogout" title="Log Out">
-                    <span>Exit</span>
-                </button>
+
             </div>
         </header>
 
@@ -912,20 +911,6 @@ const submitGrade = () => {
                                     </div>
                                 </div>
                             </div>
-
-                            <!-- Overall Teacher Encouragement Feedback -->
-                            <div class="overall-feedback-box">
-                                <label class="feedback-heading">
-                                    <span>💬 Teacher Encouragement & Feedback:</span>
-                                    <small>(Shown directly to {{ activeGradingAttempt.student?.name }} on their completed quiz card)</small>
-                                </label>
-                                <textarea
-                                    v-model="teacherFeedbackText"
-                                    rows="3"
-                                    placeholder="Write personalized advice, praise their critical thinking, or recommend reading strategies..."
-                                    class="feedback-textarea"
-                                ></textarea>
-                            </div>
                         </div>
 
                         <!-- Modal Footer with Real-time Scoring Summary -->
@@ -1064,7 +1049,6 @@ const submitGrade = () => {
 
 .btn-3d-back:focus-visible,
 .btn-studio-edit:focus-visible,
-.btn-logout-mini:focus-visible,
 .btn-blueprint-studio:focus-visible,
 .tab-nav-btn:focus-visible,
 .filter-pill-btn:focus-visible,
@@ -1169,24 +1153,6 @@ const submitGrade = () => {
     color: #334155;
 }
 
-.btn-logout-mini {
-    background: #FFFFFF;
-    border: 1.5px solid #CBD5E1;
-    border-radius: 9999px;
-    padding: 0.32rem 0.75rem;
-    font-weight: 700;
-    font-size: 0.78rem;
-    color: #64748B;
-    cursor: pointer;
-    box-shadow: 0 1.5px 0 #CBD5E1;
-    transition: background 0.12s, color 0.12s;
-}
-
-.btn-logout-mini:hover {
-    background: #FEE2E2;
-    border-color: #FCA5A5;
-    color: #991B1B;
-}
 
 /* Stage Layout: Full Viewport Breadth with Scaled Down Compact Margins */
 .results-stage-container {

@@ -1,9 +1,12 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { csrfHeaders } from '@/Services/csrf';
+import { markReturnToMapFocus } from '@/Composables/useMapReturnFocus';
 import { Head, router } from '@inertiajs/vue3';
 import { useSound } from '@/Services/soundManager';
 import { flushCacheTags, prefetchRoute } from '@/Composables/usePrefetch';
-import { usePixarTheme } from '@/Composables/usePixarTheme';
+import { usePixarTheme, useWorldOnDocument } from '@/Composables/usePixarTheme';
+import RewardCelebrationModal from '@/Components/RewardCelebrationModal.vue';
 
 const {
     playPop,
@@ -16,6 +19,7 @@ const {
 } = useSound();
 
 const { activeWorld } = usePixarTheme();
+useWorldOnDocument(activeWorld);
 
 const props = defineProps({
     user: {
@@ -43,60 +47,58 @@ const props = defineProps({
 /* ==========================================================================
    6 CONFLICT TYPE DEFINITIONS & COLOR SWATCHES
    ========================================================================== */
+/**
+ * Builds a world-aware pastel card from one saturated hue: pale tinted card in
+ * daylight worlds, glowing dark card with light ink in night worlds.
+ */
+const worldTint = (hue) => ({
+    bg: `color-mix(in srgb, ${hue} 12%, var(--px-surface-card))`,
+    border: `color-mix(in srgb, ${hue} 55%, var(--px-surface-card))`,
+    text: `color-mix(in srgb, ${hue} 42%, var(--px-ink))`,
+});
+
 const conflictTypes = [
     {
         value: 'character_vs_character',
         label: 'Character vs. Character',
         short: 'vs. Character',
         swatch: '#EF4444',
-        bg: '#FEF2F2',
-        border: '#FCA5A5',
-        text: '#991B1B',
+        ...worldTint('#EF4444'),
     },
     {
         value: 'character_vs_self',
         label: 'Character vs. Self',
         short: 'vs. Self',
         swatch: '#8B5CF6',
-        bg: '#F5F3FF',
-        border: '#C4B5FD',
-        text: '#5B21B6',
+        ...worldTint('#8B5CF6'),
     },
     {
         value: 'character_vs_nature',
         label: 'Character vs. Nature',
         short: 'vs. Nature',
         swatch: '#10B981',
-        bg: '#ECFDF5',
-        border: '#6EE7B7',
-        text: '#065F46',
+        ...worldTint('#10B981'),
     },
     {
         value: 'character_vs_society',
         label: 'Character vs. Society',
         short: 'vs. Society',
         swatch: '#F59E0B',
-        bg: '#FFFBEB',
-        border: '#FCD34D',
-        text: '#92400E',
+        ...worldTint('#F59E0B'),
     },
     {
         value: 'character_vs_technology',
         label: 'Character vs. Technology',
         short: 'vs. Tech',
         swatch: '#0EA5E9',
-        bg: '#F0F9FF',
-        border: '#7DD3FC',
-        text: '#075985',
+        ...worldTint('#0EA5E9'),
     },
     {
         value: 'character_vs_supernatural',
         label: 'Character vs. Supernatural',
         short: 'vs. Supernatural',
         swatch: '#EC4899',
-        bg: '#FDF2F8',
-        border: '#F9A8D4',
-        text: '#9D174D',
+        ...worldTint('#EC4899'),
     },
 ];
 
@@ -105,12 +107,12 @@ const getConflictMeta = (value) => {
 };
 
 const zoneThemeColors = {
-    blue: { bg: '#EFF6FF', border: '#60A5FA', header: '#2563EB', text: '#1E3A8A' },
-    emerald: { bg: '#ECFDF5', border: '#34D399', header: '#059669', text: '#064E3B' },
-    amber: { bg: '#FFFBEB', border: '#FBBF24', header: '#D97706', text: '#78350F' },
-    purple: { bg: '#F5F3FF', border: '#A78BFA', header: '#7C3AED', text: '#4C1D95' },
-    rose: { bg: '#FFF1F2', border: '#FB7185', header: '#E11D48', text: '#881337' },
-    cyan: { bg: '#ECFEFF', border: '#22D3EE', header: '#0891B2', text: '#164E63' },
+    blue: { ...worldTint('#2563EB'), header: '#2563EB' },
+    emerald: { ...worldTint('#059669'), header: '#059669' },
+    amber: { ...worldTint('#D97706'), header: '#D97706' },
+    purple: { ...worldTint('#7C3AED'), header: '#7C3AED' },
+    rose: { ...worldTint('#E11D48'), header: '#E11D48' },
+    cyan: { ...worldTint('#0891B2'), header: '#0891B2' },
 };
 
 const getZoneTheme = (themeKey) => {
@@ -251,6 +253,8 @@ const reflectionChecked = ref({});
 // Server evaluation attempt result & submit loading state
 const isSubmittingQuiz = ref(false);
 const serverAttemptResult = ref(props.existingAttempt || null);
+/** XP / star deltas the server awarded for the submission made in this session. */
+const latestProgression = ref(null);
 
 // Timer (if time_limit_seconds exists)
 const remainingSeconds = ref(null);
@@ -517,14 +521,14 @@ const checkConflictMap = () => {
    4. MATCHING TYPE HANDLERS & TABLE COLOR PALETTES
    ========================================================================== */
 const matchingChoicePalette = [
-    { key: 'coral', bg: '#FFF1F2', border: '#FDA4AF', text: '#9F1239', badgeBg: '#E11D48', badgeText: '#FFFFFF', ring: '#F43F5E' },
-    { key: 'amber', bg: '#FFFBEB', border: '#FCD34D', text: '#92400E', badgeBg: '#D97706', badgeText: '#FFFFFF', ring: '#F59E0B' },
-    { key: 'emerald', bg: '#ECFDF5', border: '#6EE7B7', text: '#065F46', badgeBg: '#059669', badgeText: '#FFFFFF', ring: '#10B981' },
-    { key: 'sky', bg: '#F0F9FF', border: '#7DD3FC', text: '#0369A1', badgeBg: '#0284C7', badgeText: '#FFFFFF', ring: '#0EA5E9' },
-    { key: 'purple', bg: '#FAF5FF', border: '#D8B4FE', text: '#6B21A8', badgeBg: '#7C3AED', badgeText: '#FFFFFF', ring: '#8B5CF6' },
-    { key: 'rose', bg: '#FFF1F2', border: '#F472B6', text: '#9D174D', badgeBg: '#DB2777', badgeText: '#FFFFFF', ring: '#EC4899' },
-    { key: 'indigo', bg: '#EEF2FF', border: '#A5B4FC', text: '#3730A3', badgeBg: '#4F46E5', badgeText: '#FFFFFF', ring: '#6366F1' },
-    { key: 'teal', bg: '#F0FDFA', border: '#5EEAD4', text: '#115E59', badgeBg: '#0D9488', badgeText: '#FFFFFF', ring: '#14B8A6' },
+    { key: 'coral', ...worldTint('#F43F5E'), badgeBg: '#E11D48', badgeText: '#FFFFFF', ring: '#F43F5E' },
+    { key: 'amber', ...worldTint('#F59E0B'), badgeBg: '#D97706', badgeText: '#FFFFFF', ring: '#F59E0B' },
+    { key: 'emerald', ...worldTint('#10B981'), badgeBg: '#059669', badgeText: '#FFFFFF', ring: '#10B981' },
+    { key: 'sky', ...worldTint('#0EA5E9'), badgeBg: '#0284C7', badgeText: '#FFFFFF', ring: '#0EA5E9' },
+    { key: 'purple', ...worldTint('#8B5CF6'), badgeBg: '#7C3AED', badgeText: '#FFFFFF', ring: '#8B5CF6' },
+    { key: 'rose', ...worldTint('#EC4899'), badgeBg: '#DB2777', badgeText: '#FFFFFF', ring: '#EC4899' },
+    { key: 'indigo', ...worldTint('#6366F1'), badgeBg: '#4F46E5', badgeText: '#FFFFFF', ring: '#6366F1' },
+    { key: 'teal', ...worldTint('#14B8A6'), badgeBg: '#0D9488', badgeText: '#FFFFFF', ring: '#14B8A6' },
 ];
 
 const getChoiceColorByLetter = (letter) => {
@@ -1037,6 +1041,87 @@ const packageAnswersPayload = () => {
     }
 };
 
+/**
+ * Everything the reward modal shows, taken from the server's attempt + progression
+ * (falling back to the local score only in demo mode, where nothing is saved).
+ */
+const quizReward = computed(() => {
+    const attempt = serverAttemptResult.value;
+    const progression = latestProgression.value;
+    const passThreshold = Number(activeQuiz.value?.passing_percentage || 70);
+
+    if (isAttemptPendingReview.value) {
+        return {
+            state: 'pending',
+            passed: true,
+            stars: null,
+            starsGained: 0,
+            xp: 0,
+            level: null,
+            totalXp: null,
+            leveledUp: false,
+            metrics: [{ label: 'SCORE', value: 'Teacher graded' }],
+            message: '',
+        };
+    }
+
+    if (!attempt) {
+        const summary = scoreSummary.value;
+
+        return {
+            state: 'earned',
+            passed: summary.passed,
+            stars: summary.stars,
+            starsGained: 0,
+            xp: summary.passed ? Number(activeQuiz.value?.xp_reward || 150) : 50,
+            level: null,
+            totalXp: null,
+            leveledUp: false,
+            metrics: [
+                { label: 'SCORE', value: `${summary.pct}%` },
+                { label: 'POINTS', value: `${summary.earned} / ${summary.total}` },
+            ],
+            message: summary.passed ? '' : `Passing is ${passThreshold}%. Keep practicing to earn all 3 stars!`,
+        };
+    }
+
+    const metrics = [
+        { label: 'SCORE', value: `${Math.round(Number(attempt.percentage || 0))}%` },
+        { label: 'POINTS', value: `${attempt.score} / ${attempt.max_score}` },
+    ];
+    const failedNote = attempt.is_passed ? '' : `Passing is ${passThreshold}%. Keep practicing to earn all 3 stars!`;
+
+    if (progression) {
+        const gainedSomething = Number(progression.xp_delta) > 0 || Number(progression.star_delta) > 0;
+
+        return {
+            state: gainedSomething ? 'earned' : 'repeat',
+            passed: Boolean(attempt.is_passed),
+            stars: Number(attempt.stars || 0),
+            starsGained: Number(progression.star_delta || 0),
+            xp: Number(progression.xp_delta || 0),
+            level: progression.level ?? null,
+            totalXp: progression.total_xp ?? null,
+            leveledUp: Boolean(progression.leveled_up),
+            metrics,
+            message: failedNote,
+        };
+    }
+
+    return {
+        state: 'review',
+        passed: Boolean(attempt.is_passed),
+        stars: Number(attempt.stars || 0),
+        starsGained: 0,
+        xp: Number(attempt.xp_earned || 0),
+        level: null,
+        totalXp: null,
+        leveledUp: false,
+        metrics,
+        message: failedNote,
+    };
+});
+
 const finishQuizAndShowSummary = () => {
     const q = activeQuiz.value;
 
@@ -1058,14 +1143,6 @@ const finishQuizAndShowSummary = () => {
         answers: packageAnswersPayload(),
     };
 
-    const getCsrfToken = () => {
-        const metaTag = document.querySelector('meta[name="csrf-token"]');
-        if (metaTag && metaTag.getAttribute('content')) {
-            return metaTag.getAttribute('content');
-        }
-        const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
-        return match ? decodeURIComponent(match[1]) : '';
-    };
 
     fetch(`/students/modules/${props.module.slug}/quizzes/${props.quiz.slug}/submit`, {
         method: 'POST',
@@ -1073,8 +1150,7 @@ const finishQuizAndShowSummary = () => {
         headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'X-CSRF-TOKEN': getCsrfToken(),
-            'X-XSRF-TOKEN': getCsrfToken(),
+            ...csrfHeaders(),
         },
         body: JSON.stringify(payload),
     })
@@ -1089,9 +1165,10 @@ const finishQuizAndShowSummary = () => {
             if (data.attempt) {
                 serverAttemptResult.value = data.attempt;
             }
+            latestProgression.value = data.success ? data.progression || null : null;
             if (props.module?.slug) {
                 const tags = ['student-modules', `module-${props.module.slug}`];
-                flushCacheTags(tags);
+                flushCacheTags([...tags, 'student-classes']);
                 prefetchRoute(`/students/modules/${props.module.slug}`, tags, ['15s', '60s']);
             }
             showCompletionModal.value = true;
@@ -1122,6 +1199,8 @@ const goNextItem = () => {
 };
 
 const goBackToMap = () => {
+    markReturnToMapFocus();
+
     if (activeModule.value?.slug && props.module) {
         router.visit(`/students/modules/${activeModule.value.slug}`);
         return;
@@ -1139,9 +1218,22 @@ const switchQuizFormat = (formatKey) => {
     activeDemoFormat.value = formatKey;
 };
 
+const isLeavingToMap = ref(false);
+
+/** Closing the reward card (✕, backdrop or Escape) leaves for the map so a finished quiz can't be retaken. */
+const closeRewardCardToMap = () => {
+    if (isLeavingToMap.value) {
+        return;
+    }
+
+    isLeavingToMap.value = true;
+    showCompletionModal.value = false;
+    goBackToMap();
+};
+
 const handleKeydown = (e) => {
     if (e.key === 'Escape' && showCompletionModal.value) {
-        showCompletionModal.value = false;
+        closeRewardCardToMap();
     }
 };
 
@@ -2271,130 +2363,36 @@ onBeforeUnmount(() => {
     </main>
 
         <!-- =========================================================================
-             3. CELEBRATION & QUIZ RESULTS SUMMARY MODAL (TELEPORTED TO BODY)
+             3. QUIZ REWARD CELEBRATION (shared Pixar reward modal)
              ========================================================================= -->
-        <Teleport to="body">
-            <Transition name="modal-pop">
-                <div
-                    v-if="showCompletionModal"
-                    class="clay-summary-modal-backdrop"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="quiz-summary-heading"
-                    @click.self="showCompletionModal = false"
-                >
-                    <div class="clay-summary-modal-card">
-                        <button
-                            type="button"
-                            class="summary-modal-close"
-                            aria-label="Close summary modal"
-                            @click="showCompletionModal = false"
-                        >
-                            ✕
-                        </button>
-
-                        <!-- 3 Golden Stars Ribbon / Pending Badge -->
-                        <div v-if="isAttemptPendingReview" class="summary-pending-row" aria-hidden="true">
-                            <div class="summary-pending-tag">
-                                <span class="summary-pending-icon">📝</span>
-                                <span class="summary-pending-tag-lbl">Score Pending Teacher Review</span>
-                            </div>
-                        </div>
-                        <div v-else class="summary-stars-row" aria-hidden="true">
-                            <span
-                                v-for="starIdx in 3"
-                                :key="starIdx"
-                                class="summary-star-badge"
-                                :class="{
-                                    'star-earned': starIdx <= (serverAttemptResult ? serverAttemptResult.stars : scoreSummary.stars),
-                                }"
-                            >
-                                ★
-                            </span>
-                        </div>
-
-                        <span
-                            class="summary-status-pill"
-                            :class="isAttemptPendingReview ? 'status-pending' : ((serverAttemptResult ? serverAttemptResult.is_passed : scoreSummary.passed) ? 'status-pass' : 'status-retry')"
-                        >
-                            {{
-                                isAttemptPendingReview
-                                    ? 'SUBMITTED FOR TEACHER GRADING 📝'
-                                    : ((serverAttemptResult ? serverAttemptResult.is_passed : scoreSummary.passed)
-                                        ? 'QUEST MILESTONE MASTERED!'
-                                        : `KEEP PRACTICING • PASSING IS ${scoreSummary.passThreshold}%`)
-                            }}
-                        </span>
-
-                        <h2 id="quiz-summary-heading" class="summary-modal-title">
-                            {{ activeQuiz.title }}
-                        </h2>
-
-                        <p v-if="isAttemptPendingReview" class="summary-pending-explainer">
-                            Great job expressing your thoughts! Because this challenge asks for your perspective and reasoning, your teacher will evaluate your answers and assign your score and stars shortly.
-                        </p>
-
-                        <div class="summary-metrics-grid">
-                            <div class="summary-metric-box">
-                                <span class="metric-lbl">SCORE</span>
-                                <strong class="metric-val" :class="{ 'text-amber': isAttemptPendingReview }">
-                                    {{ isAttemptPendingReview ? 'Pending' : `${serverAttemptResult ? serverAttemptResult.percentage : scoreSummary.pct}%` }}
-                                </strong>
-                            </div>
-                            <div class="summary-metric-box">
-                                <span class="metric-lbl">POINTS</span>
-                                <strong class="metric-val">
-                                    {{
-                                        isAttemptPendingReview
-                                            ? `Teacher Graded`
-                                            : (serverAttemptResult
-                                                ? `${serverAttemptResult.score} / ${serverAttemptResult.max_score}`
-                                                : `${scoreSummary.earned} / ${scoreSummary.total}`)
-                                    }}
-                                </strong>
-                            </div>
-                            <div class="summary-metric-box">
-                                <span class="metric-lbl">REWARD</span>
-                                <strong class="metric-val text-amber">
-                                    {{
-                                        isAttemptPendingReview
-                                            ? 'XP on Grade ⭐'
-                                            : `+${serverAttemptResult ? serverAttemptResult.xp_earned : (scoreSummary.passed ? activeQuiz.xp_reward || 150 : 50)} XP`
-                                    }}
-                                </strong>
-                            </div>
-                        </div>
-
-                        <!-- Teacher Feedback Note -->
-                        <div v-if="latestTeacherFeedback" class="summary-feedback-box">
-                            <div class="feedback-badge-row">
-                                <span class="feedback-emoji">👨‍🏫</span>
-                                <strong class="feedback-badge-lbl">Teacher Feedback:</strong>
-                            </div>
-                            <p class="feedback-text">"{{ latestTeacherFeedback }}"</p>
-                        </div>
-
-                        <div class="summary-modal-actions">
-                            <button
-                                v-if="!existingAttempt && !isAttemptPendingReview"
-                                type="button"
-                                class="clay-summary-secondary-btn"
-                                @click="resetQuizSession"
-                            >
-                                Play Again ↻
-                            </button>
-                            <button
-                                type="button"
-                                class="clay-summary-primary-btn"
-                                @click="goBackToMap"
-                            >
-                                Back to Adventure Map →
-                            </button>
-                        </div>
-                    </div>
+        <RewardCelebrationModal
+            :open="showCompletionModal"
+            kind="quiz"
+            :state="quizReward.state"
+            :item-title="activeQuiz.title"
+            :passed="quizReward.passed"
+            :stars="quizReward.stars"
+            :stars-gained="quizReward.starsGained"
+            :xp-amount="quizReward.xp"
+            :level="quizReward.level"
+            :total-xp="quizReward.totalXp"
+            :leveled-up="quizReward.leveledUp"
+            :metrics="quizReward.metrics"
+            :message="quizReward.message"
+            primary-label="Back to Adventure Map →"
+            :secondary-label="!existingAttempt && !isAttemptPendingReview && !serverAttemptResult ? 'Play Again ↻' : ''"
+            @primary="goBackToMap"
+            @secondary="resetQuizSession"
+            @close="closeRewardCardToMap"
+        >
+            <div v-if="latestTeacherFeedback" class="summary-feedback-box">
+                <div class="feedback-badge-row">
+                    <span class="feedback-emoji">👨‍🏫</span>
+                    <strong class="feedback-badge-lbl">Teacher Feedback:</strong>
                 </div>
-            </Transition>
-        </Teleport>
+                <p class="feedback-text">"{{ latestTeacherFeedback }}"</p>
+            </div>
+        </RewardCelebrationModal>
     </div>
 </template>
 
@@ -2416,7 +2414,7 @@ onBeforeUnmount(() => {
    ALREADY COMPLETED STATE BANNER
    ========================================================================== */
 .clay-already-taken-card {
-    background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--px-tint-success-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-success-bg) 100%);
     border: 3.5px solid #10B981;
     border-radius: 28px;
     padding: 2rem 2.25rem;
@@ -2441,7 +2439,7 @@ onBeforeUnmount(() => {
 
 .already-taken-badge {
     background: #059669;
-    border: 3px solid #FFFFFF;
+    border: 3px solid var(--px-card-border);
     border-radius: 20px;
     padding: 0.5rem 0.65rem;
     box-shadow: 0 4px 10px rgba(5, 150, 105, 0.35);
@@ -2478,7 +2476,7 @@ onBeforeUnmount(() => {
 .already-taken-date {
     font-size: 0.78rem;
     font-weight: 700;
-    color: #047857;
+    color: var(--px-tint-success-ink);
 }
 
 .already-taken-title {
@@ -2486,7 +2484,7 @@ onBeforeUnmount(() => {
     font-family: 'Fredoka', sans-serif;
     font-size: 1.35rem;
     font-weight: 800;
-    color: #064E3B;
+    color: var(--px-tint-success-ink);
     line-height: 1.25;
 }
 
@@ -2494,7 +2492,7 @@ onBeforeUnmount(() => {
     margin: 0;
     font-size: 0.92rem;
     line-height: 1.5;
-    color: #065F46;
+    color: var(--px-tint-success-ink);
     font-weight: 700;
 }
 
@@ -2507,7 +2505,7 @@ onBeforeUnmount(() => {
 
 .clay-taken-review-btn {
     background: linear-gradient(180deg, #F59E0B 0%, #D97706 100%);
-    border: 2.5px solid #FFFFFF;
+    border: 2.5px solid var(--px-card-border);
     border-radius: 16px;
     color: #FFFFFF;
     font-family: 'Fredoka', sans-serif;
@@ -2525,10 +2523,10 @@ onBeforeUnmount(() => {
 }
 
 .clay-taken-back-btn {
-    background: #FFFFFF;
+    background: var(--px-surface-card);
     border: 2.5px solid #059669;
     border-radius: 16px;
-    color: #047857;
+    color: var(--px-tint-success-ink);
     font-family: 'Fredoka', sans-serif;
     font-size: 0.9rem;
     font-weight: 800;
@@ -2622,8 +2620,8 @@ onBeforeUnmount(() => {
 }
 
 .quiz-format-badge {
-    background: #dbeafe;
-    color: #1d4ed8;
+    background: var(--px-tint-info-bg);
+    color: var(--px-tint-info-ink);
     font-size: 0.7rem;
     font-weight: 900;
     text-transform: uppercase;
@@ -2667,10 +2665,10 @@ onBeforeUnmount(() => {
 
 .clay-quiz-progress-track {
     height: 12px;
-    background: #e2e8f0;
+    background: var(--px-track);
     border-radius: 999px;
     overflow: hidden;
-    border: 2px solid #cbd5e1;
+    border: 2px solid var(--px-line);
 }
 
 .clay-quiz-progress-fill {
@@ -2692,9 +2690,9 @@ onBeforeUnmount(() => {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    background: #fef2f2;
-    color: #b91c1c;
-    border: 2px solid #fca5a5;
+    background: color-mix(in srgb, var(--px-tint-danger-bg) 55%, var(--px-surface-card));
+    color: var(--px-tint-danger-ink);
+    border: 2px solid var(--px-tint-danger-line);
     padding: 0.38rem 0.75rem;
     border-radius: 12px;
     font-weight: 900;
@@ -2705,9 +2703,9 @@ onBeforeUnmount(() => {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    background: #fffbeb;
-    color: #b45309;
-    border: 2px solid #fcd34d;
+    background: color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card));
+    color: var(--px-tint-warn-ink);
+    border: 2px solid var(--px-tint-warn-line);
     border-bottom-width: 4px;
     padding: 0.42rem 0.8rem;
     border-radius: 13px;
@@ -2718,7 +2716,7 @@ onBeforeUnmount(() => {
 }
 
 .clay-hint-toggle-btn.is-active {
-    background: #fde68a;
+    background: color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-tint-warn-line));
     border-color: #d97706;
 }
 
@@ -2726,8 +2724,8 @@ onBeforeUnmount(() => {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-    color: #92400e;
+    background: linear-gradient(135deg, var(--px-tint-warn-bg) 0%, color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-tint-warn-line)) 100%);
+    color: var(--px-tint-warn-ink);
     border: 2px solid #f59e0b;
     padding: 0.4rem 0.75rem;
     border-radius: 13px;
@@ -2759,7 +2757,7 @@ onBeforeUnmount(() => {
     max-width: 1180px;
     margin: 0.65rem auto 0;
     padding-top: 0.55rem;
-    border-top: 1.5px dashed #e2e8f0;
+    border-top: 1.5px dashed var(--px-line);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -2810,9 +2808,9 @@ onBeforeUnmount(() => {
 }
 
 .clay-view-mode-btn {
-    background: #ffffff;
-    color: #334155;
-    border: 2px solid #cbd5e1;
+    background: var(--px-surface-card);
+    color: var(--px-ink);
+    border: 2px solid var(--px-line);
     border-radius: 10px;
     padding: 0.26rem 0.7rem;
     font-size: 0.75rem;
@@ -2833,7 +2831,7 @@ onBeforeUnmount(() => {
 }
 
 .clay-passage-banner-card {
-    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-warn-bg) 100%);
     border: 3px solid #f59e0b;
     border-bottom-width: 6px;
     border-radius: 24px;
@@ -2869,12 +2867,12 @@ onBeforeUnmount(() => {
 .passage-sub {
     font-size: 0.85rem;
     font-weight: 800;
-    color: #92400e;
+    color: var(--px-tint-warn-ink);
 }
 
 .passage-collapse-btn {
-    background: rgba(255, 255, 255, 0.8);
-    color: #78350f;
+    background: color-mix(in srgb, var(--px-surface-card) 80%, transparent);
+    color: var(--px-tint-warn-ink);
     border: 2px solid #f59e0b;
     border-radius: 10px;
     padding: 0.25rem 0.65rem;
@@ -2893,22 +2891,22 @@ onBeforeUnmount(() => {
     font-size: 1.05rem;
     line-height: 1.7;
     font-weight: 800;
-    color: #78350f;
+    color: var(--px-tint-warn-ink);
     margin: 0;
 }
 
 .passage-context-hint {
     margin: 0.6rem 0 0;
     font-size: 0.88rem;
-    color: #92400e;
-    background: rgba(255, 255, 255, 0.7);
+    color: var(--px-tint-warn-ink);
+    background: color-mix(in srgb, var(--px-surface-card) 70%, transparent);
     padding: 0.45rem 0.75rem;
     border-radius: 12px;
 }
 
 /* Global Hint Callout */
 .clay-active-hint-callout {
-    background: #eff6ff;
+    background: color-mix(in srgb, var(--px-tint-info-bg) 55%, var(--px-surface-card));
     border: 2.5px solid #60a5fa;
     border-radius: 18px;
     padding: 0.85rem 1.15rem;
@@ -2931,7 +2929,7 @@ onBeforeUnmount(() => {
     margin: 0;
     font-size: 0.92rem;
     font-weight: 800;
-    color: #1e3a8a;
+    color: var(--px-tint-info-ink);
 }
 
 /* ==========================================================================
@@ -2944,12 +2942,12 @@ onBeforeUnmount(() => {
 }
 
 .clay-interactive-card {
-    background: #ffffff;
-    border: 3px solid #cbd5e1;
+    background: var(--px-surface-card);
+    border: 3px solid var(--px-line);
     border-bottom-width: 7px;
     border-radius: 28px;
     padding: 1.5rem 1.75rem;
-    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.07);
+    box-shadow: 0 14px 32px rgba(var(--px-shadow-rgb), 0.07);
 }
 
 .card-top-meta {
@@ -2962,15 +2960,15 @@ onBeforeUnmount(() => {
 }
 
 .item-step-pill {
-    background: #f1f5f9;
-    color: #334155;
+    background: var(--px-surface-soft);
+    color: var(--px-ink);
     font-size: 0.76rem;
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     padding: 0.3rem 0.75rem;
     border-radius: 999px;
-    border: 2px solid #cbd5e1;
+    border: 2px solid var(--px-line);
 }
 
 .item-meta-right {
@@ -2980,8 +2978,8 @@ onBeforeUnmount(() => {
 }
 
 .selection-mode-tag {
-    background: #ede9fe;
-    color: #6d28d9;
+    background: var(--px-tint-magic-bg);
+    color: var(--px-tint-magic-ink);
     font-size: 0.75rem;
     font-weight: 800;
     padding: 0.25rem 0.65rem;
@@ -2989,9 +2987,9 @@ onBeforeUnmount(() => {
 }
 
 .item-points-tag {
-    background: #ecfdf5;
-    color: #047857;
-    border: 1.5px solid #6ee7b7;
+    background: color-mix(in srgb, var(--px-tint-success-bg) 55%, var(--px-surface-card));
+    color: var(--px-tint-success-ink);
+    border: 1.5px solid var(--px-tint-success-line);
     font-size: 0.76rem;
     font-weight: 900;
     padding: 0.22rem 0.65rem;
@@ -3001,19 +2999,19 @@ onBeforeUnmount(() => {
 .question-excerpt-quote {
     margin: 0 0 0.9rem;
     padding: 0.75rem 1rem;
-    background: #f8fafc;
+    background: var(--px-surface-soft);
     border-left: 4px solid #3b82f6;
     border-radius: 12px;
     font-style: italic;
     font-weight: 700;
-    color: #334155;
+    color: var(--px-ink);
 }
 
 .question-main-prompt {
     font-family: 'Fredoka', sans-serif;
     font-size: 1.35rem;
     line-height: 1.4;
-    color: #0f172a;
+    color: var(--px-ink);
     margin: 0 0 1.2rem;
 }
 
@@ -3032,8 +3030,8 @@ onBeforeUnmount(() => {
     gap: 0.9rem;
     width: 100%;
     text-align: left;
-    background: #f8fafc;
-    border: 2.5px solid #cbd5e1;
+    background: var(--px-surface-soft);
+    border: 2.5px solid var(--px-line);
     border-bottom-width: 5px;
     border-radius: 18px;
     padding: 0.9rem 1.15rem;
@@ -3042,23 +3040,23 @@ onBeforeUnmount(() => {
 }
 
 .clay-mcq-option-btn:hover {
-    background: #eff6ff;
-    border-color: #93c5fd;
+    background: color-mix(in srgb, var(--px-tint-info-bg) 55%, var(--px-surface-card));
+    border-color: var(--px-tint-info-line);
     transform: translateY(-1px);
 }
 
 .clay-mcq-option-btn.is-selected {
-    background: #dbeafe;
+    background: var(--px-tint-info-bg);
     border-color: #2563eb;
 }
 
 .clay-mcq-option-btn.is-correct {
-    background: #ecfdf5;
+    background: color-mix(in srgb, var(--px-tint-success-bg) 55%, var(--px-surface-card));
     border-color: #10b981;
 }
 
 .clay-mcq-option-btn.is-wrong {
-    background: #fef2f2;
+    background: color-mix(in srgb, var(--px-tint-danger-bg) 55%, var(--px-surface-card));
     border-color: #ef4444;
 }
 
@@ -3066,15 +3064,15 @@ onBeforeUnmount(() => {
     width: 34px;
     height: 34px;
     border-radius: 11px;
-    background: #ffffff;
-    border: 2px solid #94a3b8;
+    background: var(--px-surface-card);
+    border: 2px solid var(--px-line-strong);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font-family: 'Fredoka', sans-serif;
     font-weight: 700;
     font-size: 0.95rem;
-    color: #1e293b;
+    color: var(--px-ink);
     flex-shrink: 0;
 }
 
@@ -3094,27 +3092,27 @@ onBeforeUnmount(() => {
 .mcq-option-text {
     font-size: 1rem;
     font-weight: 800;
-    color: #0f172a;
+    color: var(--px-ink);
 }
 
 .mcq-option-feedback {
     font-size: 0.82rem;
     font-weight: 700;
-    color: #475569;
+    color: var(--px-ink-muted);
 }
 
 .mcq-check-indicator {
     font-weight: 900;
     font-size: 1.1rem;
-    color: #2563eb;
+    color: var(--px-tint-info-ink);
 }
 
 /* ==========================================================================
    2. COLOR THE CONFLICT SWATCHES
    ========================================================================== */
 .conflict-excerpt-canvas {
-    background: #f8fafc;
-    border: 3px solid #cbd5e1;
+    background: var(--px-surface-soft);
+    border: 3px solid var(--px-line);
     border-radius: 22px;
     padding: 1.25rem 1.4rem;
     margin-bottom: 1.2rem;
@@ -3134,7 +3132,7 @@ onBeforeUnmount(() => {
     font-size: 0.7rem;
     font-weight: 900;
     letter-spacing: 0.08em;
-    color: #64748b;
+    color: var(--px-ink-muted);
 }
 
 .selected-color-chip {
@@ -3155,7 +3153,7 @@ onBeforeUnmount(() => {
 .swatch-picker-heading {
     font-family: 'Fredoka', sans-serif;
     font-size: 1.02rem;
-    color: #334155;
+    color: var(--px-ink);
     margin: 0 0 0.75rem;
 }
 
@@ -3187,15 +3185,15 @@ onBeforeUnmount(() => {
 
 .clay-swatch-btn.is-selected {
     border-color: var(--swatch-color);
-    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.12);
+    box-shadow: 0 0 0 3px rgba(var(--px-shadow-rgb), 0.12);
 }
 
 .swatch-paint-dot {
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    border: 2px solid #ffffff;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+    border: 2px solid var(--px-card-border);
+    box-shadow: 0 2px 5px rgba(var(--px-shadow-rgb), 0.15);
     flex-shrink: 0;
 }
 
@@ -3203,8 +3201,8 @@ onBeforeUnmount(() => {
    3. THE CONFLICT MAP (TOP HORIZONTAL DROP ZONE & BOTTOM EVENT CARDS)
    ========================================================================== */
 .conflict-drop-zone-top-section {
-    background: #f8fafc;
-    border: 2px solid #e2e8f0;
+    background: var(--px-surface-soft);
+    border: 2px solid var(--px-line);
     border-radius: 20px;
     padding: 0.85rem 1rem;
     margin-bottom: 1.25rem;
@@ -3223,7 +3221,7 @@ onBeforeUnmount(() => {
 .map-col-title-compact {
     font-family: 'Fredoka', sans-serif;
     font-size: 0.98rem;
-    color: #1e293b;
+    color: var(--px-ink);
     margin: 0;
     display: flex;
     align-items: center;
@@ -3234,7 +3232,7 @@ onBeforeUnmount(() => {
 .events-status-lbl {
     font-size: 0.74rem;
     font-weight: 800;
-    color: #64748b;
+    color: var(--px-ink-muted);
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
@@ -3246,7 +3244,7 @@ onBeforeUnmount(() => {
 }
 
 .clay-map-zone-bucket {
-    border: 2.5px dashed #93c5fd;
+    border: 2.5px dashed var(--px-tint-info-line);
     border-radius: 16px;
     padding: 0.75rem 0.85rem;
     min-height: 95px;
@@ -3319,8 +3317,8 @@ onBeforeUnmount(() => {
 }
 
 .placed-event-chip {
-    background: #ffffff;
-    border: 1.5px solid #cbd5e1;
+    background: var(--px-surface-card);
+    border: 1.5px solid var(--px-line);
     border-radius: 10px;
     padding: 0.3rem 0.5rem;
     display: flex;
@@ -3328,7 +3326,7 @@ onBeforeUnmount(() => {
     gap: 0.4rem;
     font-size: 0.76rem;
     font-weight: 800;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 1px 3px rgba(var(--px-shadow-rgb), 0.05);
 }
 
 .placed-letter {
@@ -3351,12 +3349,12 @@ onBeforeUnmount(() => {
     overflow: hidden;
     text-overflow: ellipsis;
     font-size: 0.74rem;
-    color: #1e293b;
+    color: var(--px-ink);
 }
 
 .placed-remove-btn {
-    background: #fee2e2;
-    color: #b91c1c;
+    background: var(--px-tint-danger-bg);
+    color: var(--px-tint-danger-ink);
     border: none;
     border-radius: 5px;
     width: 18px;
@@ -3377,7 +3375,7 @@ onBeforeUnmount(() => {
 .zone-empty-placeholder {
     font-size: 0.72rem;
     font-weight: 800;
-    color: #94a3b8;
+    color: var(--px-ink-subtle);
     text-align: center;
     padding: 0.55rem 0.35rem;
     border: 1.5px dashed rgba(148, 163, 184, 0.45);
@@ -3397,8 +3395,8 @@ onBeforeUnmount(() => {
 }
 
 .clay-map-event-card {
-    background: #f8fafc;
-    border: 2.5px solid #cbd5e1;
+    background: var(--px-surface-soft);
+    border: 2.5px solid var(--px-line);
     border-bottom-width: 5px;
     border-radius: 18px;
     padding: 0.85rem 1rem;
@@ -3410,8 +3408,8 @@ onBeforeUnmount(() => {
 
 .clay-map-event-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
-    border-color: #94a3b8;
+    box-shadow: 0 6px 16px rgba(var(--px-shadow-rgb), 0.06);
+    border-color: var(--px-line-strong);
 }
 
 .clay-map-event-card:active {
@@ -3420,13 +3418,13 @@ onBeforeUnmount(() => {
 
 .clay-map-event-card.is-selected-for-tap {
     border-color: #2563eb;
-    background: #eff6ff;
+    background: color-mix(in srgb, var(--px-tint-info-bg) 55%, var(--px-surface-card));
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
 }
 
 .clay-map-event-card.is-assigned {
-    border-color: #93c5fd;
-    background: #f0f7ff;
+    border-color: var(--px-tint-info-line);
+    background: color-mix(in srgb, var(--px-tint-info-bg) 55%, var(--px-surface-card));
 }
 
 .clay-map-event-card.is-touch-dragging {
@@ -3439,12 +3437,12 @@ onBeforeUnmount(() => {
 
 .clay-map-event-card.is-correct {
     border-color: #10b981;
-    background: #ecfdf5;
+    background: color-mix(in srgb, var(--px-tint-success-bg) 55%, var(--px-surface-card));
 }
 
 .clay-map-event-card.is-wrong {
     border-color: #ef4444;
-    background: #fef2f2;
+    background: color-mix(in srgb, var(--px-tint-danger-bg) 55%, var(--px-surface-card));
 }
 
 .event-card-top,
@@ -3464,8 +3462,8 @@ onBeforeUnmount(() => {
 .event-drag-handle-hint {
     font-size: 0.68rem;
     font-weight: 900;
-    color: #64748b;
-    background: #e2e8f0;
+    color: var(--px-ink-muted);
+    background: var(--px-track);
     padding: 0.15rem 0.45rem;
     border-radius: 6px;
     letter-spacing: 0.03em;
@@ -3484,21 +3482,21 @@ onBeforeUnmount(() => {
 .event-pts-lbl {
     font-size: 0.74rem;
     font-weight: 800;
-    color: #64748b;
+    color: var(--px-ink-muted);
 }
 
 .event-card-body,
 .matching-item-desc {
     font-size: 0.92rem;
     font-weight: 800;
-    color: #0f172a;
+    color: var(--px-ink);
     margin: 0 0 0.65rem;
     line-height: 1.45;
 }
 
 .event-card-status-bar {
     padding-top: 0.5rem;
-    border-top: 1.5px dashed #e2e8f0;
+    border-top: 1.5px dashed var(--px-line);
 }
 
 .event-assigned-indicator {
@@ -3507,15 +3505,15 @@ onBeforeUnmount(() => {
     justify-content: space-between;
     gap: 0.4rem;
     font-size: 0.76rem;
-    color: #1e40af;
-    background: #dbeafe;
+    color: var(--px-tint-info-ink);
+    background: var(--px-tint-info-bg);
     padding: 0.3rem 0.6rem;
     border-radius: 8px;
     font-weight: 700;
 }
 
 .assigned-dot {
-    color: #2563eb;
+    color: var(--px-tint-info-ink);
     font-size: 0.7rem;
 }
 
@@ -3527,9 +3525,9 @@ onBeforeUnmount(() => {
 }
 
 .event-card-unassign-btn {
-    background: #ffffff;
-    color: #b91c1c;
-    border: 1px solid #fca5a5;
+    background: var(--px-surface-card);
+    color: var(--px-tint-danger-ink);
+    border: 1px solid var(--px-tint-danger-line);
     border-radius: 6px;
     padding: 0.15rem 0.45rem;
     font-size: 0.68rem;
@@ -3544,7 +3542,7 @@ onBeforeUnmount(() => {
     gap: 0.35rem;
     font-size: 0.74rem;
     font-weight: 800;
-    color: #64748b;
+    color: var(--px-ink-muted);
 }
 
 .drag-icon-hand {
@@ -3562,8 +3560,8 @@ onBeforeUnmount(() => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: #eff6ff;
-    border: 2px solid #bfdbfe;
+    background: color-mix(in srgb, var(--px-tint-info-bg) 55%, var(--px-surface-card));
+    border: 2px solid var(--px-tint-info-line);
     border-radius: 14px;
     padding: 0.6rem 0.85rem;
     margin-bottom: 0.95rem;
@@ -3574,14 +3572,14 @@ onBeforeUnmount(() => {
 .matching-guide-step {
     font-size: 0.84rem;
     font-weight: 800;
-    color: #1e40af;
+    color: var(--px-tint-info-ink);
     line-height: 1.35;
 }
 
 .matching-cancel-selection-btn {
-    background: #fee2e2;
-    color: #b91c1c;
-    border: 1px solid #fca5a5;
+    background: var(--px-tint-danger-bg);
+    color: var(--px-tint-danger-ink);
+    border: 1px solid var(--px-tint-danger-line);
     border-radius: 8px;
     padding: 0.22rem 0.55rem;
     font-size: 0.72rem;
@@ -3597,11 +3595,11 @@ onBeforeUnmount(() => {
 
 /* Matching Table Wrapper */
 .matching-table-wrap {
-    background: #ffffff;
-    border: 2.5px solid #cbd5e1;
+    background: var(--px-surface-card);
+    border: 2.5px solid var(--px-line);
     border-radius: 20px;
     overflow: hidden;
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+    box-shadow: 0 4px 12px rgba(var(--px-shadow-rgb), 0.04);
 }
 
 .matching-table-grid {
@@ -3611,16 +3609,16 @@ onBeforeUnmount(() => {
 }
 
 .matching-table-header {
-    background: #f1f5f9;
+    background: var(--px-surface-soft);
     padding: 0.65rem 0.9rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    border-bottom: 2px solid #cbd5e1;
+    border-bottom: 2px solid var(--px-line);
 }
 
 .matching-table-header.col-a-header {
-    border-right: 2px solid #cbd5e1;
+    border-right: 2px solid var(--px-line);
 }
 
 .table-col-badge {
@@ -3638,7 +3636,7 @@ onBeforeUnmount(() => {
     font-family: 'Fredoka', sans-serif;
     font-size: 0.95rem;
     font-weight: 700;
-    color: #1e293b;
+    color: var(--px-ink);
 }
 
 /* Matching Column Lanes */
@@ -3650,19 +3648,19 @@ onBeforeUnmount(() => {
 }
 
 .matching-col-lane.lane-clues {
-    border-right: 2px solid #cbd5e1;
-    background: #f8fafc;
+    border-right: 2px solid var(--px-line);
+    background: var(--px-surface-soft);
 }
 
 .matching-col-lane.lane-options {
-    background: #ffffff;
+    background: var(--px-surface-card);
 }
 
 /* Interactive Clue & Option Table Rows */
 .clay-matching-table-row {
     border-radius: 14px;
     padding: 0.65rem 0.8rem;
-    border: 2px solid #e2e8f0;
+    border: 2px solid var(--px-line);
     cursor: pointer;
     transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
     position: relative;
@@ -3674,19 +3672,19 @@ onBeforeUnmount(() => {
 
 .clay-matching-table-row:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 4px 12px rgba(var(--px-shadow-rgb), 0.05);
 }
 
 /* Clue Row (Column A) */
 .clue-row {
-    background: #ffffff;
-    border-color: #cbd5e1;
+    background: var(--px-surface-card);
+    border-color: var(--px-line);
     border-bottom-width: 3.5px;
 }
 
 .clue-row.is-active-item {
     border-color: #2563eb !important;
-    background: #eff6ff !important;
+    background: color-mix(in srgb, var(--px-tint-info-bg) 55%, var(--px-surface-card)) !important;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25) !important;
     transform: translateY(-2px);
 }
@@ -3696,7 +3694,7 @@ onBeforeUnmount(() => {
 }
 
 @keyframes targetPulse {
-    0%, 100% { border-color: #93c5fd; }
+    0%, 100% { border-color: var(--px-tint-info-line); }
     50% { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2); }
 }
 
@@ -3727,7 +3725,7 @@ onBeforeUnmount(() => {
     border-radius: 6px;
     font-size: 0.72rem;
     font-weight: 800;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 3px rgba(var(--px-shadow-rgb), 0.1);
 }
 
 .clue-unmatch-btn {
@@ -3755,7 +3753,7 @@ onBeforeUnmount(() => {
 .clue-unmatched-status {
     font-size: 0.68rem;
     font-weight: 800;
-    color: #94a3b8;
+    color: var(--px-ink-subtle);
     text-transform: uppercase;
     letter-spacing: 0.03em;
 }
@@ -3763,7 +3761,7 @@ onBeforeUnmount(() => {
 .clue-text {
     font-size: 0.86rem;
     font-weight: 700;
-    color: #1e293b;
+    color: var(--px-ink);
     margin: 0;
     line-height: 1.35;
 }
@@ -3796,14 +3794,14 @@ onBeforeUnmount(() => {
     font-weight: 900;
     font-size: 0.82rem;
     flex-shrink: 0;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgba(var(--px-shadow-rgb), 0.1);
 }
 
 .option-used-indicator {
     font-size: 0.68rem;
     font-weight: 800;
-    color: #059669;
-    background: #d1fae5;
+    color: var(--px-tint-success-ink);
+    background: var(--px-tint-success-bg);
     padding: 0.15rem 0.45rem;
     border-radius: 6px;
 }
@@ -3811,8 +3809,8 @@ onBeforeUnmount(() => {
 .option-tap-prompt {
     font-size: 0.68rem;
     font-weight: 800;
-    color: #2563eb;
-    background: #dbeafe;
+    color: var(--px-tint-info-ink);
+    background: var(--px-tint-info-bg);
     padding: 0.12rem 0.4rem;
     border-radius: 6px;
 }
@@ -3821,7 +3819,7 @@ onBeforeUnmount(() => {
     font-size: 0.86rem;
     font-weight: 800;
     line-height: 1.35;
-    color: #0f172a;
+    color: var(--px-ink);
 }
 
 .event-map-feedback {
@@ -3831,15 +3829,11 @@ onBeforeUnmount(() => {
 }
 
 .text-emerald {
-    color: #047857;
+    color: var(--px-tint-success-ink);
 }
 
 .text-rose {
-    color: #be123c;
-}
-
-.text-amber {
-    color: #d97706;
+    color: var(--px-tint-danger-ink);
 }
 
 /* ==========================================================================
@@ -3852,7 +3846,7 @@ onBeforeUnmount(() => {
 }
 
 .clay-word-helpers-bar {
-    background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--px-tint-magic-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-magic-bg) 100%);
     border: 2.5px solid #a78bfa;
     border-bottom: 4px solid #8b5cf6;
     border-radius: 18px;
@@ -3885,7 +3879,7 @@ onBeforeUnmount(() => {
 .helpers-sub {
     font-size: 0.76rem;
     font-weight: 800;
-    color: #5b21b6;
+    color: var(--px-tint-magic-ink);
 }
 
 .word-helpers-chips {
@@ -3895,8 +3889,8 @@ onBeforeUnmount(() => {
 }
 
 .clay-word-helper-chip {
-    background: #ffffff;
-    color: #5b21b6;
+    background: var(--px-surface-card);
+    color: var(--px-tint-magic-ink);
     border: 2px solid #8b5cf6;
     border-bottom-width: 3.5px;
     border-radius: 999px;
@@ -3911,7 +3905,7 @@ onBeforeUnmount(() => {
 
 .clay-word-helper-chip:hover {
     transform: translateY(-1px);
-    background: #f5f3ff;
+    background: color-mix(in srgb, var(--px-tint-magic-bg) 55%, var(--px-surface-card));
 }
 
 .clay-word-helper-chip:active {
@@ -3926,27 +3920,27 @@ onBeforeUnmount(() => {
     font-size: 1.12rem;
     font-weight: 900;
     line-height: 1.35;
-    color: #0f172a;
+    color: var(--px-ink);
     margin: 0.4rem 0 0.85rem;
 }
 
 .eval-step-box {
-    background: #f8fafc;
-    border: 2px solid #e2e8f0;
+    background: var(--px-surface-soft);
+    border: 2px solid var(--px-line);
     border-radius: 16px;
     padding: 0.85rem 1rem;
     margin-bottom: 0.8rem;
 }
 
 .eval-step-box.eval-step-one {
-    background: #f8fafc;
-    border-color: #e2e8f0;
+    background: var(--px-surface-soft);
+    border-color: var(--px-line);
 }
 
 .eval-step-box.eval-step-two {
-    background: #ffffff;
-    border-color: #cbd5e1;
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
+    background: var(--px-surface-card);
+    border-color: var(--px-line);
+    box-shadow: 0 2px 6px rgba(var(--px-shadow-rgb), 0.03);
 }
 
 .eval-step-head {
@@ -3980,7 +3974,7 @@ onBeforeUnmount(() => {
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #334155;
+    color: var(--px-ink);
     margin: 0;
 }
 
@@ -3997,9 +3991,9 @@ onBeforeUnmount(() => {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    background: #eff6ff;
-    color: #1e40af;
-    border: 1.5px solid #bfdbfe;
+    background: color-mix(in srgb, var(--px-tint-info-bg) 55%, var(--px-surface-card));
+    color: var(--px-tint-info-ink);
+    border: 1.5px solid var(--px-tint-info-line);
     border-radius: 999px;
     padding: 0.18rem 0.55rem;
     font-size: 0.72rem;
@@ -4029,9 +4023,9 @@ onBeforeUnmount(() => {
     gap: 0.6rem;
     width: 100%;
     text-align: left;
-    background: #ffffff;
-    border: 2px solid #cbd5e1;
-    border-bottom: 4px solid #94a3b8;
+    background: var(--px-surface-card);
+    border: 2px solid var(--px-line);
+    border-bottom: 4px solid var(--px-line-strong);
     border-radius: 13px;
     padding: 0.55rem 0.75rem;
     min-height: 44px;
@@ -4040,13 +4034,13 @@ onBeforeUnmount(() => {
 }
 
 .clay-eval-option-btn:hover {
-    background: #f8fafc;
-    border-color: #94a3b8;
+    background: var(--px-surface-soft);
+    border-color: var(--px-line-strong);
     transform: translateY(-1px);
 }
 
 .clay-eval-option-btn.is-selected {
-    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--px-tint-info-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-info-bg) 100%);
     border-color: #3b82f6;
     border-bottom-color: #1d4ed8;
     box-shadow: 0 3px 8px rgba(37, 99, 235, 0.16);
@@ -4058,8 +4052,8 @@ onBeforeUnmount(() => {
     border-radius: 8px;
     font-size: 0.76rem;
     font-weight: 900;
-    background: #f1f5f9;
-    color: #475569;
+    background: var(--px-surface-soft);
+    color: var(--px-ink-muted);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -4076,20 +4070,20 @@ onBeforeUnmount(() => {
     font-size: 0.86rem;
     font-weight: 800;
     line-height: 1.25;
-    color: #1e293b;
+    color: var(--px-ink);
     flex: 1;
 }
 
 .clay-eval-option-btn.is-selected .eval-option-text {
-    color: #1e40af;
+    color: var(--px-tint-info-ink);
 }
 
 .eval-option-indicator {
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    border: 2px solid #cbd5e1;
-    background: #f8fafc;
+    border: 2px solid var(--px-line);
+    background: var(--px-surface-soft);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -4111,22 +4105,22 @@ onBeforeUnmount(() => {
 
 /* Step 2 Sentence Template Canvas & Builder */
 .sentence-template-canvas {
-    background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
-    border: 2px solid #cbd5e1;
+    background: linear-gradient(180deg, var(--px-surface-card) 0%, color-mix(in srgb, var(--px-tint-info-bg) 55%, var(--px-surface-card)) 100%);
+    border: 2px solid var(--px-line);
     border-radius: 14px;
     padding: 0.85rem 1rem;
-    box-shadow: inset 0 2px 4px rgba(15, 23, 42, 0.03);
+    box-shadow: inset 0 2px 4px rgba(var(--px-shadow-rgb), 0.03);
 }
 
 .sentence-template-builder {
     font-size: 1rem;
     font-weight: 700;
     line-height: 2.15;
-    color: #1e293b;
+    color: var(--px-ink);
 }
 
 .sentence-static-text {
-    color: #334155;
+    color: var(--px-ink);
     font-weight: 700;
 }
 
@@ -4142,8 +4136,8 @@ onBeforeUnmount(() => {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-    color: #166534;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--px-tint-success-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-success-bg) 100%);
+    color: var(--px-tint-success-ink);
     border: 2px solid #22c55e;
     border-bottom: 3.5px solid #16a34a;
     border-radius: 10px;
@@ -4182,8 +4176,8 @@ onBeforeUnmount(() => {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    background: #fef3c7;
-    color: #92400e;
+    background: var(--px-tint-warn-bg);
+    color: var(--px-tint-warn-ink);
     border: 1.5px dashed #f59e0b;
     border-radius: 10px;
     padding: 0.18rem 0.55rem;
@@ -4221,11 +4215,11 @@ onBeforeUnmount(() => {
     border: 2px solid #3b82f6;
     border-bottom: 3.5px solid #2563eb;
     border-radius: 10px;
-    background: #ffffff;
+    background: var(--px-surface-card);
     font-family: 'Nunito', sans-serif;
     font-size: 1rem; /* 16px prevents iOS Safari auto-zoom */
     font-weight: 800;
-    color: #1e3a8a;
+    color: var(--px-tint-info-ink);
     outline: none;
     transition: all 0.16s ease;
     box-shadow: inset 0 2px 4px rgba(30, 58, 138, 0.05);
@@ -4234,21 +4228,21 @@ onBeforeUnmount(() => {
 .clay-inline-blank-input:focus,
 .clay-inline-blank-input.is-active-focus {
     border-color: #1d4ed8;
-    background: #eff6ff;
+    background: color-mix(in srgb, var(--px-tint-info-bg) 55%, var(--px-surface-card));
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.28), inset 0 2px 4px rgba(30, 58, 138, 0.08);
 }
 
 .clay-inline-blank-input.is-blank-filled {
     border-color: #60a5fa;
-    background: #f8fafc;
+    background: var(--px-surface-soft);
 }
 
 .reflection-guiding-note {
-    background: #f0fdf4;
-    border: 2px solid #86efac;
+    background: color-mix(in srgb, var(--px-tint-success-bg) 55%, var(--px-surface-card));
+    border: 2px solid var(--px-tint-success-line);
     border-radius: 14px;
     padding: 0.65rem 0.95rem;
-    color: #166534;
+    color: var(--px-tint-success-ink);
     font-size: 0.9rem;
     font-weight: 700;
     margin: 0 0 0.9rem;
@@ -4260,8 +4254,8 @@ onBeforeUnmount(() => {
     justify-content: space-between;
     gap: 0.75rem;
     flex-wrap: wrap;
-    background: #f8fafc;
-    border: 2px dashed #cbd5e1;
+    background: var(--px-surface-soft);
+    border: 2px dashed var(--px-line);
     border-radius: 14px;
     padding: 0.6rem 0.9rem;
     margin-bottom: 0.85rem;
@@ -4270,12 +4264,12 @@ onBeforeUnmount(() => {
 .starter-sentence-preview {
     font-size: 0.86rem;
     font-weight: 700;
-    color: #475569;
+    color: var(--px-ink-muted);
 }
 
 .clay-starter-insert-btn {
-    background: #dbeafe;
-    color: #1d4ed8;
+    background: var(--px-tint-info-bg);
+    color: var(--px-tint-info-ink);
     border: 2px solid #60a5fa;
     border-radius: 10px;
     padding: 0.3rem 0.75rem;
@@ -4287,21 +4281,21 @@ onBeforeUnmount(() => {
 .clay-reflection-textarea {
     width: 100%;
     box-sizing: border-box;
-    border: 2.5px solid #cbd5e1;
+    border: 2.5px solid var(--px-line);
     border-radius: 18px;
     padding: 1rem;
     font-family: 'Nunito', sans-serif;
     font-size: 1rem;
     font-weight: 700;
     line-height: 1.65;
-    color: #0f172a;
-    background: #f8fafc;
+    color: var(--px-ink);
+    background: var(--px-surface-soft);
 }
 
 .clay-reflection-textarea:focus {
     outline: none;
     border-color: #2563eb;
-    background: #ffffff;
+    background: var(--px-surface-card);
 }
 
 .reflection-word-meter {
@@ -4313,7 +4307,7 @@ onBeforeUnmount(() => {
     margin-top: 0.6rem;
     font-size: 0.84rem;
     font-weight: 800;
-    color: #475569;
+    color: var(--px-ink-muted);
 }
 
 .word-goal-chip {
@@ -4324,13 +4318,13 @@ onBeforeUnmount(() => {
 }
 
 .word-goal-chip.goal-met {
-    background: #dcfce7;
-    color: #15803d;
+    background: color-mix(in srgb, var(--px-tint-success-bg) 55%, var(--px-surface-card));
+    color: var(--px-tint-success-ink);
 }
 
 .word-goal-chip.goal-pending {
-    background: #fef3c7;
-    color: #b45309;
+    background: var(--px-tint-warn-bg);
+    color: var(--px-tint-warn-ink);
 }
 
 /* ==========================================================================
@@ -4339,7 +4333,7 @@ onBeforeUnmount(() => {
 .card-check-row {
     margin-top: 1.25rem;
     padding-top: 1rem;
-    border-top: 2px dashed #e2e8f0;
+    border-top: 2px dashed var(--px-line);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -4378,15 +4372,15 @@ onBeforeUnmount(() => {
 }
 
 .feedback-pill-banner.banner-correct {
-    background: #ecfdf5;
+    background: color-mix(in srgb, var(--px-tint-success-bg) 55%, var(--px-surface-card));
     border: 2px solid #34d399;
-    color: #065f46;
+    color: var(--px-tint-success-ink);
 }
 
 .feedback-pill-banner.banner-incorrect {
-    background: #fffbeb;
-    border: 2px solid #fbbf24;
-    color: #92400e;
+    background: color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card));
+    border: 2px solid var(--px-tint-warn-line);
+    color: var(--px-tint-warn-ink);
 }
 
 /* ==========================================================================
@@ -4397,17 +4391,17 @@ onBeforeUnmount(() => {
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    background: #ffffff;
-    border: 3px solid #cbd5e1;
+    background: var(--px-surface-card);
+    border: 3px solid var(--px-line);
     border-bottom-width: 6px;
     border-radius: 22px;
     padding: 0.85rem 1.25rem;
 }
 
 .clay-step-nav-btn {
-    background: #f1f5f9;
-    color: #1e293b;
-    border: 2px solid #94a3b8;
+    background: var(--px-surface-soft);
+    color: var(--px-ink);
+    border: 2px solid var(--px-line-strong);
     border-bottom-width: 4px;
     border-radius: 14px;
     padding: 0.5rem 1.1rem;
@@ -4444,11 +4438,11 @@ onBeforeUnmount(() => {
     width: 34px;
     height: 34px;
     border-radius: 10px;
-    border: 2px solid #cbd5e1;
-    background: #f8fafc;
+    border: 2px solid var(--px-line);
+    background: var(--px-surface-soft);
     font-weight: 900;
     font-size: 0.82rem;
-    color: #475569;
+    color: var(--px-ink-muted);
     cursor: pointer;
 }
 
@@ -4458,128 +4452,8 @@ onBeforeUnmount(() => {
     color: #ffffff;
 }
 
-/* ==========================================================================
-   3. COMPLETION SUMMARY MODAL
-   ========================================================================== */
-.clay-summary-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 90;
-    background: rgba(15, 23, 42, 0.65);
-    backdrop-filter: blur(6px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-}
-
-.clay-summary-modal-card {
-    position: relative;
-    width: 100%;
-    max-width: 480px;
-    background: #ffffff;
-    border: 4px solid #cbd5e1;
-    border-bottom-width: 9px;
-    border-radius: 32px;
-    padding: 2rem 1.75rem;
-    text-align: center;
-    box-shadow: 0 24px 50px rgba(15, 23, 42, 0.35);
-}
-
-.summary-modal-close {
-    position: absolute;
-    top: 1rem;
-    right: 1rem;
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    border: 2px solid #cbd5e1;
-    background: #f8fafc;
-    font-weight: 900;
-    cursor: pointer;
-}
-
-.summary-stars-row {
-    display: flex;
-    justify-content: center;
-    gap: 0.65rem;
-    margin-bottom: 0.85rem;
-}
-
-.summary-star-badge {
-    font-size: 2.6rem;
-    color: #cbd5e1;
-    text-shadow: 0 3px 0 #94a3b8;
-}
-
-.summary-star-badge.star-earned {
-    color: #facc15;
-    text-shadow: 0 4px 0 #b45309;
-}
-
-.summary-status-pill {
-    display: inline-block;
-    font-size: 0.72rem;
-    font-weight: 900;
-    letter-spacing: 0.08em;
-    padding: 0.28rem 0.8rem;
-    border-radius: 999px;
-    margin-bottom: 0.5rem;
-}
-
-.summary-status-pill.status-pass {
-    background: #dcfce7;
-    color: #15803d;
-}
-
-.summary-status-pill.status-retry {
-    background: #fef3c7;
-    color: #b45309;
-}
-
-.summary-status-pill.status-pending {
-    background: #FEF3C7;
-    color: #B45309;
-    border: 1px solid #F59E0B;
-}
-
-.summary-pending-row {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 0.85rem;
-}
-
-.summary-pending-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: #FEF3C7;
-    border: 2px solid #F59E0B;
-    border-radius: 9999px;
-    padding: 0.4rem 1.15rem;
-}
-
-.summary-pending-icon {
-    font-size: 1.3rem;
-}
-
-.summary-pending-tag-lbl {
-    font-family: 'Fredoka', sans-serif;
-    font-weight: 800;
-    font-size: 0.85rem;
-    color: #92400E;
-}
-
-.summary-pending-explainer {
-    font-size: 0.88rem;
-    font-weight: 600;
-    color: #475569;
-    line-height: 1.45;
-    margin: -0.5rem 0 1rem;
-}
-
 .summary-feedback-box {
-    background: #FFFBEB;
+    background: color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card));
     border: 2px dashed #F59E0B;
     border-radius: 16px;
     padding: 0.85rem 1rem;
@@ -4588,7 +4462,7 @@ onBeforeUnmount(() => {
 }
 
 .clay-already-taken-card.card-pending-review {
-    background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-warn-bg) 100%);
     border-color: #F59E0B;
     box-shadow: 0 10px 0 #D97706, 0 20px 38px rgba(217, 119, 6, 0.2);
 }
@@ -4618,20 +4492,20 @@ onBeforeUnmount(() => {
 }
 
 .card-pending-review .already-taken-title {
-    color: #78350F;
+    color: var(--px-tint-warn-ink);
 }
 
 .card-pending-review .already-taken-desc {
-    color: #92400E;
+    color: var(--px-tint-warn-ink);
 }
 
 .card-pending-review .already-taken-date {
-    color: #B45309;
+    color: var(--px-tint-warn-ink);
 }
 
 .clay-teacher-feedback-box {
     margin-top: 0.85rem;
-    background: rgba(255, 255, 255, 0.9);
+    background: color-mix(in srgb, var(--px-surface-card) 90%, transparent);
     border: 2px dashed #F59E0B;
     border-radius: 14px;
     padding: 0.75rem 1rem;
@@ -4651,82 +4525,16 @@ onBeforeUnmount(() => {
 .feedback-badge-lbl {
     font-family: 'Fredoka', sans-serif;
     font-size: 0.82rem;
-    color: #92400E;
+    color: var(--px-tint-warn-ink);
 }
 
 .feedback-text {
     margin: 0;
     font-style: italic;
     font-weight: 600;
-    color: #334155;
+    color: var(--px-ink);
     font-size: 0.9rem;
     line-height: 1.45;
-}
-
-.summary-modal-title {
-    font-family: 'Fredoka', sans-serif;
-    font-size: 1.55rem;
-    color: #0f172a;
-    margin: 0 0 1.2rem;
-}
-
-.summary-metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.65rem;
-    margin-bottom: 1.5rem;
-}
-
-.summary-metric-box {
-    background: #f8fafc;
-    border: 2px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 0.75rem 0.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-}
-
-.metric-lbl {
-    font-size: 0.68rem;
-    font-weight: 900;
-    color: #64748b;
-}
-
-.metric-val {
-    font-family: 'Fredoka', sans-serif;
-    font-size: 1.15rem;
-    color: #0f172a;
-}
-
-.summary-modal-actions {
-    display: flex;
-    gap: 0.75rem;
-}
-
-.clay-summary-secondary-btn,
-.clay-summary-primary-btn {
-    flex: 1;
-    padding: 0.75rem 1rem;
-    border-radius: 16px;
-    font-family: 'Fredoka', sans-serif;
-    font-size: 0.95rem;
-    font-weight: 700;
-    cursor: pointer;
-}
-
-.clay-summary-secondary-btn {
-    background: #f1f5f9;
-    color: #334155;
-    border: 2.5px solid #cbd5e1;
-    border-bottom-width: 5px;
-}
-
-.clay-summary-primary-btn {
-    background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
-    color: #ffffff;
-    border: 2.5px solid #1e40af;
-    border-bottom-width: 5px;
 }
 
 /* ==========================================================================
@@ -5323,11 +5131,11 @@ onBeforeUnmount(() => {
         z-index: 35;
         padding: 0.6rem 0.75rem;
         border-radius: 18px;
-        background: rgba(255, 255, 255, 0.96);
+        background: color-mix(in srgb, var(--px-surface-card) 96%, transparent);
         backdrop-filter: blur(12px);
         box-shadow:
-            0 8px 24px rgba(15, 23, 42, 0.16),
-            0 2px 6px rgba(15, 23, 42, 0.08);
+            0 8px 24px rgba(var(--px-shadow-rgb), 0.16),
+            0 2px 6px rgba(var(--px-shadow-rgb), 0.08);
         gap: 0.45rem;
         border-width: 2.5px;
         border-bottom-width: 5px;
@@ -5360,50 +5168,6 @@ onBeforeUnmount(() => {
         border-radius: 8px;
     }
 
-    /* 9. COMPLETION MODAL */
-    .clay-summary-modal-card {
-        padding: 1.5rem 1.15rem;
-        border-radius: 24px;
-        max-height: 88vh;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    .summary-star-badge {
-        font-size: 2.1rem;
-    }
-
-    .summary-modal-title {
-        font-size: 1.25rem;
-        margin-bottom: 0.85rem;
-    }
-
-    .summary-metrics-grid {
-        gap: 0.45rem;
-        margin-bottom: 1.2rem;
-    }
-
-    .summary-metric-box {
-        padding: 0.65rem 0.4rem;
-        border-radius: 13px;
-    }
-
-    .metric-val {
-        font-size: 1rem;
-    }
-
-    .summary-modal-actions {
-        flex-direction: column;
-        gap: 0.6rem;
-    }
-
-    .clay-summary-primary-btn,
-    .clay-summary-secondary-btn {
-        width: 100%;
-        padding: 0.8rem 1rem;
-        font-size: 0.92rem;
-        min-height: 46px;
-    }
 }
 
 /* ==========================================================================
@@ -5439,15 +5203,15 @@ onBeforeUnmount(() => {
 
 /* Empty Quiz State */
 .clay-empty-quiz-card {
-    background: #FFFFFF;
-    border: 3px dashed #CBD5E1;
+    background: var(--px-surface-card);
+    border: 3px dashed var(--px-line);
     border-radius: 28px;
     padding: 3.5rem 2rem;
     text-align: center;
     max-width: 540px;
     margin: 2rem auto;
     width: 100%;
-    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.06);
+    box-shadow: 0 16px 36px rgba(var(--px-shadow-rgb), 0.06);
 }
 
 .empty-quiz-icon {
@@ -5460,14 +5224,14 @@ onBeforeUnmount(() => {
 .empty-quiz-title {
     font-family: var(--font-heading, 'Fredoka', sans-serif);
     font-size: 1.6rem;
-    color: #1E293B;
+    color: var(--px-ink);
     margin: 0 0 0.75rem 0;
     font-weight: 800;
 }
 
 .empty-quiz-desc {
     font-size: 0.95rem;
-    color: #64748B;
+    color: var(--px-ink-muted);
     line-height: 1.6;
     margin: 0 0 1.75rem 0;
 }

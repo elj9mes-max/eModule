@@ -32,7 +32,10 @@ class TeacherModuleController extends Controller
             return redirect()->route('students.dashboard');
         }
 
-        $classrooms = $this->cache->getTeacherClassrooms($user->id);
+        $requestedClassroomId = $request->query('class_id');
+        $classroom = is_string($requestedClassroomId) && ctype_digit($requestedClassroomId)
+            ? collect($this->cache->getTeacherClassrooms($user->id))->firstWhere('id', (int) $requestedClassroomId)
+            : null;
 
         return Inertia::render('teachers/create/Module', [
             'user' => [
@@ -42,14 +45,11 @@ class TeacherModuleController extends Controller
                 'role' => $user->role->value,
             ],
             'pending_grading_count' => $this->cache->getTeacherPendingGradingCount($user->id),
-            'classrooms' => array_map(static fn (array $c): array => [
-                'id' => $c['id'],
-                'name' => $c['name'],
-                'grade_level' => $c['grade_level'],
-                'icon' => $c['icon'],
-                'theme' => $c['theme'],
-                'students_count' => $c['students_count'],
-            ], $classrooms),
+            'classroom' => $classroom === null ? null : [
+                'id' => $classroom['id'],
+                'name' => $classroom['name'],
+                'icon' => $classroom['icon'],
+            ],
         ]);
     }
 
@@ -94,14 +94,14 @@ class TeacherModuleController extends Controller
             'published_at' => $status === ModuleStatus::Published ? now() : null,
         ]);
 
-        if (! empty($validated['classroom_ids'])) {
-            $classrooms = $user->taughtClassrooms()
-                ->whereIn('id', $validated['classroom_ids'])
-                ->get();
+        $classroom = isset($validated['classroom_id'])
+            ? $user->taughtClassrooms()->find($validated['classroom_id'])
+            : null;
 
-            foreach ($classrooms as $classroom) {
-                $classroom->assignModule($module);
-            }
+        if ($classroom !== null) {
+            $classroom->assignModule($module);
+
+            return redirect()->route('teachers.dashboard', ['class_id' => $classroom->id]);
         }
 
         return redirect()->route('teachers.dashboard');
@@ -130,7 +130,45 @@ class TeacherModuleController extends Controller
             'module' => $mapData['module'],
             'lectures' => $mapData['lectures'],
             'quizzes' => $mapData['quizzes'],
+            'backLink' => $this->resolveModulesListBackLink($request),
         ]);
+    }
+
+    /**
+     * Send Back to the modules list exactly as the teacher left it (filtered by classroom, or all).
+     *
+     * @return array{url: string, label: string}
+     */
+    private function resolveModulesListBackLink(Request $request): array
+    {
+        $classrooms = collect($this->cache->getTeacherClassrooms($request->user()->id));
+        $sessionKey = TeacherDashboardController::MODULES_FILTER_SESSION_KEY;
+
+        // The classroom list the module was opened from wins; it is part of the URL, so each
+        // classroom gets its own (prefetch-cached) copy of this page with the right Back link.
+        $requested = $request->query('class_id');
+        $classroom = is_string($requested) && ctype_digit($requested)
+            ? $classrooms->firstWhere('id', (int) $requested)
+            : null;
+
+        if ($classroom !== null && ! $request->prefetch()) {
+            $request->session()->put($sessionKey, $classroom['id']);
+        }
+
+        // Otherwise (e.g. returning from a lecture or quiz editor) use the last list actually visited.
+        if ($classroom === null && $requested === null) {
+            $remembered = $request->session()->get($sessionKey);
+            $classroom = is_int($remembered) ? $classrooms->firstWhere('id', $remembered) : null;
+        }
+
+        if ($classroom === null) {
+            return ['url' => route('teachers.dashboard'), 'label' => 'All Modules'];
+        }
+
+        return [
+            'url' => route('teachers.dashboard', ['class_id' => $classroom['id']]),
+            'label' => (string) $classroom['name'],
+        ];
     }
 
     /**

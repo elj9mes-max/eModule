@@ -26,19 +26,20 @@ use App\Models\ReflectionPrompt;
 use App\Models\StudentLectureCompletion;
 use App\Models\User;
 use Closure;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class EModuleCacheService
 {
-    private const string KEY_PREFIX = 'v1';
+    private const string KEY_PREFIX = 'v2';
 
     private const int EPOCH_TTL_SECONDS = 2592000; // 30 days
 
     private const string FLEXIBLE_CREATED_PREFIX = 'illuminate:cache:flexible:created:';
 
     /**
-     * Retrieve published modules enrolled by a student with dynamic `is_new` freshness.
+     * Retrieve published modules visible to a student (or the whole published catalog) with dynamic `is_new` freshness.
      *
      * @return list<array<string, mixed>>
      */
@@ -53,16 +54,54 @@ class EModuleCacheService
             $key = self::KEY_PREFIX.":student:all:c{$catEpoch}:modules";
         }
 
+        return $this->rememberStudentModuleCards($key, fn (): Builder => $studentId !== null
+            ? Module::query()->visibleToStudent($studentId)
+            : Module::query()->where('status', ModuleStatus::Published));
+    }
+
+    /**
+     * Retrieve the published modules assigned to one classroom, shared by every student in that room.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getClassroomStudentModules(int $classroomId): array
+    {
+        $catEpoch = $this->getEpoch($this->catalogEpochKey());
+        $classEpoch = $this->getEpoch($this->classroomEpochKey($classroomId));
+        $key = self::KEY_PREFIX.":student:classroom:{$classroomId}:k{$classEpoch}:c{$catEpoch}:modules";
+
+        return $this->rememberStudentModuleCards($key, fn (): Builder => Module::query()
+            ->where('status', ModuleStatus::Published)
+            ->whereHas('classroomModules', fn (Builder $assignment) => $assignment->where('classroom_id', $classroomId)));
+    }
+
+    /**
+     * Retrieve the published modules a student joined directly with a module join code (outside any classroom).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getStudentDirectModules(int $studentId): array
+    {
+        $catEpoch = $this->getEpoch($this->catalogEpochKey());
+        $epoch = $this->getEpoch($this->studentEnrollmentEpochKey($studentId));
+        $key = self::KEY_PREFIX.":student:{$studentId}:e{$epoch}:c{$catEpoch}:direct_modules";
+
+        return $this->rememberStudentModuleCards($key, fn (): Builder => Module::query()
+            ->where('status', ModuleStatus::Published)
+            ->whereHas('enrollments', fn (Builder $directJoin) => $directJoin->where('user_id', $studentId)));
+    }
+
+    /**
+     * Cache student-facing module cards for a module query and stamp the dynamic `is_new` flag.
+     *
+     * @param  Closure(): Builder<Module>  $queryFactory
+     * @return list<array<string, mixed>>
+     */
+    private function rememberStudentModuleCards(string $key, Closure $queryFactory): array
+    {
         /** @var list<array<string, mixed>> $modules */
-        $modules = $this->rememberFlexible($key, 300, 900, function () use ($studentId): array {
-            $query = Module::query()
-                ->where('status', ModuleStatus::Published);
-
-            if ($studentId !== null) {
-                $query->whereHas('enrollments', fn ($q) => $q->where('user_id', $studentId));
-            }
-
-            return $query
+        $modules = $this->rememberFlexible($key, 300, 900, function () use ($queryFactory): array {
+            return $queryFactory()
                 ->reorder()
                 ->latest('created_at')
                 ->latest('id')
@@ -582,6 +621,9 @@ class EModuleCacheService
             ->where('classrooms.is_active', true)
             ->with('teacher')
             ->select('classrooms.*')
+            ->withCount(['modules as published_modules_count' => fn (Builder $modules) => $modules->where('modules.status', ModuleStatus::Published)])
+            ->orderByDesc('classroom_students.joined_at')
+            ->orderByDesc('classroom_students.id')
             ->get()
             ->map(static fn (Classroom $c): array => [
                 'id' => (int) $c->id,
@@ -591,6 +633,7 @@ class EModuleCacheService
                 'theme' => (string) $c->theme,
                 'icon' => (string) $c->icon,
                 'teacher_name' => (string) ($c->teacher?->name ?? 'Instructor'),
+                'modules_count' => (int) $c->published_modules_count,
             ])
             ->values()
             ->all();
@@ -644,6 +687,7 @@ class EModuleCacheService
                     'id' => $content->id,
                     'type' => $content->type->value,
                     'layout_style' => $content->layout_style ?? 'standard',
+                    'paper_theme' => $content->paper_theme->value,
                     'title' => $content->title,
                     'content' => $content->content,
                     'media_url' => $content->mediaUrl(),
@@ -706,6 +750,46 @@ class EModuleCacheService
                 'quiz_ids' => $module->quizzes->pluck('id')->map(static fn ($id): int => (int) $id)->values()->all(),
             ];
         });
+    }
+
+    /**
+     * Count how many lectures and quizzes a student has finished in each module, in two grouped queries.
+     *
+     * Uses the same rule as the expedition map: a lecture is done once completed, a quiz once it is
+     * completed or awaiting teacher review.
+     *
+     * @param  list<int>  $moduleIds
+     * @return array<int, int> completed item count keyed by module ID
+     */
+    public function getStudentCompletedCountsByModule(int $userId, array $moduleIds): array
+    {
+        if ($moduleIds === []) {
+            return [];
+        }
+
+        $lectureCounts = StudentLectureCompletion::query()
+            ->join('lectures', 'lectures.id', '=', 'student_lecture_completions.lecture_id')
+            ->where('student_lecture_completions.user_id', $userId)
+            ->whereIn('lectures.module_id', $moduleIds)
+            ->groupBy('lectures.module_id')
+            ->selectRaw('lectures.module_id as module_id, COUNT(DISTINCT student_lecture_completions.lecture_id) as completed')
+            ->pluck('completed', 'module_id');
+
+        $quizCounts = QuizAttempt::query()
+            ->join('quizzes', 'quizzes.id', '=', 'quiz_attempts.quiz_id')
+            ->where('quiz_attempts.user_id', $userId)
+            ->whereIn('quiz_attempts.status', ['completed', 'pending_review'])
+            ->whereIn('quizzes.module_id', $moduleIds)
+            ->groupBy('quizzes.module_id')
+            ->selectRaw('quizzes.module_id as module_id, COUNT(DISTINCT quiz_attempts.quiz_id) as completed')
+            ->pluck('completed', 'module_id');
+
+        $counts = [];
+        foreach ($moduleIds as $moduleId) {
+            $counts[$moduleId] = (int) ($lectureCounts[$moduleId] ?? 0) + (int) ($quizCounts[$moduleId] ?? 0);
+        }
+
+        return $counts;
     }
 
     /**
@@ -834,6 +918,7 @@ class EModuleCacheService
                     'id' => $content->id,
                     'type' => $content->type->value,
                     'layout_style' => $content->layout_style ?? 'standard',
+                    'paper_theme' => $content->paper_theme->value,
                     'title' => $content->title,
                     'content' => $content->content,
                     'media_url' => $content->mediaUrl(),
@@ -1016,6 +1101,7 @@ class EModuleCacheService
                         'id' => $content->id,
                         'type' => $content->type->value,
                         'layout_style' => $content->layout_style ?? 'standard',
+                        'paper_theme' => $content->paper_theme->value,
                         'title' => $content->title,
                         'content' => $content->content,
                         'media_url' => $content->mediaUrl(),
@@ -1368,6 +1454,17 @@ class EModuleCacheService
     public function invalidateStudentEnrollment(int $userId): void
     {
         $this->bumpEpoch($this->studentEnrollmentEpochKey($userId));
+    }
+
+    /**
+     * Bump the module-visibility epoch of every student in a classroom (its module list or status changed).
+     */
+    public function invalidateClassroomStudentModules(int $classroomId): void
+    {
+        DB::table('classroom_students')
+            ->where('classroom_id', $classroomId)
+            ->pluck('user_id')
+            ->each(fn (int|string $userId) => $this->invalidateStudentEnrollment((int) $userId));
     }
 
     /**

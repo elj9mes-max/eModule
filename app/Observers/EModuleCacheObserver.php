@@ -3,6 +3,9 @@
 namespace App\Observers;
 
 use App\Enums\UserRole;
+use App\Models\Classroom;
+use App\Models\ClassroomModule;
+use App\Models\ClassroomStudent;
 use App\Models\Lecture;
 use App\Models\LectureContent;
 use App\Models\Module;
@@ -90,8 +93,22 @@ class EModuleCacheObserver
             return;
         }
 
-        if ($model instanceof ModuleEnrollment) {
+        if ($model instanceof ModuleEnrollment || $model instanceof ClassroomStudent) {
             $this->cache->invalidateStudentEnrollment((int) $model->user_id);
+
+            return;
+        }
+
+        if ($model instanceof ClassroomModule) {
+            $this->cache->invalidateClassroom((int) $model->classroom_id);
+            $this->cache->invalidateClassroomStudentModules((int) $model->classroom_id);
+
+            return;
+        }
+
+        if ($model instanceof Classroom) {
+            $this->cache->invalidateClassroom((int) $model->id);
+            $this->cache->invalidateClassroomStudentModules((int) $model->id);
 
             return;
         }

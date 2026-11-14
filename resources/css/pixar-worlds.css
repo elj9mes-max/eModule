@@ -397,3 +397,139 @@
     --px-focus-stroke: #FFC054;
 }
 
+
+/* ==========================================================================
+   SEMANTIC SURFACE / LINE / TINT TOKENS
+   Every page & component pulls neutrals and pastel chips from these, so a
+   world switch (especially to a dark world) recolours text, cards, chips,
+   borders and ledges together.
+   ========================================================================== */
+:root,
+[data-pixar-theme="toybox"] {
+    --px-surface-soft: #F7F4FF;
+    --px-track: #E6E1F7;
+    --px-line: #E4DEF6;
+    --px-line-strong: #C3BBE6;
+    --px-ledge: #D2CAEE;
+}
+
+[data-pixar-theme="luca-coast"] {
+    --px-surface-soft: #FFF8EE;
+    --px-track: #F2E6D4;
+    --px-line: #F0E2CE;
+    --px-line-strong: #D9C3A4;
+    --px-ledge: #E8D5B8;
+}
+
+[data-pixar-theme="memory-orb"] {
+    --px-surface-soft: #251C52;
+    --px-track: #161033;
+    --px-line: rgba(167, 139, 250, 0.28);
+    --px-line-strong: rgba(167, 139, 250, 0.5);
+    --px-ledge: #120C2E;
+}
+
+[data-pixar-theme="marigold"] {
+    --px-surface-soft: #2E1640;
+    --px-track: #1E0D2B;
+    --px-line: rgba(255, 186, 112, 0.24);
+    --px-line-strong: rgba(255, 186, 112, 0.45);
+    --px-ledge: #170821;
+}
+
+/* Light worlds: classic pastel chips with deep ink */
+:root,
+[data-pixar-theme="toybox"],
+[data-pixar-theme="luca-coast"] {
+    --px-tint-warn-bg: #FEF3C7;     --px-tint-warn-line: #FCD34D;    --px-tint-warn-ink: #92400E;
+    --px-tint-success-bg: #DCFCE7;  --px-tint-success-line: #86EFAC; --px-tint-success-ink: #166534;
+    --px-tint-info-bg: #DBEAFE;     --px-tint-info-line: #93C5FD;    --px-tint-info-ink: #1E40AF;
+    --px-tint-danger-bg: #FEE2E2;   --px-tint-danger-line: #FCA5A5;  --px-tint-danger-ink: #B91C1C;
+    --px-tint-magic-bg: #EDE9FE;    --px-tint-magic-line: #C4B5FD;   --px-tint-magic-ink: #5B21B6;
+    --px-tint-pink-bg: #FCE7F3;     --px-tint-pink-line: #F9A8D4;    --px-tint-pink-ink: #9D174D;
+}
+
+/* Dark worlds: glowing tints mixed into the world's own card colour, light ink */
+[data-pixar-theme="memory-orb"],
+[data-pixar-theme="marigold"] {
+    --px-tint-warn-bg: color-mix(in srgb, #F59E0B 22%, var(--px-surface-card));
+    --px-tint-warn-line: color-mix(in srgb, #FBBF24 55%, var(--px-surface-card));
+    --px-tint-warn-ink: #FDE68A;
+    --px-tint-success-bg: color-mix(in srgb, #10B981 22%, var(--px-surface-card));
+    --px-tint-success-line: color-mix(in srgb, #34D399 55%, var(--px-surface-card));
+    --px-tint-success-ink: #A7F3D0;
+    --px-tint-info-bg: color-mix(in srgb, #0EA5E9 22%, var(--px-surface-card));
+    --px-tint-info-line: color-mix(in srgb, #38BDF8 55%, var(--px-surface-card));
+    --px-tint-info-ink: #BAE6FD;
+    --px-tint-danger-bg: color-mix(in srgb, #EF4444 24%, var(--px-surface-card));
+    --px-tint-danger-line: color-mix(in srgb, #F87171 55%, var(--px-surface-card));
+    --px-tint-danger-ink: #FECACA;
+    --px-tint-magic-bg: color-mix(in srgb, #8B5CF6 26%, var(--px-surface-card));
+    --px-tint-magic-line: color-mix(in srgb, #A78BFA 55%, var(--px-surface-card));
+    --px-tint-magic-ink: #DDD6FE;
+    --px-tint-pink-bg: color-mix(in srgb, #EC4899 24%, var(--px-surface-card));
+    --px-tint-pink-line: color-mix(in srgb, #F472B6 55%, var(--px-surface-card));
+    --px-tint-pink-ink: #FBCFE8;
+}
+
+/* World-aware page canvas so teleported modals & overscroll match the world */
+html[data-pixar-theme] {
+    background: var(--px-sky-top);
+    color: var(--px-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html[data-pixar-theme] *,
+    html[data-pixar-theme] *::before,
+    html[data-pixar-theme] *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Specular gloss bands: full strength in daylight, a soft sheen at night */
+:root,
+[data-pixar-theme="toybox"],
+[data-pixar-theme="luca-coast"] {
+    --px-gloss: 1;
+}
+
+[data-pixar-theme="memory-orb"],
+[data-pixar-theme="marigold"] {
+    --px-gloss: 0.3;
+}
+
+/* ==========================================================================
+   LITE PERFORMANCE MODE (html[data-perf="lite"])
+   Set before first paint by app.blade.php on low-memory / few-core devices, or chosen in Settings.
+   Drops the effects that cost the most GPU time on low-end Android:
+   - backdrop-filter blur (re-blurs everything behind it on every scroll frame)
+   - endlessly looping decorative animations (keep the GPU busy forever)
+   Entrance animations still play once, so nothing that fades in stays hidden.
+   ========================================================================== */
+
+html[data-perf="lite"] *,
+html[data-perf="lite"] *::before,
+html[data-perf="lite"] *::after {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    animation-iteration-count: 1 !important;
+}
+
+/* Long ambient loops (drifting clouds, floating orbs) hold still instead of playing one long cycle. */
+html[data-perf="lite"] .clay-sky-backdrop,
+html[data-perf="lite"] .clay-sky-backdrop * {
+    animation-play-state: paused !important;
+}
+
+/* Loading spinners still need to spin so people know something is happening. */
+html[data-perf="lite"] .perf-keep-motion,
+html[data-perf="lite"] .join-loader-icon,
+html[data-perf="lite"] .ai-sparkle-spin {
+    animation-iteration-count: infinite !important;
+}
+
+html[data-perf="lite"] {
+    scroll-behavior: auto;
+}

@@ -14,9 +14,9 @@ const props = defineProps({
             role: 'teacher',
         }),
     },
-    classrooms: {
-        type: Array,
-        default: () => [],
+    classroom: {
+        type: Object,
+        default: null,
     },
     pending_grading_count: {
         type: Number,
@@ -107,7 +107,7 @@ const form = useForm({
     boss_name: 'Grammar Goblin',
     max_students: null,
     status: 'draft',
-    classroom_ids: [],
+    classroom_id: props.classroom?.id ?? null,
 });
 
 const selectTheme = (themeOption) => {
@@ -155,7 +155,7 @@ const submitModule = () => {
 };
 
 const goToDashboard = () => {
-    router.visit('/teachers/dashboard');
+    router.visit(props.classroom ? `/teachers/dashboard?class_id=${props.classroom.id}` : '/teachers/dashboard');
 };
 </script>
 
@@ -326,7 +326,7 @@ const goToDashboard = () => {
                     <div class="form-section">
                         <h2 class="section-heading">
                             <span class="section-num">3</span>
-                            <span>Quest Rewards & Classroom Assignment</span>
+                            <span>Quest Rewards</span>
                         </h2>
 
                         <div class="field-row-2">
@@ -373,44 +373,12 @@ const goToDashboard = () => {
                             </div>
                         </div>
 
-                        <!-- Classroom Selection (Assign to Classrooms) -->
-                        <div class="field-group">
-                            <label class="field-label">ASSIGN TO CLASSROOMS (OPTIONAL)</label>
-                            <p class="field-help-sub">
-                                Select which classrooms will immediately have access to this adventure module.
-                            </p>
-
-                            <div v-if="classrooms && classrooms.length > 0" class="classroom-checkbox-grid">
-                                <label
-                                    v-for="c in classrooms"
-                                    :key="c.id"
-                                    class="classroom-check-card"
-                                    :class="{ 'is-selected': form.classroom_ids.includes(c.id) }"
-                                >
-                                    <input
-                                        v-model="form.classroom_ids"
-                                        type="checkbox"
-                                        :value="c.id"
-                                        class="classroom-checkbox-native"
-                                    />
-                                    <div class="classroom-check-content">
-                                        <div class="check-top-line">
-                                            <span class="check-room-icon">{{ c.icon || '🏫' }}</span>
-                                            <span class="check-indicator">
-                                                {{ form.classroom_ids.includes(c.id) ? '✓' : '+' }}
-                                            </span>
-                                        </div>
-                                        <strong class="check-room-name">{{ c.name }}</strong>
-                                        <span class="check-room-meta">{{ c.grade_level || 'Reading Guild' }} • {{ c.students_count }} students</span>
-                                    </div>
-                                </label>
-                            </div>
-
-                            <div v-else class="no-classrooms-hint">
-                                <span>🏫 No classrooms created yet. You can create classrooms later in the Classrooms page and assign this module anytime!</span>
-                            </div>
-                            <p v-if="form.errors.classroom_ids" class="field-error">{{ form.errors.classroom_ids }}</p>
+                        <!-- Target classroom: the one the teacher clicked "Add New Module" from -->
+                        <div v-if="classroom" class="target-classroom-badge">
+                            <span class="target-classroom-icon">{{ classroom.icon || '🏫' }}</span>
+                            <span>This module will be added to <strong>{{ classroom.name }}</strong></span>
                         </div>
+                        <p v-if="form.errors.classroom_id" class="field-error">{{ form.errors.classroom_id }}</p>
                     </div>
 
                     <!-- Form Actions -->
@@ -1115,108 +1083,20 @@ const goToDashboard = () => {
     font-weight: 700;
 }
 
-.classroom-checkbox-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 0.75rem;
-}
-
-.classroom-check-card {
-    position: relative;
+.target-classroom-badge {
     display: flex;
     align-items: center;
-    background: #EEF1F9;
-    border: 2px solid var(--game-border);
+    gap: 10px;
+    padding: 12px 16px;
     border-radius: 16px;
-    padding: 0.75rem 0.95rem;
-    cursor: pointer;
-    box-shadow: 0 3px 0 var(--game-border);
-    transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-    user-select: none;
-}
-
-.classroom-check-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 0 var(--game-border);
-    border-color: var(--game-blue);
-}
-
-.classroom-check-card.is-selected {
-    background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
-    border-color: #2563EB;
-    box-shadow: 0 3px 0 #1D4ED8, 0 6px 12px rgba(37, 99, 235, 0.18);
-}
-
-.classroom-checkbox-native {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-}
-
-.classroom-check-content {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    width: 100%;
-}
-
-.check-top-line {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.15rem;
-}
-
-.check-room-icon {
-    font-size: 1.25rem;
-}
-
-.check-indicator {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75rem;
-    font-weight: 900;
-    background: #FFFFFF;
-    border: 2px solid #CBD5E1;
-    color: #94A3B8;
-    transition: all 0.15s ease;
-}
-
-.classroom-check-card.is-selected .check-indicator {
-    background: #2563EB;
-    border-color: #1D4ED8;
-    color: #FFFFFF;
-    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.35);
-}
-
-.check-room-name {
-    font-family: var(--font-game);
-    font-size: 0.92rem;
-    font-weight: 900;
-    color: var(--game-navy);
-}
-
-.check-room-meta {
+    background: rgba(6, 214, 160, 0.12);
+    border: 2px dashed rgba(6, 214, 160, 0.55);
     font-family: var(--font-ui);
-    font-size: 0.74rem;
     font-weight: 700;
-    color: #64748B;
 }
 
-.no-classrooms-hint {
-    background: #F8FAFC;
-    border: 2px dashed #CBD5E1;
-    border-radius: 14px;
-    padding: 0.85rem 1rem;
-    font-family: var(--font-ui);
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: #64748B;
-    line-height: 1.4;
+.target-classroom-icon {
+    font-size: 1.4rem;
 }
 
 /* ==========================================================================

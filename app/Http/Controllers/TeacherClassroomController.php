@@ -124,7 +124,8 @@ class TeacherClassroomController extends Controller
             abort(403);
         }
 
-        $classroom->classroomModules()->where('module_id', $module->id)->delete();
+        // Delete through the model so the cache observer refreshes every classroom student's module list.
+        $classroom->classroomModules()->where('module_id', $module->id)->get()->each->delete();
 
         $this->cache->invalidateTeacherClassrooms($user->id);
         $this->cache->invalidateClassroom($classroom->id, $user->id);

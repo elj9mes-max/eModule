@@ -5,16 +5,7 @@
  * Handles CSRF protection, explicit timeouts, and structured error responses.
  */
 
-function getCsrfToken() {
-    const metaTag = document.querySelector('meta[name="csrf-token"]');
-    if (metaTag && metaTag.content) {
-        return metaTag.content;
-    }
-
-    // Fallback: parse XSRF-TOKEN cookie if present
-    const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
-    return match ? decodeURIComponent(match[1]) : '';
-}
+import { csrfHeaders } from '@/Services/csrf';
 
 async function postJson(endpoint, payload) {
     const response = await fetch(endpoint, {
@@ -22,7 +13,7 @@ async function postJson(endpoint, payload) {
         headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'X-CSRF-TOKEN': getCsrfToken(),
+            ...csrfHeaders(),
             'X-Requested-With': 'XMLHttpRequest',
         },
         body: JSON.stringify(payload),

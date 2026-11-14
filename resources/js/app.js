@@ -4,6 +4,7 @@ import '../css/pixar-worlds.css';
 import { createApp, h } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
+import SaveQueuePanel from './Components/SaveQueuePanel.vue';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -15,7 +16,8 @@ createInertiaApp({
             import.meta.glob('./Pages/**/*.vue')
         ),
     setup({ el, App, props, plugin }) {
-        return createApp({ render: () => h(App, props) })
+        // SaveQueuePanel sits beside the Inertia App so background saves stay visible across page visits.
+        return createApp({ render: () => [h(App, props), h(SaveQueuePanel)] })
             .use(plugin)
             .mount(el);
     },

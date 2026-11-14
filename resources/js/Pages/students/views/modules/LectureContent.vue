@@ -3,10 +3,15 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Head, Link, router, useRemember } from '@inertiajs/vue3';
 import { useSound } from '@/Services/soundManager';
 import { flushCacheTags, prefetchRoute } from '@/Composables/usePrefetch';
-import { usePixarTheme } from '@/Composables/usePixarTheme';
+import { usePixarTheme, useWorldOnDocument } from '@/Composables/usePixarTheme';
+import RewardCelebrationModal from '@/Components/RewardCelebrationModal.vue';
+import { DEFAULT_PAPER_THEME_ID, findPaperTheme } from '@/Services/paperThemes.js';
+import { csrfHeaders } from '@/Services/csrf';
+import { markReturnToMapFocus } from '@/Composables/useMapReturnFocus';
 
 const { duckBgm } = useSound();
 const { activeWorld } = usePixarTheme();
+useWorldOnDocument(activeWorld);
 
 const props = defineProps({
     user: {
@@ -107,6 +112,12 @@ const prewarmPageMedia = (index) => {
     }
 };
 const showCompletionCelebration = ref(false);
+/**
+ * What the server actually awarded for finishing this lecture.
+ *
+ * @type {import('vue').Ref<{state: string, xp: number, level: number|null, totalXp: number|null, leveledUp: boolean, message: string}>}
+ */
+const lectureReward = ref({ state: 'saving', xp: 0, level: null, totalXp: null, leveledUp: false, message: '' });
 
 // Reader Text Zoom: 100%, 112%, 125%
 const zoomLevels = [100, 112, 125];
@@ -122,6 +133,27 @@ const currentPage = computed(() => {
 });
 
 const totalPages = computed(() => pages.value.length);
+
+/** The paper the teacher picked for this page in the Studio. */
+const currentPaperTheme = computed(() => findPaperTheme(currentPage.value?.paper_theme));
+
+/**
+ * Classic pages keep the student's own world colors (including dark mode); any other paper
+ * repaints the sheet with the teacher's paper and ink so it reads exactly as designed.
+ */
+const paperSheetStyle = computed(() => {
+    const paper = currentPaperTheme.value;
+    if (paper.id === DEFAULT_PAPER_THEME_ID) {
+        return {};
+    }
+
+    return {
+        '--px-surface-card': paper.bg,
+        '--px-ink': paper.text,
+        '--px-card-border': paper.border,
+        '--px-line': paper.border,
+    };
+});
 
 const readingProgressPercent = computed(() => {
     if (totalPages.value === 0) {
@@ -448,6 +480,7 @@ const backToMapUrl = computed(() => {
 });
 
 const returnToExpeditionMap = () => {
+    markReturnToMapFocus();
     router.visit(backToMapUrl.value);
 };
 
@@ -455,24 +488,71 @@ const completeStoryLecture = () => {
     resetAudioPlayer();
     showCompletionCelebration.value = true;
 
-    if (props.module?.slug && activeLecture.value?.slug) {
-        fetch(`/students/modules/${props.module.slug}/lectures/${activeLecture.value.slug}/complete`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-            },
-        })
-            .then((res) => {
-                if (res.ok) {
-                    const tags = ['student-modules', `module-${props.module.slug}`];
-                    flushCacheTags(tags);
-                    prefetchRoute(backToMapUrl.value, tags, ['15s', '60s']);
-                }
-            })
-            .catch((err) => console.error('Lecture completion error:', err));
+    // Demo reader without a saved lecture: show the lecture's advertised reward.
+    if (!props.module?.slug || !activeLecture.value?.slug) {
+        lectureReward.value = {
+            state: 'earned',
+            xp: Number(activeLecture.value?.xp_reward || 100),
+            level: null,
+            totalXp: null,
+            leveledUp: false,
+            message: '',
+        };
+
+        return;
     }
+
+    lectureReward.value = { state: 'saving', xp: 0, level: null, totalXp: null, leveledUp: false, message: '' };
+
+    fetch(`/students/modules/${props.module.slug}/lectures/${activeLecture.value.slug}/complete`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            ...csrfHeaders(),
+        },
+    })
+        .then(async (res) => {
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.progression) {
+                throw new Error(data.message || '');
+            }
+
+            const tags = ['student-modules', `module-${props.module.slug}`];
+            flushCacheTags([...tags, 'student-classes']);
+            prefetchRoute(backToMapUrl.value, tags, ['15s', '60s']);
+
+            const progression = data.progression;
+            lectureReward.value = {
+                state: progression.is_first_completion ? 'earned' : 'repeat',
+                xp: Number(progression.xp_delta || 0),
+                level: progression.level ?? null,
+                totalXp: progression.total_xp ?? null,
+                leveledUp: Boolean(progression.leveled_up),
+                message: '',
+            };
+        })
+        .catch((err) => {
+            console.error('Lecture completion error:', err);
+            lectureReward.value = {
+                state: 'error',
+                xp: 0,
+                level: null,
+                totalXp: null,
+                leveledUp: false,
+                message: err.message || '',
+            };
+        });
+};
+
+const handleLectureRewardPrimary = () => {
+    if (lectureReward.value.state === 'error') {
+        completeStoryLecture();
+
+        return;
+    }
+
+    returnToExpeditionMap();
 };
 
 const handleKeydown = (event) => {
@@ -536,6 +616,7 @@ onBeforeUnmount(() => {
                             :cache-tags="['student-modules', activeModule.slug ? `module-${activeModule.slug}` : '']"
                             class="clay-hud-back-btn"
                             aria-label="Back to Island Expedition Map"
+                            @click="markReturnToMapFocus"
                         >
                             <svg viewBox="0 0 20 20" class="back-icon-svg" aria-hidden="true">
                                 <path
@@ -792,7 +873,8 @@ onBeforeUnmount(() => {
                     <article
                         v-if="currentPage"
                         class="student-studio-paper-sheet"
-                        :style="{ '--reader-scale': readerZoomPercent / 100 }"
+                        :class="[`paper-theme-${currentPaperTheme.id}`, { 'paper-is-lined': currentPaperTheme.lined }]"
+                        :style="{ '--reader-scale': readerZoomPercent / 100, ...paperSheetStyle }"
                     >
                         <!-- Paper Sheet Top Meta Header (Matches Teacher Studio Page Header) -->
                         <div class="paper-sheet-meta-bar">
@@ -906,7 +988,7 @@ onBeforeUnmount(() => {
                             <p class="empty-paper-desc">
                                 This reading milestone is currently blank. Content published by the teacher in the database will appear here!
                             </p>
-                            <Link :href="backToMapUrl" class="empty-paper-btn">
+                            <Link :href="backToMapUrl" class="empty-paper-btn" @click="markReturnToMapFocus">
                                 🗺️ Back to Island Map
                             </Link>
                         </div>
@@ -920,7 +1002,7 @@ onBeforeUnmount(() => {
                             :disabled="currentPageIndex === 0"
                             @click="goPrevPage"
                         >
-                            <span>◀ Previous Page</span>
+                            <span>◀</span>
                         </button>
 
                         <div class="page-dots-indicator" role="tablist" aria-label="Page indicators">
@@ -946,7 +1028,7 @@ onBeforeUnmount(() => {
                             class="clay-turn-btn btn-next"
                             @click="goNextPage"
                         >
-                            <span>Next Page ▶</span>
+                            <span>▶</span>
                         </button>
 
                         <button
@@ -955,7 +1037,7 @@ onBeforeUnmount(() => {
                             class="clay-turn-btn btn-complete"
                             @click="completeStoryLecture"
                         >
-                            <span>Complete Story & Claim +{{ activeLecture.xp_reward || 150 }} XP ✓</span>
+                            <span>Claim +{{ activeLecture.xp_reward || 150 }} XP ✓</span>
                         </button>
                     </footer>
                 </main>
@@ -1036,58 +1118,24 @@ onBeforeUnmount(() => {
         <!-- =========================================================================
              4. STORY LECTURE COMPLETION CELEBRATION MODAL
              ========================================================================= -->
-        <Teleport to="body">
-            <Transition name="meaning-pop">
-                <div
-                    v-if="showCompletionCelebration"
-                    class="clay-celebration-backdrop"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="story-complete-heading"
-                    @click.self="showCompletionCelebration = false"
-                >
-                    <div class="clay-celebration-dialog">
-                        <div class="celebration-trophy-badge" aria-hidden="true">🏆</div>
-                        <span class="celebration-kicker">STORY LECTURE COMPLETED!</span>
-                        <h2 id="story-complete-heading" class="celebration-title">
-                            Awesome Reading, {{ user?.name || 'Explorer' }}!
-                        </h2>
-                        <p class="celebration-subtitle">
-                            You finished all {{ totalPages }} {{ totalPages === 1 ? 'page' : 'pages' }} of
-                            <strong>{{ activeLecture.title }}</strong>!
-                        </p>
-
-                        <div class="celebration-rewards-row">
-                            <div class="reward-pill-card">
-                                <span class="reward-lbl">XP EARNED</span>
-                                <strong class="reward-val text-amber">+{{ activeLecture.xp_reward || 150 }} XP</strong>
-                            </div>
-                            <div class="reward-pill-card">
-                                <span class="reward-lbl">MASTERY</span>
-                                <strong class="reward-val text-emerald">★★★ 3 Stars</strong>
-                            </div>
-                        </div>
-
-                        <div class="celebration-actions">
-                            <button
-                                type="button"
-                                class="clay-celebration-primary-btn"
-                                @click="returnToExpeditionMap"
-                            >
-                                <span>Continue on Island Expedition Map ▶</span>
-                            </button>
-                            <button
-                                type="button"
-                                class="clay-celebration-secondary-btn"
-                                @click="showCompletionCelebration = false"
-                            >
-                                <span>Stay & Review Story Pages</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </Transition>
-        </Teleport>
+        <RewardCelebrationModal
+            :open="showCompletionCelebration"
+            kind="lecture"
+            :state="lectureReward.state"
+            :item-title="activeLecture.title"
+            :player-name="user?.name || ''"
+            :xp-amount="lectureReward.xp"
+            :level="lectureReward.level"
+            :total-xp="lectureReward.totalXp"
+            :leveled-up="lectureReward.leveledUp"
+            :metrics="[{ label: 'PAGES READ', value: `${totalPages} / ${totalPages}` }]"
+            :message="lectureReward.message"
+            :primary-label="lectureReward.state === 'error' ? 'Try Again ↻' : 'Continue to the Map ▶'"
+            secondary-label="Stay & Review Pages"
+            @primary="handleLectureRewardPrimary"
+            @secondary="showCompletionCelebration = false"
+            @close="showCompletionCelebration = false"
+        />
     </div>
 </template>
 
@@ -1126,7 +1174,7 @@ onBeforeUnmount(() => {
 .sky-cloud-puff {
     position: absolute;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.65);
+    background: color-mix(in srgb, var(--px-surface-card) 65%, transparent);
     filter: blur(2px);
 }
 
@@ -1183,7 +1231,7 @@ onBeforeUnmount(() => {
     right: 22px;
     height: 8px;
     border-radius: 999px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 100%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, calc(0.85 * var(--px-gloss, 1))) 0%, rgba(255, 255, 255, 0) 100%);
     pointer-events: none;
 }
 
@@ -1211,7 +1259,7 @@ onBeforeUnmount(() => {
     border-radius: 9999px;
     background: linear-gradient(180deg, #6366F1 0%, #4338CA 100%);
     color: #FFFFFF;
-    border: 2px solid #FFFFFF;
+    border: 2px solid var(--px-card-border);
     box-shadow:
         0 3.5px 0 #312E81,
         0 6px 12px rgba(67, 56, 202, 0.25),
@@ -1242,7 +1290,7 @@ onBeforeUnmount(() => {
     align-items: center;
     padding: 0.42rem 0.72rem;
     border-radius: 9999px;
-    border: 2px solid #FFFFFF;
+    border: 2px solid var(--px-card-border);
     background: linear-gradient(180deg, #FEF08A 0%, #F59E0B 100%);
     color: #78350F;
     font-family: var(--font-display);
@@ -1279,9 +1327,9 @@ onBeforeUnmount(() => {
     gap: 0.3rem;
     padding: 0.14rem 0.52rem;
     border-radius: 9999px;
-    background: #DCFCE7;
-    border: 1.5px solid #86EFAC;
-    color: #065F46;
+    background: color-mix(in srgb, var(--px-tint-success-bg) 55%, var(--px-surface-card));
+    border: 1.5px solid var(--px-tint-success-line);
+    color: var(--px-tint-success-ink);
     font-family: var(--font-display);
     font-size: 0.66rem;
     font-weight: 700;
@@ -1313,8 +1361,8 @@ onBeforeUnmount(() => {
 .hud-page-fraction-pill {
     padding: 0.14rem 0.5rem;
     border-radius: 9999px;
-    background: #E0E7FF;
-    color: #3730A3;
+    background: var(--px-tint-info-bg);
+    color: var(--px-tint-magic-ink);
     font-family: var(--font-display);
     font-size: 0.66rem;
     font-weight: 800;
@@ -1332,9 +1380,9 @@ onBeforeUnmount(() => {
     flex: 1 1 auto;
     height: 9px;
     border-radius: 9999px;
-    background: #E2E8F0;
-    border: 1.5px solid #CBD5E1;
-    box-shadow: inset 0 1.5px 3px rgba(15, 23, 42, 0.12);
+    background: var(--px-track);
+    border: 1.5px solid var(--px-line);
+    box-shadow: inset 0 1.5px 3px rgba(var(--px-shadow-rgb), 0.12);
     overflow: hidden;
     position: relative;
 }
@@ -1354,7 +1402,7 @@ onBeforeUnmount(() => {
     right: 5px;
     height: 3px;
     border-radius: 9999px;
-    background: rgba(255, 255, 255, 0.65);
+    background: color-mix(in srgb, var(--px-surface-card) 65%, transparent);
 }
 
 .hud-progress-pct {
@@ -1380,14 +1428,14 @@ onBeforeUnmount(() => {
     gap: 0.25rem;
     padding: 0.2rem;
     border-radius: 9999px;
-    background: #EFF6FF;
-    border: 2px solid #93C5FD;
+    background: color-mix(in srgb, var(--px-tint-info-bg) 55%, var(--px-surface-card));
+    border: 2px solid var(--px-tint-info-line);
     box-shadow: 0 3px 0 #60A5FA;
 }
 
 .clay-hud-narration-pod.is-playing {
-    background: #FFFBEB;
-    border-color: #FBBF24;
+    background: color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card));
+    border-color: var(--px-tint-warn-line);
     box-shadow: 0 3px 0 #D97706;
 }
 
@@ -1397,7 +1445,7 @@ onBeforeUnmount(() => {
     gap: 0.35rem;
     padding: 0.34rem 0.78rem;
     border-radius: 9999px;
-    border: 2px solid #FFFFFF;
+    border: 2px solid var(--px-card-border);
     background: linear-gradient(180deg, #38BDF8 0%, #0284C7 100%);
     color: #FFFFFF;
     font-family: var(--font-display);
@@ -1443,7 +1491,7 @@ onBeforeUnmount(() => {
     display: block;
     width: 2.5px;
     height: 100%;
-    background: #FFFFFF;
+    background: var(--px-surface-card);
     border-radius: 2px;
     animation: hudWaveBounce 0.55s ease-in-out infinite alternate;
 }
@@ -1459,9 +1507,9 @@ onBeforeUnmount(() => {
 .clay-hud-speed-btn {
     padding: 0.28rem 0.52rem;
     border-radius: 9999px;
-    border: 1.5px solid #BFDBFE;
-    background: #FFFFFF;
-    color: #1E40AF;
+    border: 1.5px solid var(--px-tint-info-line);
+    background: var(--px-surface-card);
+    color: var(--px-tint-info-ink);
     font-family: var(--font-display);
     font-size: 0.68rem;
     font-weight: 800;
@@ -1471,14 +1519,14 @@ onBeforeUnmount(() => {
 .clay-hud-zoom-btn {
     padding: 0.38rem 0.68rem;
     border-radius: 9999px;
-    border: 2px solid #FFFFFF;
-    background: linear-gradient(180deg, #F8FAFC 0%, #E2E8F0 100%);
-    color: #334155;
+    border: 2px solid var(--px-card-border);
+    background: linear-gradient(180deg, var(--px-surface-soft) 0%, var(--px-track) 100%);
+    color: var(--px-ink);
     font-family: var(--font-display);
     font-size: 0.72rem;
     font-weight: 800;
     cursor: pointer;
-    box-shadow: 0 3px 0 #94A3B8;
+    box-shadow: 0 3px 0 var(--px-ledge);
 }
 
 .clay-hud-xp-pill {
@@ -1487,7 +1535,7 @@ onBeforeUnmount(() => {
     gap: 0.22rem;
     padding: 0.38rem 0.72rem;
     border-radius: 9999px;
-    border: 2px solid #FFFFFF;
+    border: 2px solid var(--px-card-border);
     background: linear-gradient(180deg, #FEF08A 0%, #F59E0B 100%);
     color: #78350F;
     font-family: var(--font-display);
@@ -1508,15 +1556,15 @@ onBeforeUnmount(() => {
     gap: 0.55rem;
     padding: 0.32rem 0.68rem;
     border-radius: 14px;
-    background: #EFF6FF;
-    border: 1.5px solid #BFDBFE;
+    background: color-mix(in srgb, var(--px-tint-info-bg) 55%, var(--px-surface-card));
+    border: 1.5px solid var(--px-tint-info-line);
 }
 
 .hud-audio-tag {
     font-family: var(--font-display);
     font-size: 0.66rem;
     font-weight: 800;
-    color: #1E40AF;
+    color: var(--px-tint-info-ink);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1527,7 +1575,7 @@ onBeforeUnmount(() => {
     font-family: var(--font-display);
     font-size: 0.68rem;
     font-weight: 800;
-    color: #1E3A8A;
+    color: var(--px-tint-info-ink);
 }
 
 .hud-audio-range {
@@ -1553,12 +1601,12 @@ onBeforeUnmount(() => {
 
 .clay-pages-sidebar {
     display: none;
-    background: rgba(255, 255, 255, 0.96);
-    border: 3px solid #FFFFFF;
+    background: color-mix(in srgb, var(--px-surface-card) 96%, transparent);
+    border: 3px solid var(--px-card-border);
     border-radius: 26px;
     padding: 1rem;
     box-shadow:
-        0 7px 0 #CBD5E1,
+        0 7px 0 var(--px-ledge),
         0 14px 28px rgba(30, 27, 75, 0.1);
 }
 
@@ -1579,22 +1627,22 @@ onBeforeUnmount(() => {
     font-size: 0.62rem;
     font-weight: 800;
     letter-spacing: 0.08em;
-    color: #6366F1;
+    color: var(--px-tint-magic-ink);
 }
 
 .sidebar-heading {
     margin: 0;
     font-family: var(--font-display);
     font-size: 0.98rem;
-    color: #1E1B4B;
+    color: var(--px-ink);
 }
 
 .sidebar-mobile-close {
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    border: 2px solid #CBD5E1;
-    background: #F8FAFC;
+    border: 2px solid var(--px-line);
+    background: var(--px-surface-soft);
     font-weight: 900;
     cursor: pointer;
 }
@@ -1610,8 +1658,8 @@ onBeforeUnmount(() => {
     text-align: left;
     padding: 0.7rem 0.85rem;
     border-radius: 16px;
-    border: 2.5px solid #E2E8F0;
-    background: #F8FAFC;
+    border: 2.5px solid var(--px-line);
+    background: var(--px-surface-soft);
     cursor: pointer;
     transition: all 0.16s ease;
     display: flex;
@@ -1620,13 +1668,13 @@ onBeforeUnmount(() => {
 }
 
 .clay-page-thumb-btn:hover {
-    border-color: #93C5FD;
-    background: #EFF6FF;
+    border-color: var(--px-tint-info-line);
+    background: color-mix(in srgb, var(--px-tint-info-bg) 55%, var(--px-surface-card));
     transform: translateY(-1px);
 }
 
 .clay-page-thumb-btn.is-current {
-    background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
+    background: linear-gradient(135deg, var(--px-tint-info-bg) 0%, var(--px-tint-info-bg) 100%);
     border-color: #4F46E5;
     box-shadow: 0 4px 0 #4F46E5;
 }
@@ -1643,8 +1691,8 @@ onBeforeUnmount(() => {
     font-weight: 800;
     padding: 0.12rem 0.48rem;
     border-radius: 999px;
-    background: #E2E8F0;
-    color: #334155;
+    background: var(--px-track);
+    color: var(--px-ink);
 }
 
 .clay-page-thumb-btn.is-current .page-num-pill {
@@ -1669,7 +1717,7 @@ onBeforeUnmount(() => {
     font-family: var(--font-body);
     font-size: 0.82rem;
     font-weight: 800;
-    color: #1E293B;
+    color: var(--px-ink);
 }
 
 .page-thumb-badges {
@@ -1686,19 +1734,19 @@ onBeforeUnmount(() => {
 }
 
 .tag-audio {
-    background: #DBEAFE;
-    color: #1D4ED8;
+    background: var(--px-tint-info-bg);
+    color: var(--px-tint-info-ink);
 }
 
 .tag-vocab {
-    background: #FEF3C7;
-    color: #92400E;
+    background: var(--px-tint-warn-bg);
+    color: var(--px-tint-warn-ink);
 }
 
 .sibling-lectures-box {
     margin-top: 1.1rem;
     padding-top: 0.9rem;
-    border-top: 2px dashed #E2E8F0;
+    border-top: 2px dashed var(--px-line);
 }
 
 .sibling-links-stack {
@@ -1715,23 +1763,23 @@ onBeforeUnmount(() => {
     gap: 0.4rem;
     padding: 0.5rem 0.65rem;
     border-radius: 12px;
-    background: #F8FAFC;
-    border: 1.5px solid #E2E8F0;
+    background: var(--px-surface-soft);
+    border: 1.5px solid var(--px-line);
     text-decoration: none;
     font-size: 0.75rem;
     font-weight: 800;
-    color: #334155;
+    color: var(--px-ink);
 }
 
 .sibling-lecture-link.is-active-lecture {
-    background: #FEF3C7;
+    background: var(--px-tint-warn-bg);
     border-color: #F59E0B;
-    color: #78350F;
+    color: var(--px-tint-warn-ink);
 }
 
 .sib-xp {
     font-size: 0.66rem;
-    color: #D97706;
+    color: var(--px-tint-warn-ink);
     white-space: nowrap;
 }
 
@@ -1761,13 +1809,13 @@ onBeforeUnmount(() => {
     position: relative;
     width: 100%;
     max-width: 440px;
-    background: linear-gradient(180deg, #FFFBEB 0%, #FEF3C7 100%);
-    border: 3.5px solid #FFFFFF;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-warn-bg) 100%);
+    border: 3.5px solid var(--px-card-border);
     border-radius: 28px;
     padding: 1.35rem 1.35rem 1.25rem;
     box-shadow:
         0 9px 0 #D97706,
-        0 24px 48px rgba(15, 23, 42, 0.34),
+        0 24px 48px rgba(var(--px-shadow-rgb), 0.34),
         inset 0 2px 3px rgba(255, 255, 255, 0.9);
     display: flex;
     flex-direction: column;
@@ -1781,7 +1829,7 @@ onBeforeUnmount(() => {
     right: 24px;
     height: 8px;
     border-radius: 999px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 100%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, calc(0.85 * var(--px-gloss, 1))) 0%, rgba(255, 255, 255, 0) 100%);
     pointer-events: none;
 }
 
@@ -1803,7 +1851,7 @@ onBeforeUnmount(() => {
     height: 32px;
     border-radius: 11px;
     background: linear-gradient(180deg, #FBBF24 0%, #D97706 100%);
-    border: 2px solid #FFFFFF;
+    border: 2px solid var(--px-card-border);
     box-shadow: 0 3px 0 #92400E;
     display: inline-flex;
     align-items: center;
@@ -1817,11 +1865,11 @@ onBeforeUnmount(() => {
     font-size: 0.68rem;
     font-weight: 800;
     letter-spacing: 0.06em;
-    color: #92400E;
-    background: rgba(255, 255, 255, 0.75);
+    color: var(--px-tint-warn-ink);
+    background: color-mix(in srgb, var(--px-surface-card) 75%, transparent);
     padding: 0.2rem 0.6rem;
     border-radius: 999px;
-    border: 1.5px solid #FCD34D;
+    border: 1.5px solid var(--px-tint-warn-line);
 }
 
 .spotlight-word-hero-box {
@@ -1830,8 +1878,8 @@ onBeforeUnmount(() => {
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 0.6rem;
-    background: rgba(255, 255, 255, 0.78);
-    border: 2px solid #FDE68A;
+    background: color-mix(in srgb, var(--px-surface-card) 78%, transparent);
+    border: 2px solid var(--px-tint-warn-line);
     border-radius: 20px;
     padding: 0.75rem 0.95rem;
 }
@@ -1847,7 +1895,7 @@ onBeforeUnmount(() => {
     font-family: var(--font-display);
     font-size: 1.45rem;
     font-weight: 800;
-    color: #78350F;
+    color: var(--px-tint-warn-ink);
     line-height: 1.15;
 }
 
@@ -1855,8 +1903,8 @@ onBeforeUnmount(() => {
     font-family: var(--font-body);
     font-size: 0.86rem;
     font-weight: 800;
-    color: #B45309;
-    background: #FEF3C7;
+    color: var(--px-tint-warn-ink);
+    background: var(--px-tint-warn-bg);
     padding: 0.12rem 0.5rem;
     border-radius: 8px;
 }
@@ -1864,7 +1912,7 @@ onBeforeUnmount(() => {
 .clay-speak-word-btn {
     padding: 0.36rem 0.78rem;
     border-radius: 999px;
-    border: 2px solid #FFFFFF;
+    border: 2px solid var(--px-card-border);
     background: linear-gradient(180deg, #38BDF8 0%, #0284C7 100%);
     color: #FFFFFF;
     font-family: var(--font-display);
@@ -1884,16 +1932,16 @@ onBeforeUnmount(() => {
     height: 32px;
     border-radius: 50%;
     border: 2px solid #F59E0B;
-    background: #FFFFFF;
-    color: #78350F;
+    background: var(--px-surface-card);
+    color: var(--px-tint-warn-ink);
     font-weight: 900;
     cursor: pointer;
     box-shadow: 0 2.5px 0 #D97706;
 }
 
 .spotlight-definition-well {
-    background: #FFFFFF;
-    border: 2.5px solid #FCD34D;
+    background: var(--px-surface-card);
+    border: 2.5px solid var(--px-tint-warn-line);
     border-radius: 20px;
     padding: 0.9rem 1.05rem;
     box-shadow: inset 0 2px 4px rgba(180, 83, 9, 0.06);
@@ -1905,7 +1953,7 @@ onBeforeUnmount(() => {
     font-size: 0.62rem;
     font-weight: 800;
     letter-spacing: 0.07em;
-    color: #B45309;
+    color: var(--px-tint-warn-ink);
     margin-bottom: 0.28rem;
 }
 
@@ -1914,7 +1962,7 @@ onBeforeUnmount(() => {
     font-family: var(--font-body);
     font-size: 1rem;
     font-weight: 800;
-    color: #451A03;
+    color: var(--px-tint-warn-ink);
     line-height: 1.55;
 }
 
@@ -1922,7 +1970,7 @@ onBeforeUnmount(() => {
     width: 100%;
     padding: 0.72rem 1rem;
     border-radius: 18px;
-    border: 2.5px solid #FFFFFF;
+    border: 2.5px solid var(--px-card-border);
     background: linear-gradient(180deg, #34D399 0%, #059669 100%);
     color: #FFFFFF;
     font-family: var(--font-display);
@@ -1945,16 +1993,29 @@ onBeforeUnmount(() => {
     width: 100%;
     max-width: 820px;
     margin: 0 auto;
-    background: #FFFFFF;
+    background: var(--px-surface-card);
     border-radius: 26px;
-    border: 3px solid #FFFFFF;
+    border: 3px solid var(--px-card-border);
     box-shadow:
-        0 10px 0 #CBD5E1,
-        0 24px 50px rgba(15, 23, 42, 0.12);
+        0 10px 0 var(--px-ledge),
+        0 24px 50px rgba(var(--px-shadow-rgb), 0.12);
     padding: clamp(1.25rem, 4vw, 2.75rem);
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
+}
+
+.student-studio-paper-sheet {
+    transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+.student-studio-paper-sheet.paper-is-lined {
+    background-image: repeating-linear-gradient(
+        transparent,
+        transparent 31px,
+        rgba(148, 163, 184, 0.25) 31px,
+        rgba(148, 163, 184, 0.25) 32px
+    );
 }
 
 .paper-sheet-meta-bar {
@@ -1964,7 +2025,7 @@ onBeforeUnmount(() => {
     flex-wrap: wrap;
     gap: 0.5rem;
     padding-bottom: 0.8rem;
-    border-bottom: 2px dashed #E2E8F0;
+    border-bottom: 2px dashed var(--px-line);
 }
 
 .paper-meta-left {
@@ -1977,9 +2038,9 @@ onBeforeUnmount(() => {
 .paper-page-chip {
     padding: 0.2rem 0.6rem;
     border-radius: 999px;
-    background: #EEF2FF;
+    background: var(--px-tint-info-bg);
     border: 1.5px solid #818CF8;
-    color: #4338CA;
+    color: var(--px-tint-magic-ink);
     font-family: var(--font-display);
     font-size: 0.66rem;
     font-weight: 800;
@@ -1989,15 +2050,15 @@ onBeforeUnmount(() => {
     font-family: var(--font-display);
     font-size: 0.95rem;
     font-weight: 700;
-    color: #334155;
+    color: var(--px-ink);
 }
 
 .paper-interactive-hint {
     padding: 0.22rem 0.65rem;
     border-radius: 999px;
-    background: #FEF3C7;
+    background: var(--px-tint-warn-bg);
     border: 1.5px solid #F59E0B;
-    color: #92400E;
+    color: var(--px-tint-warn-ink);
     font-family: var(--font-display);
     font-size: 0.68rem;
     font-weight: 800;
@@ -2008,7 +2069,7 @@ onBeforeUnmount(() => {
     font-family: 'Nunito', sans-serif;
     font-size: calc(1.05rem * var(--reader-scale, 1));
     line-height: 1.8;
-    color: #1E293B;
+    color: var(--px-ink);
     word-break: break-word;
 }
 
@@ -2020,7 +2081,7 @@ onBeforeUnmount(() => {
 }
 
 .student-paper-content-body :deep(.vocab-gloss-token) {
-    background: linear-gradient(180deg, #FEF9C3 0%, #FDE047 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-warn-line) 100%);
     color: #78350F;
     font-weight: 900;
     padding: 0.08rem 0.42rem;
@@ -2046,7 +2107,7 @@ onBeforeUnmount(() => {
 .standalone-story-video {
     width: 100%;
     border-radius: 18px;
-    border: 3px solid #E2E8F0;
+    border: 3px solid var(--px-line);
 }
 
 .standalone-story-audio {
@@ -2059,8 +2120,8 @@ onBeforeUnmount(() => {
     gap: 0.55rem;
     padding: 0.75rem 1rem;
     border-radius: 16px;
-    background: #F8FAFC;
-    border: 2px solid #E2E8F0;
+    background: var(--px-surface-soft);
+    border: 2px solid var(--px-line);
 }
 
 .caption-icon {
@@ -2072,7 +2133,7 @@ onBeforeUnmount(() => {
     font-family: var(--font-body);
     font-size: 0.85rem;
     font-weight: 800;
-    color: #475569;
+    color: var(--px-ink-muted);
 }
 
 /* Interactive Vocabulary Strip at Bottom of Sheet */
@@ -2080,8 +2141,8 @@ onBeforeUnmount(() => {
     margin-top: 0.5rem;
     padding: 0.9rem 1.05rem;
     border-radius: 18px;
-    background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
-    border: 2.5px solid #FCD34D;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card)) 0%, var(--px-tint-warn-bg) 100%);
+    border: 2.5px solid var(--px-tint-warn-line);
 }
 
 .glossary-strip-head {
@@ -2097,7 +2158,7 @@ onBeforeUnmount(() => {
     font-family: var(--font-display);
     font-size: 0.78rem;
     font-weight: 800;
-    color: #92400E;
+    color: var(--px-tint-warn-ink);
 }
 
 .glossary-discovery-counter {
@@ -2106,8 +2167,8 @@ onBeforeUnmount(() => {
     font-weight: 800;
     padding: 0.12rem 0.55rem;
     border-radius: 999px;
-    background: #FFFFFF;
-    color: #B45309;
+    background: var(--px-surface-card);
+    color: var(--px-tint-warn-ink);
     border: 1.5px solid #F59E0B;
 }
 
@@ -2124,8 +2185,8 @@ onBeforeUnmount(() => {
     padding: 0.32rem 0.72rem;
     border-radius: 999px;
     border: 2px solid #F59E0B;
-    background: #FFFFFF;
-    color: #78350F;
+    background: var(--px-surface-card);
+    color: var(--px-tint-warn-ink);
     font-family: var(--font-display);
     font-size: 0.76rem;
     font-weight: 800;
@@ -2152,12 +2213,12 @@ onBeforeUnmount(() => {
     width: 100%;
     max-width: 820px;
     margin: 0 auto;
-    background: rgba(255, 255, 255, 0.96);
-    border: 3px solid #FFFFFF;
+    background: color-mix(in srgb, var(--px-surface-card) 96%, transparent);
+    border: 3px solid var(--px-card-border);
     border-radius: 24px;
     padding: 0.75rem 1rem;
     box-shadow:
-        0 6px 0 #CBD5E1,
+        0 6px 0 var(--px-ledge),
         0 14px 28px rgba(30, 27, 75, 0.1);
     display: flex;
     align-items: center;
@@ -2182,9 +2243,9 @@ onBeforeUnmount(() => {
 }
 
 .btn-prev {
-    background: #F1F5F9;
-    border: 2.5px solid #94A3B8;
-    color: #334155;
+    background: var(--px-surface-soft);
+    border: 2.5px solid var(--px-line-strong);
+    color: var(--px-ink);
     box-shadow: 0 4px 0 #64748B;
 }
 
@@ -2213,9 +2274,9 @@ onBeforeUnmount(() => {
     width: 30px;
     height: 30px;
     border-radius: 10px;
-    border: 2px solid #CBD5E1;
-    background: #F8FAFC;
-    color: #475569;
+    border: 2px solid var(--px-line);
+    background: var(--px-surface-soft);
+    color: var(--px-ink-muted);
     font-family: var(--font-display);
     font-size: 0.75rem;
     font-weight: 800;
@@ -2223,9 +2284,9 @@ onBeforeUnmount(() => {
 }
 
 .page-dot-btn.is-visited {
-    border-color: #6EE7B7;
-    background: #ECFDF5;
-    color: #065F46;
+    border-color: var(--px-tint-success-line);
+    background: color-mix(in srgb, var(--px-tint-success-bg) 55%, var(--px-surface-card));
+    color: var(--px-tint-success-ink);
 }
 
 .page-dot-btn.is-active {
@@ -2233,137 +2294,6 @@ onBeforeUnmount(() => {
     border-color: #312E81;
     color: #FFFFFF;
     box-shadow: 0 2px 0 #312E81;
-}
-
-/* ==========================================================================
-   6. COMPLETION CELEBRATION MODAL
-   ========================================================================== */
-.clay-celebration-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 80;
-    background: rgba(15, 23, 42, 0.62);
-    backdrop-filter: blur(6px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-}
-
-.clay-celebration-dialog {
-    width: 100%;
-    max-width: 440px;
-    background: #FFFFFF;
-    border: 4px solid #FDE047;
-    border-radius: 30px;
-    padding: 1.65rem 1.45rem;
-    text-align: center;
-    box-shadow:
-        0 10px 0 #D97706,
-        0 24px 48px rgba(0, 0, 0, 0.3);
-}
-
-.celebration-trophy-badge {
-    width: 68px;
-    height: 68px;
-    margin: 0 auto 0.65rem;
-    border-radius: 22px;
-    background: linear-gradient(180deg, #FEF08A 0%, #F59E0B 100%);
-    border: 3px solid #B45309;
-    box-shadow: 0 5px 0 #B45309;
-    font-size: 2.1rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.celebration-kicker {
-    display: inline-block;
-    padding: 0.2rem 0.7rem;
-    border-radius: 999px;
-    background: #FEF3C7;
-    color: #B45309;
-    font-family: var(--font-display);
-    font-size: 0.68rem;
-    font-weight: 800;
-}
-
-.celebration-title {
-    margin: 0.45rem 0 0.3rem;
-    font-family: var(--font-display);
-    font-size: 1.4rem;
-    color: #1E1B4B;
-}
-
-.celebration-subtitle {
-    margin: 0 0 1rem;
-    font-family: var(--font-body);
-    font-size: 0.88rem;
-    font-weight: 700;
-    color: #475569;
-}
-
-.celebration-rewards-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.65rem;
-    margin-bottom: 1.15rem;
-}
-
-.reward-pill-card {
-    padding: 0.65rem;
-    border-radius: 16px;
-    background: #F8FAFC;
-    border: 2px solid #E2E8F0;
-}
-
-.reward-lbl {
-    display: block;
-    font-family: var(--font-display);
-    font-size: 0.62rem;
-    color: #64748B;
-}
-
-.reward-val {
-    font-family: var(--font-display);
-    font-size: 1rem;
-    font-weight: 800;
-}
-
-.text-amber { color: #D97706; }
-.text-emerald { color: #059669; }
-
-.celebration-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-}
-
-.clay-celebration-primary-btn {
-    width: 100%;
-    padding: 0.78rem 1rem;
-    border-radius: 16px;
-    border: 2.5px solid #065F46;
-    background: linear-gradient(180deg, #34D399 0%, #10B981 100%);
-    color: #FFFFFF;
-    font-family: var(--font-display);
-    font-size: 0.9rem;
-    font-weight: 800;
-    cursor: pointer;
-    box-shadow: 0 4px 0 #065F46;
-}
-
-.clay-celebration-secondary-btn {
-    width: 100%;
-    padding: 0.62rem 1rem;
-    border-radius: 14px;
-    border: 2px solid #CBD5E1;
-    background: #F8FAFC;
-    color: #475569;
-    font-family: var(--font-display);
-    font-size: 0.8rem;
-    font-weight: 700;
-    cursor: pointer;
 }
 
 .meaning-pop-enter-active,
@@ -2416,14 +2346,14 @@ onBeforeUnmount(() => {
 }
 
 .empty-paper-card {
-    background: #FFFFFF;
-    border: 3px dashed #CBD5E1;
+    background: var(--px-surface-card);
+    border: 3px dashed var(--px-line);
     border-radius: 28px;
     padding: 3rem 2rem;
     text-align: center;
     max-width: 520px;
     width: 100%;
-    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.06);
+    box-shadow: 0 16px 36px rgba(var(--px-shadow-rgb), 0.06);
 }
 
 .empty-paper-icon {
@@ -2436,14 +2366,14 @@ onBeforeUnmount(() => {
 .empty-paper-title {
     font-family: var(--font-heading, 'Fredoka', sans-serif);
     font-size: 1.55rem;
-    color: #1E293B;
+    color: var(--px-ink);
     margin: 0 0 0.75rem 0;
     font-weight: 800;
 }
 
 .empty-paper-desc {
     font-size: 0.95rem;
-    color: #64748B;
+    color: var(--px-ink-muted);
     line-height: 1.6;
     margin: 0 0 1.75rem 0;
 }

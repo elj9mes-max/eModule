@@ -10,6 +10,11 @@ use Inertia\Response;
 
 class TeacherDashboardController extends Controller
 {
+    /**
+     * Session key holding the classroom the teacher last filtered the modules list by (null = all).
+     */
+    public const MODULES_FILTER_SESSION_KEY = 'teacher_modules_class_id';
+
     public function __construct(
         private readonly EModuleCacheService $cache,
     ) {}
@@ -35,6 +40,12 @@ class TeacherDashboardController extends Controller
                 // If invalid classroom ID or doesn't belong to teacher, reset to all
                 $classroomId = null;
             }
+        }
+
+        // Remember the filter so a module's Back button can return to this same classroom list.
+        // Hover prefetches are not real visits, so they must never overwrite it.
+        if (! $request->prefetch()) {
+            $request->session()->put(self::MODULES_FILTER_SESSION_KEY, $classroomId);
         }
 
         return Inertia::render('teachers/Dashboard', [

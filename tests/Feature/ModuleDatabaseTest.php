@@ -3,6 +3,7 @@
 use App\Enums\LectureContentType;
 use App\Enums\ModuleStatus;
 use App\Enums\ModuleTheme;
+use App\Enums\PaperTheme;
 use App\Models\Lecture;
 use App\Models\LectureContent;
 use App\Models\Module;
@@ -329,6 +330,159 @@ test('teacher can view create lecture content page and store a content block', f
         ->and($content->file_path)->not->toBeNull();
 
     Storage::disk('public')->assertExists($content->file_path);
+});
+
+test('background save queue receives json with the content id when storing and updating a lecture page', function () {
+    $teacher = User::factory()->teacher()->create();
+    $module = Module::factory()->for($teacher, 'teacher')->create();
+    $lecture = Lecture::factory()->for($module)->create();
+    $routeParams = ['module' => $module->slug, 'lecture' => $lecture->slug];
+
+    $storeResponse = $this->actingAs($teacher)->postJson(route('teachers.lectures.contents.store', $routeParams), [
+        'type' => 'text',
+        'layout_style' => 'interactive_story',
+        'title' => 'Queued Page',
+        'content' => '<p>First draft</p>',
+    ]);
+
+    $content = LectureContent::where('lecture_id', $lecture->id)->firstOrFail();
+    $storeResponse->assertCreated()->assertExactJson(['id' => $content->id]);
+
+    $this->actingAs($teacher)->postJson(route('teachers.lectures.contents.update', [...$routeParams, 'content' => $content->id]), [
+        'type' => 'text',
+        'layout_style' => 'interactive_story',
+        'title' => 'Queued Page Updated',
+        'content' => '<p>Second draft</p>',
+    ])->assertOk()->assertExactJson(['id' => $content->id]);
+
+    expect($content->fresh()->title)->toBe('Queued Page Updated');
+});
+
+test('lecture pages remember their paper theme and students read them on the same paper', function () {
+    $teacher = User::factory()->teacher()->create();
+    $student = User::factory()->student()->create();
+    $module = Module::factory()->for($teacher, 'teacher')->create(['status' => ModuleStatus::Published]);
+    $lecture = Lecture::factory()->for($module)->create(['is_published' => true]);
+    $routeParams = ['module' => $module->slug, 'lecture' => $lecture->slug];
+
+    $this->actingAs($teacher)->postJson(route('teachers.lectures.contents.store', $routeParams), [
+        'type' => 'text',
+        'title' => 'Parchment Page',
+        'content' => '<p>Once upon a time</p>',
+        'paper_theme' => 'parchment',
+    ])->assertCreated();
+
+    $content = LectureContent::where('lecture_id', $lecture->id)->firstOrFail();
+    expect($content->paper_theme)->toBe(PaperTheme::Parchment);
+
+    $this->actingAs($teacher)->postJson(route('teachers.lectures.contents.update', [...$routeParams, 'content' => $content->id]), [
+        'type' => 'text',
+        'title' => 'Notebook Page',
+        'content' => '<p>Once upon a time</p>',
+        'paper_theme' => 'lined',
+    ])->assertOk();
+
+    expect($content->fresh()->paper_theme)->toBe(PaperTheme::Lined);
+
+    $this->actingAs($teacher)
+        ->get(route('teachers.lectures.contents.create', $routeParams))
+        ->assertInertia(fn (Assert $page) => $page->where('existing_contents.0.paper_theme', 'lined'));
+
+    $this->actingAs($student)
+        ->get(route('students.lectures.show', $routeParams))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('students/views/modules/LectureContent')
+            ->where('contents.0.paper_theme', 'lined')
+        );
+});
+
+test('lecture pages default to classic paper and reject unknown paper themes', function () {
+    $teacher = User::factory()->teacher()->create();
+    $module = Module::factory()->for($teacher, 'teacher')->create();
+    $lecture = Lecture::factory()->for($module)->create();
+    $routeParams = ['module' => $module->slug, 'lecture' => $lecture->slug];
+
+    $this->actingAs($teacher)->postJson(route('teachers.lectures.contents.store', $routeParams), [
+        'type' => 'text',
+        'content' => '<p>Plain page</p>',
+    ])->assertCreated();
+
+    expect(LectureContent::where('lecture_id', $lecture->id)->firstOrFail()->paper_theme)->toBe(PaperTheme::Classic);
+
+    $this->actingAs($teacher)->postJson(route('teachers.lectures.contents.store', $routeParams), [
+        'type' => 'text',
+        'content' => '<p>Odd page</p>',
+        'paper_theme' => 'glitter',
+    ])->assertUnprocessable()->assertJsonValidationErrors('paper_theme');
+});
+
+test('teacher can upload an inline lecture video and receives its public url', function () {
+    Storage::fake('public');
+
+    $teacher = User::factory()->teacher()->create();
+    $module = Module::factory()->for($teacher, 'teacher')->create();
+    $lecture = Lecture::factory()->for($module)->create();
+
+    $video = UploadedFile::fake()->create('creation-story.mp4', 120_000, 'video/mp4');
+
+    $response = $this->actingAs($teacher)->post(
+        route('teachers.lectures.media.store', ['module' => $module->slug, 'lecture' => $lecture->slug]),
+        ['file' => $video],
+        ['Accept' => 'application/json'],
+    );
+
+    $response->assertCreated()
+        ->assertJsonPath('name', 'creation-story.mp4')
+        ->assertJsonPath('kind', 'video');
+
+    $storedPath = 'lectures/inline/video/'.$video->hashName();
+    Storage::disk('public')->assertExists($storedPath);
+    expect($response->json('url'))->toBe(Storage::disk('public')->url($storedPath));
+});
+
+test('inline lecture media upload rejects non media files and other teachers', function () {
+    Storage::fake('public');
+
+    $teacher = User::factory()->teacher()->create();
+    $module = Module::factory()->for($teacher, 'teacher')->create();
+    $lecture = Lecture::factory()->for($module)->create();
+    $uploadUrl = route('teachers.lectures.media.store', ['module' => $module->slug, 'lecture' => $lecture->slug]);
+
+    $this->actingAs($teacher)
+        ->post($uploadUrl, ['file' => UploadedFile::fake()->create('notes.zip', 10, 'application/zip')], ['Accept' => 'application/json'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('file');
+
+    $this->actingAs(User::factory()->teacher()->create())
+        ->post($uploadUrl, ['file' => UploadedFile::fake()->create('clip.mp4', 10, 'video/mp4')], ['Accept' => 'application/json'])
+        ->assertForbidden();
+
+    expect(Storage::disk('public')->allFiles())->toBeEmpty();
+});
+
+test('background save queue receives json validation errors and forbidden responses', function () {
+    $teacher = User::factory()->teacher()->create();
+    $module = Module::factory()->for($teacher, 'teacher')->create();
+    $lecture = Lecture::factory()->for($module)->create();
+    $routeParams = ['module' => $module->slug, 'lecture' => $lecture->slug];
+
+    $this->actingAs($teacher)
+        ->postJson(route('teachers.lectures.contents.store', $routeParams), [])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('type');
+
+    $otherTeacher = User::factory()->teacher()->create();
+
+    $this->actingAs($otherTeacher)
+        ->postJson(route('teachers.lectures.contents.store', $routeParams), [
+            'type' => 'text',
+            'title' => 'Intruder Page',
+            'content' => '<p>Nope</p>',
+        ])
+        ->assertForbidden();
+
+    expect(LectureContent::where('lecture_id', $lecture->id)->count())->toBe(0);
 });
 
 test('teacher can store an interactive story lecture page with word meanings and full-page read-aloud narration audio', function () {

@@ -120,7 +120,10 @@ class Classroom extends Model
     }
 
     /**
-     * Assign a module to this classroom and auto-enroll existing room students into the module.
+     * Assign a module to this classroom.
+     *
+     * Students are not copied into module_enrollments: classroom members see the module through
+     * Module::visibleToStudent(), so access always follows current classroom membership.
      */
     public function assignModule(Module|int $module): ClassroomModule
     {
@@ -133,30 +136,11 @@ class Classroom extends Model
             'assigned_at' => now(),
         ]);
 
-        // Auto-enroll existing classroom students into the newly assigned module
-        $studentIds = $this->students()->pluck('users.id')->all();
-        if (! empty($studentIds)) {
-            $now = now();
-            $enrollments = array_map(static fn (int $studentId): array => [
-                'user_id' => $studentId,
-                'module_id' => $moduleId,
-                'enrolled_at' => $now,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ], $studentIds);
-
-            ModuleEnrollment::upsert(
-                $enrollments,
-                ['user_id', 'module_id'],
-                ['updated_at']
-            );
-        }
-
         return $assignment;
     }
 
     /**
-     * Enroll a student into this classroom and auto-enroll them into all assigned modules.
+     * Add a student to this classroom. They gain the classroom's modules through membership alone.
      */
     public function enrollStudent(User|int $student): ClassroomStudent
     {
@@ -168,25 +152,6 @@ class Classroom extends Model
         ], [
             'joined_at' => now(),
         ]);
-
-        // Auto-enroll the new student into all current classroom modules
-        $moduleIds = $this->modules()->pluck('modules.id')->all();
-        if (! empty($moduleIds)) {
-            $now = now();
-            $enrollments = array_map(static fn (int $moduleId): array => [
-                'user_id' => $studentId,
-                'module_id' => $moduleId,
-                'enrolled_at' => $now,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ], $moduleIds);
-
-            ModuleEnrollment::upsert(
-                $enrollments,
-                ['user_id', 'module_id'],
-                ['updated_at']
-            );
-        }
 
         return $enrollment;
     }

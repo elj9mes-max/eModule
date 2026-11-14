@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\LectureContentType;
+use App\Enums\PaperTheme;
 use Database\Factories\LectureContentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'lecture_id',
     'type',
     'layout_style',
+    'paper_theme',
     'title',
     'content',
     'file_disk',
@@ -43,6 +45,7 @@ class LectureContent extends Model
     protected $attributes = [
         'type' => LectureContentType::Text,
         'layout_style' => 'standard',
+        'paper_theme' => PaperTheme::Classic,
         'file_disk' => 'public',
         'narration_audio_disk' => 'public',
         'sort_order' => 0,
@@ -57,6 +60,7 @@ class LectureContent extends Model
     {
         return [
             'type' => LectureContentType::class,
+            'paper_theme' => PaperTheme::class,
             'file_size' => 'integer',
             'duration_seconds' => 'integer',
             'vocabulary_glosses' => 'array',

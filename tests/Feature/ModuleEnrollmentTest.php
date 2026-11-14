@@ -9,7 +9,7 @@ use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
-test('newly registered student sees 0 modules on dashboard if not enrolled', function () {
+test('newly registered student sees no classrooms and no code adventures if not enrolled', function () {
     $teacher = User::factory()->teacher()->create();
     Module::factory()->count(3)->create([
         'user_id' => $teacher->id,
@@ -18,12 +18,15 @@ test('newly registered student sees 0 modules on dashboard if not enrolled', fun
 
     $newStudent = User::factory()->student()->create();
 
-    $response = $this->actingAs($newStudent)->get(route('students.dashboard'));
+    $this->actingAs($newStudent)->get(route('students.dashboard'))
+        ->assertRedirect(route('students.classes.index'));
 
-    $response->assertOk()
+    $this->actingAs($newStudent)->get(route('students.classes.index'))
+        ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('students/Dashboard')
-            ->has('modules', 0)
+            ->component('students/Classrooms')
+            ->has('classrooms', 0)
+            ->where('direct_modules_count', 0)
         );
 });
 
@@ -41,7 +44,7 @@ test('student can join published module with valid 6 digit code', function () {
         'join_code' => '482910',
     ]);
 
-    $response->assertRedirect(route('students.dashboard'));
+    $response->assertRedirect(route('students.classes.code-adventures'));
     $response->assertSessionHas('success');
 
     $this->assertDatabaseHas('module_enrollments', [
@@ -50,7 +53,7 @@ test('student can join published module with valid 6 digit code', function () {
     ]);
 });
 
-test('enrolled module immediately appears on student dashboard', function () {
+test('module joined by code immediately appears in code adventures, not in a classroom', function () {
     $teacher = User::factory()->teacher()->create();
     $module = Module::factory()->create([
         'user_id' => $teacher->id,
@@ -64,11 +67,16 @@ test('enrolled module immediately appears on student dashboard', function () {
         'join_code' => '392817',
     ]);
 
-    $response = $this->actingAs($student)->get(route('students.dashboard'));
-
-    $response->assertOk()
+    $this->actingAs($student)->get(route('students.classes.index'))
         ->assertInertia(fn (Assert $page) => $page
-            ->component('students/Dashboard')
+            ->has('classrooms', 0)
+            ->where('direct_modules_count', 1)
+        );
+
+    $this->actingAs($student)->get(route('students.classes.code-adventures'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('students/ClassroomModules')
             ->has('modules', 1)
             ->where('modules.0.id', $module->id)
         );

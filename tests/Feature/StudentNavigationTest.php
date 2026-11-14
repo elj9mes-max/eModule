@@ -70,10 +70,10 @@ test('student can save their pixar color world theme and retain it across logins
             ->where('auth.user.ui_theme', PixarWorldTheme::MemoryOrb->value)
         );
 
-    $this->get(route('students.dashboard'))
+    $this->get(route('students.classes.index'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('students/Dashboard')
+            ->component('students/Classrooms')
             ->where('user.ui_theme', PixarWorldTheme::MemoryOrb->value)
             ->where('auth.user.ui_theme', PixarWorldTheme::MemoryOrb->value)
         );

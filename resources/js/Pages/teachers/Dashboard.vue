@@ -1,6 +1,6 @@
 <script setup>
 import { Head, router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import TeacherLayout from '@/Components/TeacherLayout.vue';
 import { flushAllClientCache, prefetchRoute } from '@/Composables/usePrefetch';
 
@@ -107,6 +107,15 @@ const goToStudents = () => {
     router.visit('/teachers/students');
 };
 
+/** Student ranking filtered to the classroom whose modules are showing (all students otherwise). */
+const classRankingUrl = computed(() =>
+    props.selected_classroom_id ? `/teachers/students?class_id=${props.selected_classroom_id}` : '/teachers/students',
+);
+
+const goToClassRanking = () => {
+    router.visit(classRankingUrl.value);
+};
+
 const goToClasses = () => {
     router.visit('/teachers/classes');
 };
@@ -115,12 +124,28 @@ const goToGrading = () => {
     router.visit('/teachers/grading');
 };
 
+/** Create-module URL that carries the classroom being viewed, so the new module lands in it. */
+const createModuleUrl = computed(() =>
+    props.selected_classroom_id
+        ? `/teachers/create/module?class_id=${props.selected_classroom_id}`
+        : '/teachers/create/module',
+);
+
 const goToCreateModule = () => {
-    router.visit('/teachers/create/module');
+    router.visit(createModuleUrl.value);
 };
 
+/**
+ * Module URL that carries the classroom this list is filtered by, so the module's Back button
+ * (and its prefetch-cached copy) always return to this exact list.
+ */
+const moduleUrl = (mod) =>
+    props.selected_classroom_id
+        ? `/teachers/modules/${mod.slug}?class_id=${props.selected_classroom_id}`
+        : `/teachers/modules/${mod.slug}`;
+
 const openModule = (mod) => {
-    router.visit(`/teachers/modules/${mod.slug}`);
+    router.visit(moduleUrl(mod));
 };
 </script>
 
@@ -129,7 +154,7 @@ const openModule = (mod) => {
 
     <TeacherLayout
         :user="user"
-        active-nav="modules"
+        active-nav="classes"
         :pending-grading-count="pending_grading_count"
     >
         <!-- YOUR MODULES -->
@@ -144,44 +169,27 @@ const openModule = (mod) => {
                         </p>
                     </div>
                     <div class="header-buttons">
+                        <button
+                            type="button"
+                            class="btn-3d btn-ranking-action"
+                            :aria-label="selected_classroom ? `View the ${selected_classroom.name} student ranking` : 'View the student ranking'"
+                            @mouseenter="prefetchTeacherRoute(classRankingUrl, ['teacher-students'])"
+                            @focus="prefetchTeacherRoute(classRankingUrl, ['teacher-students'])"
+                            @click="goToClassRanking"
+                        >
+                            <span>🏆 {{ selected_classroom ? 'CLASS RANKING' : 'STUDENT RANKING' }}</span>
+                        </button>
                         <button type="button" class="btn-3d btn-grade-action" @mouseenter="prefetchTeacherRoute('/teachers/grading', ['teacher-grading'])" @focus="prefetchTeacherRoute('/teachers/grading', ['teacher-grading'])" @click="goToGrading">
                             <span>📝 GRADE SUBMISSIONS <strong v-if="pending_grading_count > 0" class="btn-pending-tag">({{ pending_grading_count }})</strong></span>
                         </button>
-                        <button type="button" class="btn-3d btn-primary-action" @mouseenter="prefetchTeacherRoute('/teachers/create/module', ['teacher-modules'])" @focus="prefetchTeacherRoute('/teachers/create/module', ['teacher-modules'])" @click="goToCreateModule">
+                        <button type="button" class="btn-3d btn-primary-action" @mouseenter="prefetchTeacherRoute(createModuleUrl, ['teacher-modules'])" @focus="prefetchTeacherRoute(createModuleUrl, ['teacher-modules'])" @click="goToCreateModule">
                             <span>✨ + ADD NEW MODULE</span>
                         </button>
                     </div>
                 </div>
 
                 <!-- Classroom / Room Filter Strip (When Teacher has Classrooms) -->
-                <div v-if="classrooms && classrooms.length > 0" class="room-selector-strip">
-                    <span class="room-selector-label">FILTER BY ROOM:</span>
-                    <button
-                        type="button"
-                        class="room-filter-pill"
-                        :class="{ active: !selected_classroom_id }"
-                        @click="filterByClassroom(null)"
-                    >
-                        <span>🏰 All Modules</span>
-                    </button>
-                    <button
-                        v-for="c in classrooms"
-                        :key="c.id"
-                        type="button"
-                        class="room-filter-pill"
-                        :class="{ active: selected_classroom_id === c.id }"
-                        @click="filterByClassroom(c.id)"
-                    >
-                        <span>{{ c.icon }} {{ c.name }} ({{ c.modules_count }})</span>
-                    </button>
-                    <button
-                        type="button"
-                        class="room-manage-link"
-                        @click="goToClasses"
-                    >
-                        <span>⚙️ Manage Rooms</span>
-                    </button>
-                </div>
+
 
                 <!-- Shared SVG Definitions hoisted once to prevent duplicate DOM IDs and per-card filter overhead -->
                 <svg v-if="modules.length > 0" width="0" height="0" style="position: absolute; pointer-events: none;" aria-hidden="true">
@@ -265,8 +273,8 @@ const openModule = (mod) => {
                         role="button"
                         tabindex="0"
                         :aria-label="'Open learning module: ' + mod.title"
-                        @mouseenter="prefetchTeacherRoute(`/teachers/modules/${mod.slug}`, ['teacher-modules', `module-${mod.slug}`])"
-                        @focus="prefetchTeacherRoute(`/teachers/modules/${mod.slug}`, ['teacher-modules', `module-${mod.slug}`])"
+                        @mouseenter="prefetchTeacherRoute(moduleUrl(mod), ['teacher-modules', `module-${mod.slug}`])"
+                        @focus="prefetchTeacherRoute(moduleUrl(mod), ['teacher-modules', `module-${mod.slug}`])"
                         @click="openModule(mod)"
                         @keydown.enter="openModule(mod)"
                         @keydown.space.prevent="openModule(mod)"
@@ -310,25 +318,7 @@ const openModule = (mod) => {
                         <!-- Floating Discrete Status / New Clay Badges -->
                         <div class="clay-card-badges">
                             <span v-if="mod.is_new" class="clay-badge-new">✨ NEW</span>
-                            <button
-                                type="button"
-                                class="clay-badge-draft"
-                                :class="{
-                                    'is-published': mod.status === 'published',
-                                    'is-toggling': togglingModuleId === mod.id,
-                                }"
-                                :disabled="togglingModuleId === mod.id"
-                                :title="mod.status === 'draft' ? 'Click to publish this module' : 'Click to unpublish (set to draft)'"
-                                :aria-label="mod.status === 'draft' ? 'Draft module. Click to publish' : 'Published module. Click to set as draft'"
-                                @click.stop="toggleModuleStatus(mod)"
-                                @keydown.stop.enter="toggleModuleStatus(mod)"
-                                @keydown.stop.space.prevent="toggleModuleStatus(mod)"
-                            >
-                                <span v-if="togglingModuleId === mod.id" class="badge-status-icon" aria-hidden="true">⏳</span>
-                                <span v-else-if="mod.status === 'draft'" class="badge-status-icon" aria-hidden="true">📝</span>
-                                <span v-else class="badge-status-icon" aria-hidden="true">🌟</span>
-                                <span>{{ togglingModuleId === mod.id ? 'UPDATING...' : (mod.status === 'draft' ? 'DRAFT' : 'PUBLISHED') }}</span>
-                            </button>
+
                         </div>
 
                         <!-- Stepped Neumorphic Bezel holding Center Picture Window -->
@@ -427,6 +417,28 @@ const openModule = (mod) => {
                             <strong class="code-pill-val">{{ mod.join_code }}</strong>
                             <span class="code-pill-action">{{ copiedCodeId === mod.id ? 'COPIED!' : 'COPY' }}</span>
                         </div>
+
+                        <!-- 3D Publish Status Toggle -->
+                        <button
+                            type="button"
+                            class="clay-badge-draft"
+                            :class="{
+                                'is-published': mod.status === 'published',
+                                'is-toggling': togglingModuleId === mod.id,
+                            }"
+                            :disabled="togglingModuleId === mod.id"
+                            :title="mod.status === 'draft' ? 'Click to publish this module' : 'Click to unpublish (set to draft)'"
+                            :aria-label="mod.status === 'draft' ? 'Draft module. Click to publish' : 'Published module. Click to set as draft'"
+                            @click.stop="toggleModuleStatus(mod)"
+                            @keydown.stop.enter="toggleModuleStatus(mod)"
+                            @keydown.stop.space.prevent="toggleModuleStatus(mod)"
+                        >
+                            <span v-if="togglingModuleId === mod.id" class="badge-status-icon" aria-hidden="true">⏳</span>
+                            <span v-else-if="mod.status === 'draft'" class="badge-status-icon" aria-hidden="true">📝</span>
+                            <span v-else class="badge-status-icon" aria-hidden="true">🌟</span>
+                            <span class="badge-status-label">{{ togglingModuleId === mod.id ? 'UPDATING...' : (mod.status === 'draft' ? 'DRAFT' : 'PUBLISHED') }}</span>
+                            <span v-if="togglingModuleId !== mod.id" class="badge-status-action">{{ mod.status === 'draft' ? 'PUBLISH' : 'UNPUBLISH' }}</span>
+                        </button>
                     </div>
                 </div>
 
@@ -1075,45 +1087,58 @@ const openModule = (mod) => {
     }
 }
 
+/* Full-width publish toggle that sits under the quest code pill and mirrors its shape */
 .clay-badge-draft {
     position: relative;
-    font-size: 0.68rem;
+    width: 100%;
+    min-height: 2.35rem;
+    margin: 0;
+    padding: 0.4rem 0.65rem;
+    border-radius: 14px;
+    border: 2px solid #FB7185;
+    background: linear-gradient(180deg, #FFF1F2 0%, #FFE4E6 45%, #FDA4AF 100%);
+    color: #9F1239;
+    font-family: var(--font-game, -apple-system, sans-serif);
+    font-size: 0.72rem;
     font-weight: 900;
     letter-spacing: 0.06em;
-    background: linear-gradient(180deg, #FFFFFF 0%, #FFE4E6 50%, #FDA4AF 100%);
-    color: #9F1239;
-    padding: 0.25rem 0.65rem;
-    border-radius: 9999px;
-    border: 1.5px solid rgba(255, 255, 255, 0.95);
+    line-height: 1;
     box-shadow:
         0 3px 0 #BE123C,
-        0 4px 10px rgba(190, 18, 60, 0.25),
-        inset 0 1.5px 1.5px rgba(255, 255, 255, 1),
-        inset 0 -2px 3px rgba(190, 18, 60, 0.25);
+        0 4px 10px rgba(190, 18, 60, 0.18),
+        inset 0 1.5px 1px rgba(255, 255, 255, 0.9);
     pointer-events: auto;
     cursor: pointer;
     user-select: none;
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    gap: 0.35rem;
-    font-family: inherit;
-    line-height: 1;
+    justify-content: center;
+    gap: 0.4rem;
     appearance: none;
     outline: none;
+    z-index: 6;
     transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease, filter 0.15s ease;
 }
 
+.badge-status-action {
+    font-size: 0.58rem;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    padding: 0.14rem 0.45rem;
+    border-radius: 9999px;
+    background: rgba(0, 0, 0, 0.1);
+}
+
 .clay-badge-draft:hover:not(:disabled) {
-    transform: translateY(-1.5px) scale(1.05);
+    transform: translateY(-2px);
     box-shadow:
-        0 4.5px 0 #BE123C,
-        0 6px 12px rgba(190, 18, 60, 0.32),
-        inset 0 1.5px 1.5px rgba(255, 255, 255, 1),
-        inset 0 -2px 3px rgba(190, 18, 60, 0.25);
+        0 5px 0 #BE123C,
+        0 8px 14px rgba(190, 18, 60, 0.26),
+        inset 0 1.5px 1px #FFFFFF;
 }
 
 .clay-badge-draft:active:not(:disabled) {
-    transform: translateY(2px) scale(0.97);
+    transform: translateY(2px);
     box-shadow:
         0 1px 0 #BE123C,
         0 2px 4px rgba(190, 18, 60, 0.2),
@@ -1127,26 +1152,25 @@ const openModule = (mod) => {
 }
 
 .clay-badge-draft.is-published {
-    background: linear-gradient(180deg, #FFFFFF 0%, #DCFCE7 45%, #86EFAC 100%);
+    border-color: #22C55E;
+    background: linear-gradient(180deg, #F0FDF4 0%, #DCFCE7 45%, #86EFAC 100%);
     color: #14532D;
     box-shadow:
         0 3px 0 #15803D,
-        0 4px 10px rgba(21, 128, 61, 0.25),
-        inset 0 1.5px 1.5px rgba(255, 255, 255, 1),
-        inset 0 -2px 3px rgba(21, 128, 61, 0.25);
+        0 4px 10px rgba(21, 128, 61, 0.18),
+        inset 0 1.5px 1px rgba(255, 255, 255, 0.9);
 }
 
 .clay-badge-draft.is-published:hover:not(:disabled) {
-    transform: translateY(-1.5px) scale(1.05);
+    transform: translateY(-2px);
     box-shadow:
-        0 4.5px 0 #15803D,
-        0 6px 12px rgba(21, 128, 61, 0.32),
-        inset 0 1.5px 1.5px rgba(255, 255, 255, 1),
-        inset 0 -2px 3px rgba(21, 128, 61, 0.25);
+        0 5px 0 #15803D,
+        0 8px 14px rgba(21, 128, 61, 0.26),
+        inset 0 1.5px 1px #FFFFFF;
 }
 
 .clay-badge-draft.is-published:active:not(:disabled) {
-    transform: translateY(2px) scale(0.97);
+    transform: translateY(2px);
     box-shadow:
         0 1px 0 #15803D,
         0 2px 4px rgba(21, 128, 61, 0.2),
@@ -1161,16 +1185,16 @@ const openModule = (mod) => {
 }
 
 .badge-status-icon {
-    font-size: 0.72rem;
+    font-size: 0.85rem;
     line-height: 1;
 }
 
 .clay-badge-draft::before {
     content: "";
     position: absolute;
-    inset: 1.5px 4px auto 4px;
-    height: 38%;
-    border-radius: 9999px;
+    inset: 2px 8px auto 8px;
+    height: 36%;
+    border-radius: 10px;
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0) 100%);
     pointer-events: none;
 }

@@ -49,7 +49,7 @@ test('guest visiting the student welcome page is redirected to login', function 
     $response->assertRedirect(route('login'));
 });
 
-test('student dashboard returns modules list for the student', function () {
+test('student code adventures page returns the modules the student joined by code', function () {
     $teacher = User::factory()->teacher()->create();
     $student = User::factory()->student()->create(['name' => 'Maya Explorer']);
 
@@ -60,11 +60,12 @@ test('student dashboard returns modules list for the student', function () {
     ]);
     $module->enrollments()->create(['user_id' => $student->id]);
 
-    $response = $this->actingAs($student)->get(route('students.dashboard'));
+    $response = $this->actingAs($student)->get(route('students.classes.code-adventures'));
 
     $response->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('students/Dashboard')
+            ->component('students/ClassroomModules')
+            ->where('classroom', null)
             ->where('user.name', 'Maya Explorer')
             ->has('modules', 1)
             ->where('modules.0.id', $module->id)

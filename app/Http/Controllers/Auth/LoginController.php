@@ -20,7 +20,7 @@ class LoginController extends Controller
     {
         if (Auth::check()) {
             return Auth::user()->isTeacher()
-                ? redirect()->route('teachers.dashboard')
+                ? redirect()->route('teachers.classes.index')
                 : redirect()->route('students.dashboard');
         }
 
@@ -42,7 +42,7 @@ class LoginController extends Controller
         $user = $request->user();
 
         if ($user->isTeacher()) {
-            return redirect()->intended(route('teachers.dashboard'));
+            return redirect()->intended(route('teachers.classes.index'));
         }
 
         return redirect()->route('students.welcome');

@@ -3,13 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Enums\LectureContentType;
+use App\Enums\PaperTheme;
 use App\Http\Requests\StoreLectureContentRequest;
 use App\Http\Requests\StoreLectureRequest;
+use App\Http\Requests\UploadLectureMediaRequest;
 use App\Models\Lecture;
 use App\Models\LectureContent;
 use App\Models\Module;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -129,6 +133,7 @@ class TeacherLectureController extends Controller
                 'id' => $content->id,
                 'type' => $content->type->value,
                 'layout_style' => $content->layout_style ?? 'standard',
+                'paper_theme' => $content->paper_theme->value,
                 'title' => $content->title,
                 'content' => $content->content,
                 'media_url' => $content->mediaUrl(),
@@ -148,11 +153,15 @@ class TeacherLectureController extends Controller
     /**
      * Store a newly created content block under a lecture.
      */
-    public function storeContent(StoreLectureContentRequest $request, Module $module, Lecture $lecture): RedirectResponse
+    public function storeContent(StoreLectureContentRequest $request, Module $module, Lecture $lecture): RedirectResponse|JsonResponse
     {
         $user = $request->user();
 
         if (! $user->isTeacher() || $module->user_id !== $user->id || $lecture->module_id !== $module->id) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Forbidden.'], 403);
+            }
+
             return redirect()->route('teachers.dashboard');
         }
 
@@ -187,9 +196,10 @@ class TeacherLectureController extends Controller
 
         $nextOrder = ((int) $lecture->contents()->max('sort_order')) + 1;
 
-        $lecture->contents()->create([
+        $content = $lecture->contents()->create([
             'type' => $validated['type'],
             'layout_style' => $validated['layout_style'] ?? 'standard',
+            'paper_theme' => $validated['paper_theme'] ?? PaperTheme::Classic->value,
             'title' => $validated['title'] ?? null,
             'content' => $validated['content'] ?? null,
             'file_disk' => $fileDisk,
@@ -207,6 +217,10 @@ class TeacherLectureController extends Controller
             'sort_order' => $nextOrder,
         ]);
 
+        if ($request->expectsJson()) {
+            return response()->json(['id' => $content->id], 201);
+        }
+
         return redirect()->route('teachers.lectures.contents.create', [
             'module' => $module->slug,
             'lecture' => $lecture->slug,
@@ -221,7 +235,7 @@ class TeacherLectureController extends Controller
         Module $module,
         Lecture $lecture,
         LectureContent $content
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         $user = $request->user();
 
         if (
@@ -230,6 +244,10 @@ class TeacherLectureController extends Controller
             || $lecture->module_id !== $module->id
             || $content->lecture_id !== $lecture->id
         ) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Forbidden.'], 403);
+            }
+
             return redirect()->route('teachers.dashboard');
         }
 
@@ -271,6 +289,7 @@ class TeacherLectureController extends Controller
         $content->update([
             'type' => $validated['type'],
             'layout_style' => $validated['layout_style'] ?? ($content->layout_style ?? 'standard'),
+            'paper_theme' => $validated['paper_theme'] ?? $content->paper_theme->value,
             'title' => $validated['title'] ?? null,
             'content' => $validated['content'] ?? null,
             'file_disk' => $fileDisk,
@@ -287,10 +306,39 @@ class TeacherLectureController extends Controller
             'caption' => $validated['caption'] ?? null,
         ]);
 
+        if ($request->expectsJson()) {
+            return response()->json(['id' => $content->id]);
+        }
+
         return redirect()->route('teachers.lectures.contents.create', [
             'module' => $module->slug,
             'lecture' => $lecture->slug,
         ]);
+    }
+
+    /**
+     * Upload a single image, audio, or video file that the studio embeds inline in a lecture page.
+     */
+    public function uploadContentMedia(UploadLectureMediaRequest $request, Module $module, Lecture $lecture): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($module->user_id !== $user->id || $lecture->module_id !== $module->id) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        $file = $request->file('file');
+        $mimeType = (string) $file->getMimeType();
+        $kind = Str::before($mimeType, '/');
+        $path = $file->store("lectures/inline/{$kind}", 'public');
+
+        return response()->json([
+            'url' => Storage::disk('public')->url($path),
+            'name' => $file->getClientOriginalName(),
+            'kind' => $kind,
+            'mime_type' => $mimeType,
+            'size' => $file->getSize(),
+        ], 201);
     }
 
     /**

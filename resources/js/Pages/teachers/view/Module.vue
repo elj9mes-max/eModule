@@ -39,6 +39,11 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    /** The modules list as the teacher left it (filtered by classroom, or all modules). */
+    backLink: {
+        type: Object,
+        default: () => ({ url: '/teachers/dashboard', label: 'All Modules' }),
+    },
 });
 
 const totalMilestonesCount = computed(() => (props.lectures?.length || 0) + (props.quizzes?.length || 0));
@@ -112,8 +117,10 @@ const quizTypes = [
     },
 ];
 
+const backUrl = computed(() => props.backLink?.url || '/teachers/dashboard');
+
 const handleBack = () => {
-    router.visit('/teachers/dashboard');
+    router.visit(backUrl.value);
 };
 
 const handleLogout = () => {
@@ -234,9 +241,17 @@ const copyJoinCode = async () => {
         <!-- Top Game Header Bar matching Dashboard conventions -->
         <header class="module-header-nav">
             <div class="nav-left">
-                <button type="button" class="btn-back-nav" @mouseenter="prefetchRoute('/teachers/dashboard', ['teacher-modules'])" @focus="prefetchRoute('/teachers/dashboard', ['teacher-modules'])" @click="handleBack">
+                <button
+                    type="button"
+                    class="btn-back-nav"
+                    :title="`Back to ${backLink.label}`"
+                    :aria-label="`Back to ${backLink.label}`"
+                    @mouseenter="prefetchRoute(backUrl, ['teacher-modules'])"
+                    @focus="prefetchRoute(backUrl, ['teacher-modules'])"
+                    @click="handleBack"
+                >
                     <span class="back-arrow">❮</span>
-                    <span>Dashboard</span>
+                    <span class="back-nav-label">{{ backLink.label }}</span>
                 </button>
 
                 <div class="brand-group">
@@ -270,16 +285,7 @@ const copyJoinCode = async () => {
                 </button>
 
                 <!-- 🚀 Pixar 3D Tactile Publish Quiz Action Button -->
-                <button
-                    type="button"
-                    class="btn-nav-publish-quiz"
-                    title="Publish a reading comprehension quiz challenge to this module"
-                    @click="handleOpenQuizModal"
-                >
-                    <span class="btn-publish-glare" aria-hidden="true"></span>
-                    <span class="btn-publish-icon" aria-hidden="true">🚀</span>
-                    <span>PUBLISH QUIZ</span>
-                </button>
+
 
                 <!-- + Create Milestone Action Button -->
                 <button
@@ -294,10 +300,6 @@ const copyJoinCode = async () => {
                     <span class="user-avatar">🧙‍♂️</span>
                     <span class="user-name">{{ user.name }}</span>
                 </div>
-
-                <button type="button" class="btn-logout-mini" @click="handleLogout" title="Log Out">
-                    <span>Exit</span>
-                </button>
             </div>
         </header>
 
@@ -648,6 +650,13 @@ const copyJoinCode = async () => {
     gap: 1.15rem;
 }
 
+.back-nav-label {
+    max-width: 11rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .btn-back-nav {
     background: linear-gradient(180deg, #FFFFFF 0%, #F1F5FB 50%, #E3EAF4 100%);
     border: 2.5px solid var(--game-border);
@@ -854,89 +863,7 @@ const copyJoinCode = async () => {
     letter-spacing: 0.04em;
 }
 
-/* 🚀 Pixar 3D Tactile Publish Quiz Button */
-.btn-nav-publish-quiz {
-    position: relative;
-    background: linear-gradient(180deg, #34D399 0%, #10B981 48%, #059669 100%);
-    color: #FFFFFF;
-    border: 2.5px solid #064E3B;
-    border-radius: 9999px;
-    padding: 0.55rem 1.35rem;
-    font-family: var(--font-game);
-    font-weight: 900;
-    font-size: 0.86rem;
-    letter-spacing: 0.04em;
-    box-shadow:
-        0 4.5px 0 #064E3B,
-        0 10px 20px rgba(5, 150, 105, 0.4),
-        inset 0 2px 2px rgba(255, 255, 255, 0.85),
-        inset 0 -2px 4px rgba(6, 78, 59, 0.45);
-    cursor: pointer;
-    overflow: hidden;
-    white-space: nowrap;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    transform: translate3d(0, 0, 0);
-    transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
-}
 
-.btn-nav-publish-quiz::before {
-    content: '';
-    position: absolute;
-    inset: 2px 6px auto 6px;
-    height: 38%;
-    border-radius: 9999px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 100%);
-    pointer-events: none;
-}
-
-.btn-publish-glare {
-    position: absolute;
-    top: 0;
-    left: -120%;
-    width: 60%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
-    transform: skewX(-22deg);
-    pointer-events: none;
-    transition: left 0.6s ease;
-}
-
-.btn-nav-publish-quiz:hover .btn-publish-glare {
-    left: 160%;
-}
-
-.btn-nav-publish-quiz:hover {
-    transform: translate3d(0, -2px, 0) scale(1.02);
-    box-shadow:
-        0 6.5px 0 #064E3B,
-        0 14px 26px rgba(5, 150, 105, 0.48),
-        inset 0 2px 2px rgba(255, 255, 255, 0.95);
-}
-
-.btn-nav-publish-quiz:active {
-    transform: translate3d(0, 3px, 0) scaleX(1.03) scaleY(0.95);
-    box-shadow:
-        0 1.5px 0 #064E3B,
-        inset 0 2px 4px rgba(6, 78, 59, 0.55);
-}
-
-.btn-nav-publish-quiz:focus-visible {
-    outline: 2px solid #10B981;
-    outline-offset: 3px;
-}
-
-.btn-publish-icon {
-    font-size: 1rem;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
-    display: inline-block;
-    transition: transform 0.2s ease;
-}
-
-.btn-nav-publish-quiz:hover .btn-publish-icon {
-    transform: scale(1.15) rotate(-12deg);
-}
 
 .btn-nav-create {
     position: relative;
@@ -1020,40 +947,7 @@ const copyJoinCode = async () => {
     color: var(--game-navy);
 }
 
-.btn-logout-mini {
-    background: linear-gradient(180deg, #FFF1F2 0%, #FFE4E6 100%);
-    color: #BE123C;
-    border: 2px solid #E11D48;
-    padding: 0.38rem 0.85rem;
-    border-radius: 9999px;
-    font-family: var(--font-game);
-    font-weight: 800;
-    font-size: 0.8rem;
-    cursor: pointer;
-    box-shadow:
-        0 3px 0 #9F1239,
-        inset 0 1.5px 1.5px rgba(255, 255, 255, 0.95),
-        inset 0 -1.5px 2px rgba(225, 29, 72, 0.25);
-    transform: translate3d(0, 0, 0);
-    transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
-}
 
-.btn-logout-mini:hover {
-    transform: translate3d(0, -2px, 0);
-    box-shadow:
-        0 5px 0 #9F1239,
-        0 8px 16px rgba(225, 29, 72, 0.25);
-}
-
-.btn-logout-mini:active {
-    transform: translate3d(0, 2px, 0);
-    box-shadow: 0 1px 0 #9F1239;
-}
-
-.btn-logout-mini:focus-visible {
-    outline: 2px solid #E11D48;
-    outline-offset: 3px;
-}
 
 /* ==========================================================================
    STORYBOOK 3D MODALS WITH OVERLAPPING CRESTS
@@ -1841,10 +1735,6 @@ const copyJoinCode = async () => {
         padding: 0.75rem 1rem;
     }
 
-    .btn-nav-create span,
-    .btn-nav-publish-quiz span {
-        font-size: 0.74rem;
-    }
 
     .choice-cards-grid {
         grid-template-columns: 1fr;

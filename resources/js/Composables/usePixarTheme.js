@@ -1,5 +1,6 @@
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
+import { shouldReduceEffects } from '@/Composables/usePerformanceMode';
 
 const STORAGE_KEY = 'webread-pixar-world';
 
@@ -8,7 +9,7 @@ export const PIXAR_WORLDS = [
         id: 'toybox',
         name: 'Sunny Toybox',
         tagline: 'Radiant azure sky, sunlit meadow & toy-vinyl coral',
-        inspiration: 'Toy Story & Monsters, Inc.',
+        inspiration: 'Sunlit playroom brights',
         mode: 'Daylight',
         isDark: false,
         swatch: 'linear-gradient(135deg, #42BAFF 0%, #FFBF0F 52%, #DE2B1E 100%)',
@@ -25,9 +26,9 @@ export const PIXAR_WORLDS = [
     },
     {
         id: 'luca-coast',
-        name: 'Portorosso Coast',
+        name: 'Riviera Coast',
         tagline: 'Tangerine sunset sky, Riviera aqua & Vespa emerald',
-        inspiration: 'Luca Mediterranean Coast',
+        inspiration: 'Seaside village at golden hour',
         mode: 'Sunset',
         isDark: false,
         swatch: 'linear-gradient(135deg, #FF955C 0%, #FFE066 50%, #078578 100%)',
@@ -46,7 +47,7 @@ export const PIXAR_WORLDS = [
         id: 'memory-orb',
         name: 'Memory Orb Studio',
         tagline: 'Glowing twilight indigo, luminous gold & console cyan',
-        inspiration: 'Inside Out Headquarters',
+        inspiration: 'Glowing control-room twilight',
         mode: 'Night Glow',
         isDark: true,
         swatch: 'linear-gradient(135deg, #7C3AED 0%, #FF5FA2 52%, #38D6FF 100%)',
@@ -65,7 +66,7 @@ export const PIXAR_WORLDS = [
         id: 'marigold',
         name: 'Fiesta Marigold',
         tagline: 'Candlelight plum dusk, marigold flame & spirit mint',
-        inspiration: 'Coco Candlelight Fiesta',
+        inspiration: 'Candlelit marigold festival',
         mode: 'Fiesta',
         isDark: true,
         swatch: 'linear-gradient(135deg, #FF9924 0%, #D4246C 52%, #37DEC6 100%)',
@@ -87,9 +88,7 @@ const VALID_WORLD_IDS = new Set(PIXAR_WORLDS.map((world) => world.id));
 export const resolveValidWorldId = (value) =>
     typeof value === 'string' && VALID_WORLD_IDS.has(value) ? value : 'toybox';
 
-const prefersReducedMotion = () =>
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const prefersReducedMotion = shouldReduceEffects;
 
 const readStoredWorld = () => {
     if (typeof window === 'undefined') {
@@ -168,6 +167,33 @@ export const spawnPixarBurst = (anchorEl, count = 14, worldId = 'toybox') => {
         );
         anim.onfinish = () => dot.remove();
     }
+};
+
+/**
+ * Mirrors the active world onto <html> while the calling shell is mounted, so
+ * content teleported to <body> (modals, toasts) inherits the same world tokens.
+ */
+export const useWorldOnDocument = (worldRef) => {
+    if (typeof document === 'undefined') {
+        return;
+    }
+
+    const root = document.documentElement;
+
+    watch(
+        worldRef,
+        (worldId) => {
+            const meta = PIXAR_WORLDS.find((w) => w.id === worldId) || PIXAR_WORLDS[0];
+            root.dataset.pixarTheme = meta.id;
+            root.style.colorScheme = meta.isDark ? 'dark' : 'light';
+        },
+        { immediate: true },
+    );
+
+    onBeforeUnmount(() => {
+        delete root.dataset.pixarTheme;
+        root.style.colorScheme = '';
+    });
 };
 
 export function usePixarTheme() {

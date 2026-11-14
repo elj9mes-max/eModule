@@ -2,6 +2,7 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import { useSound } from '@/Services/soundManager';
+import { shouldReduceEffects } from '@/Composables/usePerformanceMode';
 
 defineProps({
     laravelVersion: {
@@ -24,9 +25,7 @@ const {
     toggleMute,
 } = useSound();
 
-const prefersReducedMotion = () =>
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const prefersReducedMotion = shouldReduceEffects;
 
 // Portal state
 const role = ref('student'); // 'student' | 'teacher'
@@ -71,7 +70,7 @@ const WORLD_PRESETS = [
     },
     {
         id: 'luca-coast',
-        label: 'Portorosso Coast',
+        label: 'Riviera Coast',
         swatch: 'linear-gradient(135deg, #FF8E53 0%, #FFE066 50%, #10C7B5 100%)',
         burst: ['#28DEC9', '#FF8342', '#FFD633', '#00B8D4', '#FF5E7E'],
     },
@@ -1124,53 +1123,7 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- Bottom Pixar Sliding Pill Dock & Greeting -->
-            <footer class="webread-footer">
-                <div class="greeting-text" aria-live="polite">
-                    HI {{ role.toUpperCase() }}!
-                </div>
 
-                <div ref="dockRef" class="pixar-dock" role="tablist" aria-label="Portal Role Theme Switcher">
-                    <span class="pixar-dock__indicator" :style="dockIndicatorStyle" aria-hidden="true"></span>
-                    <button
-                        ref="studentTabRef"
-                        type="button"
-                        role="tab"
-                        class="pixar-dock__tab"
-                        :aria-selected="role === 'student'"
-                        @click="(e) => setRole('student', e.currentTarget)"
-                    >
-                        Student World
-                    </button>
-                    <button
-                        ref="teacherTabRef"
-                        type="button"
-                        role="tab"
-                        class="pixar-dock__tab"
-                        :aria-selected="role === 'teacher'"
-                        @click="(e) => setRole('teacher', e.currentTarget)"
-                    >
-                        Teacher Studio
-                    </button>
-                </div>
-
-                <!-- Quick Test Credentials Pill Bar -->
-                <div class="demo-pills-bar">
-                    <span class="demo-pills-label">Quick autofill:</span>
-                    <button type="button" class="demo-pill" @click="(e) => fillDemo('student', e)">
-                        <svg class="demo-pill-svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z" />
-                            <path d="M3.5 9.654V14a1 1 0 00.629.928l5.5 2.2a1 1 0 00.742 0l5.5-2.2A1 1 0 0016.5 14V9.654l-5.318 2.279a2.5 2.5 0 01-1.964 0L3.5 9.654z" />
-                        </svg>
-                        <span>Student Demo</span>
-                    </button>
-                    <button type="button" class="demo-pill" @click="(e) => fillDemo('teacher', e)">
-                        <svg class="demo-pill-svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401z" />
-                        </svg>
-                        <span>Teacher Demo</span>
-                    </button>
-                </div>
-            </footer>
         </main>
 
         <!-- Native Top-Layer Storybook Registration <dialog> -->
