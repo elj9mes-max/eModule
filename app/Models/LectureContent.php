@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\LectureContentType;
 use App\Enums\PaperTheme;
+use App\Models\Concerns\ResolvesPublicFileUrls;
 use Database\Factories\LectureContentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -36,6 +37,8 @@ class LectureContent extends Model
 {
     /** @use HasFactory<LectureContentFactory> */
     use HasFactory;
+
+    use ResolvesPublicFileUrls;
 
     /**
      * The model's default values for attributes.
@@ -85,7 +88,7 @@ class LectureContent extends Model
     public function mediaUrl(): ?string
     {
         if ($this->file_path !== null) {
-            return '/storage/'.ltrim($this->file_path, '/');
+            return $this->publicFileUrl($this->file_path, $this->file_disk);
         }
 
         return $this->external_url;
@@ -97,7 +100,7 @@ class LectureContent extends Model
     public function narrationAudioUrl(): ?string
     {
         if ($this->narration_audio_path !== null) {
-            return '/storage/'.ltrim($this->narration_audio_path, '/');
+            return $this->publicFileUrl($this->narration_audio_path, $this->narration_audio_disk);
         }
 
         return null;

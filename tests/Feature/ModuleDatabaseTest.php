@@ -626,3 +626,36 @@ test('teacher can open the unified quiz studio with existing quizzes and delete 
 
     $this->assertDatabaseMissing('quizzes', ['id' => $quiz->id]);
 });
+
+test('uploaded module banners and lecture media use the bucket url when the public disk is remote', function () {
+    config(['filesystems.disks.public' => [
+        'driver' => 's3',
+        'key' => 'test-key',
+        'secret' => 'test-secret',
+        'region' => 'auto',
+        'bucket' => 'emodule-public',
+        'url' => 'https://bucket.example.com',
+        'endpoint' => 'https://storage.example.com',
+    ]]);
+    Storage::forgetDisk('public');
+
+    $module = Module::factory()->make(['cover_image_path' => 'modules/covers/banner.png']);
+    $content = LectureContent::factory()->make([
+        'file_disk' => 'public',
+        'file_path' => 'lectures/media/picture.png',
+        'narration_audio_disk' => 'public',
+        'narration_audio_path' => 'lectures/narration/page.mp3',
+    ]);
+
+    expect($module->coverImageUrl())->toBe('https://bucket.example.com/modules/covers/banner.png')
+        ->and($content->mediaUrl())->toBe('https://bucket.example.com/lectures/media/picture.png')
+        ->and($content->narrationAudioUrl())->toBe('https://bucket.example.com/lectures/narration/page.mp3');
+});
+
+test('uploaded module banners keep a root-relative storage url on a local public disk', function () {
+    Storage::fake('public');
+
+    $module = Module::factory()->make(['cover_image_path' => 'modules/covers/banner.png']);
+
+    expect($module->coverImageUrl())->toBe('/storage/modules/covers/banner.png');
+});

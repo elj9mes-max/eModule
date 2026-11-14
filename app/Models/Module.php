@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\ModuleStatus;
 use App\Enums\ModuleTheme;
+use App\Models\Concerns\ResolvesPublicFileUrls;
 use Database\Factories\ModuleFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -35,6 +36,8 @@ class Module extends Model
 {
     /** @use HasFactory<ModuleFactory> */
     use HasFactory;
+
+    use ResolvesPublicFileUrls;
 
     /**
      * The model's default values for attributes.
@@ -116,7 +119,7 @@ class Module extends Model
             return null;
         }
 
-        return '/storage/'.ltrim($this->cover_image_path, '/');
+        return $this->publicFileUrl($this->cover_image_path);
     }
 
     /**
