@@ -1511,7 +1511,7 @@ const confettiPieces = Array.from({ length: 38 }, (_, i) => {
             <!-- =========================================================================
                  FLOATING MOBILE THUMB-ZONE QUICK QUEST BAR
                  ========================================================================= -->
-            <div v-if="activeQuestNode" class="mobile-thumb-quest-bar">
+            <!-- <div v-if="activeQuestNode" class="mobile-thumb-quest-bar">
                 <div class="thumb-quest-info" @click="scrollToCurrentStep">
                     <span class="thumb-step-badge">
                         {{ isAllCompleted ? 'DONE' : `STEP ${activeQuestNode.step}` }}
@@ -1531,7 +1531,7 @@ const confettiPieces = Array.from({ length: 38 }, (_, i) => {
                 >
                     <span>{{ isAllCompleted ? 'VAULT' : 'PLAY ▶' }}</span>
                 </button>
-            </div>
+            </div> -->
 
             <!-- =========================================================================
                  QUEST COMPLETION CELEBRATION TOAST
