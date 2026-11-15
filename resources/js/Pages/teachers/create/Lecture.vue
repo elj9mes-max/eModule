@@ -237,7 +237,7 @@ const handleLogout = () => {
                         <!-- Short Description / Summary -->
                         <div class="form-group">
                             <label for="lecture-desc" class="form-label">
-                                <span>Short Objective / Summary</span>
+                                <span>Short Objective / Summary (Optional)</span>
                             </label>
                             <input
                                 id="lecture-desc"
@@ -253,7 +253,7 @@ const handleLogout = () => {
                         <!-- Lecture Body / Rich Text Guide -->
                         <div class="form-group">
                             <label for="lecture-body" class="form-label">
-                                <span>Lecture Body & Teaching Notes</span>
+                                <span>Lecture Body & Teaching Notes (Optional)</span>
                             </label>
                             <textarea
                                 id="lecture-body"

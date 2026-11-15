@@ -478,6 +478,11 @@ html[data-pixar-theme] {
     color: var(--px-ink);
 }
 
+html[data-pixar-theme] :focus-visible {
+    outline: 3px solid var(--px-focus-stroke);
+    outline-offset: 3px;
+}
+
 @media (prefers-reduced-motion: reduce) {
     html[data-pixar-theme] *,
     html[data-pixar-theme] *::before,
@@ -493,11 +498,93 @@ html[data-pixar-theme] {
 [data-pixar-theme="toybox"],
 [data-pixar-theme="luca-coast"] {
     --px-gloss: 1;
+    --px-cartoon-border: #2B3354;
 }
 
 [data-pixar-theme="memory-orb"],
 [data-pixar-theme="marigold"] {
     --px-gloss: 0.3;
+    --px-cartoon-border: rgba(255, 255, 255, 0.38);
+}
+
+/* ==========================================================================
+   SHARED PIXAR CARTOON VIBE CARDS & BOUNCY MOTION PRIMITIVES
+   ========================================================================== */
+
+@keyframes pixarShineSweep {
+    0% {
+        transform: translate3d(-135%, 0, 0) skewX(-24deg);
+        opacity: 0;
+    }
+    30% {
+        opacity: 0.85;
+    }
+    100% {
+        transform: translate3d(245%, 0, 0) skewX(-24deg);
+        opacity: 0;
+    }
+}
+
+@keyframes pixarOrbFloat {
+    0%, 100% {
+        transform: translate3d(0, 0, 0) scale(1);
+    }
+    50% {
+        transform: translate3d(10px, -16px, 0) scale(1.06);
+    }
+}
+
+@keyframes pixarSparkleTwinkle {
+    0%, 100% {
+        transform: scale(0.75) rotate(0deg);
+        opacity: 0.55;
+    }
+    50% {
+        transform: scale(1.18) rotate(18deg);
+        opacity: 1;
+    }
+}
+
+@keyframes pixarToyWiggle {
+    0%, 100% {
+        transform: rotate(0deg) scale(1);
+    }
+    25% {
+        transform: rotate(-7deg) scale(1.1);
+    }
+    75% {
+        transform: rotate(7deg) scale(1.1);
+    }
+}
+
+/* Click-spawned radial memory orb burst particles */
+.pixar-particle {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: var(--size, 10px);
+    height: var(--size, 10px);
+    border-radius: 50%;
+    background: radial-gradient(circle at 32% 32%, #FFFFFF 0%, var(--color, #FFD028) 55%, rgba(var(--px-shadow-rgb), 0.25) 100%);
+    box-shadow: 0 0 12px var(--color, #FFD028);
+    pointer-events: none;
+    z-index: 9999;
+    transform: translate3d(var(--x, 0px), var(--y, 0px), 0) scale(1);
+    animation: pixarParticlePop 680ms var(--px-ease-settle) forwards;
+}
+
+@keyframes pixarParticlePop {
+    0% {
+        opacity: 1;
+        transform: translate3d(var(--x, 0px), var(--y, 0px), 0) scale(0.5);
+    }
+    55% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: translate3d(calc(var(--x, 0px) + var(--dx, 0px)), calc(var(--y, 0px) + var(--dy, -40px)), 0) scale(0.15);
+    }
 }
 
 /* ==========================================================================

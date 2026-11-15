@@ -388,7 +388,7 @@ onMounted(() => {
 <template>
     <div class="reading-journey-wrapper">
         <!-- Neumorphic Ambient Backdrop Background -->
-        <div class="ocean-backdrop">
+        <div class="ocean-backdrop" aria-hidden="true">
             <!-- Animated Ambient Wave Ripples -->
             <div class="wave wave-1"></div>
             <div class="wave wave-2"></div>
@@ -397,6 +397,15 @@ onMounted(() => {
             <!-- Soft Neumorphic Glow Discs -->
             <div class="soft-glow glow-top"></div>
             <div class="soft-glow glow-bottom"></div>
+
+            <!-- Pixar 3D Floating Memory Orbs & Sparkles -->
+            <span class="journey-memory-orb orb-1"></span>
+            <span class="journey-memory-orb orb-2"></span>
+            <span class="journey-memory-orb orb-3"></span>
+            <span class="journey-memory-orb orb-4"></span>
+            <span class="journey-sparkle sp-1">✦</span>
+            <span class="journey-sparkle sp-2">✦</span>
+            <span class="journey-sparkle sp-3">★</span>
         </div>
 
         <!-- 3D Pop-Up Storybook & Character Side Flanking Scenery Wings -->
@@ -532,52 +541,7 @@ onMounted(() => {
         <main class="journey-main-container">
 
             <!-- 1. HEADER BANNER SECTION -->
-            <section class="adventure-hero-banner">
-                <!-- Floating Decorative 3D Badges around Header -->
-                <div class="floating-badge badge-cloud-left" aria-hidden="true">
-                    <svg viewBox="0 0 64 40" class="svg-3d-cloud">
-                        <path d="M16 32h32a12 12 0 0 0 0-24 16 16 0 0 0-31-4A10 10 0 0 0 16 32z" fill="#FFFFFF" filter="url(#cloudShadow)" />
-                        <ellipse cx="28" cy="18" rx="8" ry="4" fill="rgba(255,255,255,0.8)" />
-                    </svg>
-                </div>
 
-                <div class="floating-badge badge-sparkle-top" aria-hidden="true">
-                    <div class="badge-gem">⭐</div>
-                </div>
-
-                <div class="floating-badge badge-lightbulb-right" aria-hidden="true">
-                    <div class="badge-coin">💡</div>
-                </div>
-
-                <div class="floating-badge badge-pencil-left" aria-hidden="true">
-                    <div class="badge-item">✏️</div>
-                </div>
-
-                <div class="floating-badge badge-gear-right" aria-hidden="true">
-                    <div class="badge-gear-spin">⚙️</div>
-                </div>
-
-                <div class="floating-badge badge-bubble-top" aria-hidden="true">
-                    <div class="badge-speech">💬</div>
-                </div>
-
-                <!-- Hero Content -->
-                <div class="hero-text-block">
-                    <div class="banner-pill">
-                        <span class="pulsing-dot"></span>
-                        <span v-if="totalLecturesCount > 0">{{ displayGrade.toUpperCase() }} • {{ totalLecturesCount }} LECTURE{{ totalLecturesCount === 1 ? '' : 'S' }}</span>
-                        <span v-else>{{ displayGrade.toUpperCase() }} • UNCHARTED REALM</span>
-                    </div>
-
-                    <h1 class="hero-chunky-title">
-                        Let's start your reading journey!
-                    </h1>
-
-                    <p class="hero-description">
-                        Weave through mythical archipelagos, explore each reading milestone, and unlock the legendary Golden Pirate Chest!
-                    </p>
-                </div>
-            </section>
 
             <!-- EMPTY STATE: WHEN NO LECTURES IN DATABASE -->
             <div v-if="totalLecturesCount === 0" class="empty-journey-container">
@@ -898,6 +862,9 @@ onMounted(() => {
                 @click.self="showModal = false"
             >
                 <div class="modal-card">
+                    <div class="modal-crest-badge" aria-hidden="true">
+                        <span>{{ selectedStep.icon }}</span>
+                    </div>
                     <button
                         type="button"
                         class="modal-close-btn"
@@ -1191,6 +1158,70 @@ onMounted(() => {
     height: 580px;
     background: radial-gradient(circle, rgba(251, 113, 133, 0.22) 0%, rgba(251, 113, 133, 0) 70%);
 }
+
+/* Pixar 3D Floating Memory Orbs & Sparkles */
+.journey-memory-orb {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: pixarOrbFloat 8s ease-in-out infinite;
+}
+
+.journey-memory-orb.orb-1 {
+    top: 12%;
+    left: 14%;
+    width: 34px;
+    height: 34px;
+    background: radial-gradient(circle at 30% 28%, #FFFFFF 0%, #FFD028 42%, #F59E0B 82%, rgba(217, 119, 6, 0.2) 100%);
+    box-shadow: 0 0 26px rgba(255, 208, 40, 0.65), inset 0 -4px 8px rgba(180, 83, 9, 0.35);
+    animation-duration: 7.5s;
+}
+
+.journey-memory-orb.orb-2 {
+    top: 38%;
+    right: 16%;
+    width: 26px;
+    height: 26px;
+    background: radial-gradient(circle at 30% 28%, #FFFFFF 0%, #3DB2FF 45%, #0284C7 85%, rgba(2, 132, 199, 0.2) 100%);
+    box-shadow: 0 0 22px rgba(61, 178, 255, 0.6), inset 0 -4px 8px rgba(3, 105, 161, 0.35);
+    animation-duration: 9.2s;
+    animation-delay: -2.4s;
+}
+
+.journey-memory-orb.orb-3 {
+    bottom: 28%;
+    left: 18%;
+    width: 28px;
+    height: 28px;
+    background: radial-gradient(circle at 30% 28%, #FFFFFF 0%, #3CE6A6 45%, #059669 85%, rgba(5, 150, 105, 0.2) 100%);
+    box-shadow: 0 0 22px rgba(60, 230, 166, 0.58), inset 0 -4px 8px rgba(4, 120, 87, 0.35);
+    animation-duration: 8.6s;
+    animation-delay: -4.1s;
+}
+
+.journey-memory-orb.orb-4 {
+    bottom: 14%;
+    right: 20%;
+    width: 32px;
+    height: 32px;
+    background: radial-gradient(circle at 30% 28%, #FFFFFF 0%, #FF627A 45%, #E11D48 85%, rgba(225, 29, 72, 0.2) 100%);
+    box-shadow: 0 0 24px rgba(255, 98, 122, 0.58), inset 0 -4px 8px rgba(159, 18, 57, 0.35);
+    animation-duration: 10.4s;
+    animation-delay: -1.3s;
+}
+
+.journey-sparkle {
+    position: absolute;
+    color: var(--px-sparkle-color, #FFF7B2);
+    text-shadow: 0 0 12px rgba(255, 214, 66, 0.85);
+    font-size: 1.35rem;
+    pointer-events: none;
+    animation: pixarSparkleTwinkle 3.4s ease-in-out infinite;
+}
+
+.journey-sparkle.sp-1 { top: 22%; right: 24%; animation-delay: 0.4s; }
+.journey-sparkle.sp-2 { top: 64%; left: 22%; animation-delay: 1.5s; font-size: 1.15rem; }
+.journey-sparkle.sp-3 { bottom: 20%; left: 28%; animation-delay: 2.3s; font-size: 1.25rem; }
 
 /* 3D Flanking Scenery Wings */
 .flank-wing {
@@ -1531,41 +1562,71 @@ onMounted(() => {
     max-width: 680px;
     margin: 0 auto;
     padding: 0 1rem;
+    margin-top: 5rem;
 }
 
 /* Banner */
 .adventure-hero-banner {
     position: relative;
     text-align: center;
-    padding: 2.2rem 1.5rem 1.75rem 1.5rem;
-    background: color-mix(in srgb, var(--px-surface-card) 84%, transparent);
-    backdrop-filter: blur(14px);
-    border-radius: 32px;
-    box-shadow: var(--neu-card-shadow);
-    border: 2.5px solid var(--px-card-border);
-    margin-bottom: 2rem;
+    padding: 2.35rem 1.75rem 1.95rem 1.75rem;
+    background: linear-gradient(165deg, var(--px-surface-card) 0%, color-mix(in srgb, var(--px-tint-info-bg) 60%, var(--px-surface-card)) 55%, color-mix(in srgb, var(--px-tint-warn-bg) 35%, var(--px-surface-card)) 100%);
+    border-radius: 34px;
+    border: 3.5px solid #2B3354;
+    box-shadow:
+        0 10px 0 #2B3354,
+        0 24px 44px -10px rgba(28, 22, 62, 0.22),
+        inset 0 3px 2px var(--px-rim-top),
+        inset 0 -10px 20px rgba(56, 189, 248, 0.14);
+    margin-bottom: 2.25rem;
+    transform: translate3d(0, 0, 0);
+    transition: transform 0.35s var(--spring-bounce), box-shadow 0.35s var(--spring-bounce);
+}
+
+.adventure-hero-banner::before {
+    content: '';
+    position: absolute;
+    top: 5px;
+    left: 24px;
+    right: 24px;
+    height: 22px;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, calc(0.88 * var(--px-gloss, 1))) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+}
+
+.adventure-hero-banner:hover {
+    transform: translate3d(0, -4px, 0) scale(1.01);
+    box-shadow:
+        0 14px 0 #2B3354,
+        0 30px 52px -10px rgba(28, 22, 62, 0.28),
+        inset 0 3px 2px var(--px-rim-top),
+        inset 0 -10px 20px rgba(251, 191, 36, 0.18);
 }
 
 .banner-pill {
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
-    padding: 0.35rem 0.9rem;
-    background: var(--px-tint-info-bg);
-    color: var(--px-tint-info-ink);
+    padding: 0.38rem 0.95rem;
+    background: linear-gradient(180deg, #FFFBEB 0%, #FEF3C7 100%);
+    color: #92400E;
+    border: 2px solid #2B3354;
+    box-shadow: 0 3px 0 #2B3354, inset 0 1px 0 #FFFFFF;
     border-radius: 9999px;
     font-family: var(--font-heading);
-    font-weight: 800;
-    font-size: 0.72rem;
+    font-weight: 900;
+    font-size: 0.74rem;
     letter-spacing: 0.06em;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.85rem;
 }
 
 .pulsing-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #0284c7;
+    background: #10B981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
 }
 
 .hero-chunky-title {
@@ -1592,15 +1653,16 @@ onMounted(() => {
     position: absolute;
     pointer-events: none;
     z-index: 5;
-    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.1));
+    filter: drop-shadow(0 6px 10px rgba(28, 22, 62, 0.18));
+    animation: beaconBob 3.2s ease-in-out infinite alternate;
 }
 
-.badge-cloud-left { top: -24px; left: -20px; width: 64px; }
-.badge-sparkle-top { top: -18px; right: 25%; font-size: 1.8rem; }
-.badge-lightbulb-right { top: -12px; right: -10px; font-size: 1.75rem; }
-.badge-pencil-left { bottom: -14px; left: -8px; font-size: 1.7rem; }
-.badge-gear-right { bottom: -16px; right: -6px; font-size: 1.7rem; }
-.badge-bubble-top { top: 40%; left: -24px; font-size: 1.6rem; }
+.badge-cloud-left { top: -24px; left: -20px; width: 64px; animation-delay: 0.1s; }
+.badge-sparkle-top { top: -18px; right: 25%; font-size: 1.8rem; animation-delay: 0.5s; }
+.badge-lightbulb-right { top: -12px; right: -10px; font-size: 1.75rem; animation-delay: 0.9s; }
+.badge-pencil-left { bottom: -14px; left: -8px; font-size: 1.7rem; animation-delay: 0.3s; }
+.badge-gear-right { bottom: -16px; right: -6px; font-size: 1.7rem; animation-delay: 0.7s; }
+.badge-bubble-top { top: 40%; left: -24px; font-size: 1.6rem; animation-delay: 1.1s; }
 
 /* S-Curve Trail Stage */
 .trail-stage {
@@ -1637,8 +1699,8 @@ onMounted(() => {
 }
 
 @keyframes chestGlowPulse {
-    0% { stroke-width: 12; stroke-opacity: 0.8; }
-    100% { stroke-width: 16; stroke-opacity: 1; }
+    0% { opacity: 0.72; }
+    100% { opacity: 1; }
 }
 
 /* Start Marker */
@@ -1801,17 +1863,18 @@ onMounted(() => {
 
 .btn-completed {
     background: linear-gradient(145deg, #34d399 0%, #059669 100%);
-    box-shadow: var(--btn-green-lip);
+    border-color: #2B3354;
+    box-shadow: 0 7px 0 #2B3354, 0 12px 20px rgba(34, 197, 94, 0.45), inset 0 3px 2px rgba(255, 255, 255, 0.65);
 }
 
 .btn-completed:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 0 #15803d, 0 12px 20px rgba(34, 197, 94, 0.5);
+    transform: translate3d(0, -4px, 0) scale(1.06) rotate(-3deg);
+    box-shadow: 0 10px 0 #2B3354, 0 16px 24px rgba(34, 197, 94, 0.55), inset 0 3px 2px rgba(255, 255, 255, 0.8);
 }
 
 .btn-completed:active {
-    transform: translateY(4px);
-    box-shadow: 0 2px 0 #15803d;
+    transform: translate3d(0, 4px, 0) scaleX(1.06) scaleY(0.92);
+    box-shadow: 0 2px 0 #2B3354;
 }
 
 .badge-icon-check {
@@ -1822,18 +1885,19 @@ onMounted(() => {
 
 .btn-active {
     background: linear-gradient(145deg, #fb7185 0%, #ea580c 100%);
-    box-shadow: var(--btn-coral-lip);
+    border-color: #2B3354;
+    box-shadow: 0 7px 0 #2B3354, 0 12px 22px rgba(234, 88, 12, 0.5), inset 0 3px 2px rgba(255, 255, 255, 0.65);
     animation: activeBounce 2.4s ease-in-out infinite;
 }
 
 .btn-active:hover {
-    transform: translateY(-3px) scale(1.04);
-    box-shadow: 0 9px 0 #c2410c, 0 14px 22px rgba(234, 88, 12, 0.55);
+    transform: translate3d(0, -4px, 0) scale(1.08) rotate(3deg);
+    box-shadow: 0 10px 0 #2B3354, 0 18px 26px rgba(234, 88, 12, 0.6), inset 0 3px 2px rgba(255, 255, 255, 0.85);
 }
 
 .btn-active:active {
-    transform: translateY(4px);
-    box-shadow: 0 2px 0 #c2410c;
+    transform: translate3d(0, 4px, 0) scaleX(1.06) scaleY(0.92);
+    box-shadow: 0 2px 0 #2B3354;
 }
 
 .badge-num-active {
@@ -1924,26 +1988,57 @@ onMounted(() => {
     max-width: 385px;
     width: 100%;
     background: linear-gradient(155deg, var(--px-surface-card) 0%, color-mix(in srgb, var(--px-tint-info-bg) 55%, var(--px-surface-card)) 100%);
-    border-radius: 22px;
-    padding: 1.1rem 1.25rem;
+    border-radius: 26px;
+    padding: 1.2rem 1.35rem;
     box-shadow:
-        0 8px 0 #2B3354,
-        0 14px 28px rgba(29, 36, 64, 0.14),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.95),
-        inset -2px -2px 4px rgba(160, 175, 205, 0.35);
-    border: 3px solid #2B3354;
-    cursor: default;
-    transition: transform 0.25s var(--spring-bounce), box-shadow 0.25s var(--spring-bounce);
+        0 9px 0 #2B3354,
+        0 18px 32px rgba(29, 36, 64, 0.16),
+        inset 0 3px 2px rgba(255, 255, 255, 0.95),
+        inset 0 -6px 14px rgba(160, 175, 205, 0.28);
+    border: 3.5px solid #2B3354;
+    cursor: pointer;
+    transform: translate3d(0, 0, 0);
+    transition: transform 0.32s var(--spring-bounce), box-shadow 0.32s var(--spring-bounce);
     user-select: none;
     pointer-events: auto;
+    overflow: visible;
 }
 
-.speech-bubble-card:hover {
-    transform: translateY(-3px);
+/* Softbox Upper Specular Glaze Crescent */
+.speech-bubble-card::before {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 16px;
+    right: 16px;
+    height: 16px;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, calc(0.85 * var(--px-gloss, 1))) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+    z-index: 2;
+}
+
+.speech-bubble-card.pointer-left:hover {
+    transform: translate3d(0, -6px, 0) rotate(-0.8deg) scale(1.02);
     box-shadow:
-        0 11px 0 #2B3354,
-        0 20px 32px rgba(29, 36, 64, 0.18),
-        inset 2px 2px 4px rgba(255, 255, 255, 1);
+        0 13px 0 #2B3354,
+        0 24px 38px rgba(29, 36, 64, 0.22),
+        inset 0 3px 2px rgba(255, 255, 255, 1);
+}
+
+.speech-bubble-card.pointer-right:hover {
+    transform: translate3d(0, -6px, 0) rotate(0.8deg) scale(1.02);
+    box-shadow:
+        0 13px 0 #2B3354,
+        0 24px 38px rgba(29, 36, 64, 0.22),
+        inset 0 3px 2px rgba(255, 255, 255, 1);
+}
+
+.speech-bubble-card:active {
+    transform: translate3d(0, 3px, 0) scaleX(1.02) scaleY(0.97) !important;
+    box-shadow:
+        0 4px 0 #2B3354,
+        0 8px 16px rgba(29, 36, 64, 0.14);
 }
 
 .speech-bubble-card.elevated {
@@ -1951,8 +2046,8 @@ onMounted(() => {
     background: linear-gradient(155deg, var(--px-surface-card) 0%, color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card)) 60%, var(--px-tint-warn-bg) 100%);
     box-shadow:
         0 10px 0 #2B3354,
-        0 20px 34px rgba(249, 115, 22, 0.25),
-        inset 2px 2px 4px rgba(255, 255, 255, 1);
+        0 22px 36px rgba(249, 115, 22, 0.28),
+        inset 0 3px 2px rgba(255, 255, 255, 1);
 }
 
 .speech-pointer-triangle {
@@ -1962,37 +2057,40 @@ onMounted(() => {
     width: 0;
     height: 0;
     pointer-events: none;
+    filter: drop-shadow(0 3px 0 #2B3354);
 }
 
 .pointer-left .speech-pointer-triangle {
-    left: -12px;
-    border-top: 10px solid transparent;
-    border-bottom: 10px solid transparent;
-    border-right: 12px solid var(--px-card-border);
+    left: -14px;
+    border-top: 11px solid transparent;
+    border-bottom: 11px solid transparent;
+    border-right: 14px solid #2B3354;
 }
 
 .pointer-right .speech-pointer-triangle {
-    right: -12px;
-    border-top: 10px solid transparent;
-    border-bottom: 10px solid transparent;
-    border-left: 12px solid var(--px-card-border);
+    right: -14px;
+    border-top: 11px solid transparent;
+    border-bottom: 11px solid transparent;
+    border-left: 14px solid #2B3354;
 }
 
 .bubble-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.45rem;
+    margin-bottom: 0.5rem;
 }
 
 .step-kicker-pill {
     font-family: var(--font-heading);
     font-size: 0.68rem;
-    font-weight: 800;
+    font-weight: 900;
     letter-spacing: 0.05em;
-    padding: 0.2rem 0.55rem;
-    border-radius: 6px;
+    padding: 0.22rem 0.6rem;
+    border-radius: 9999px;
     text-transform: uppercase;
+    border: 2px solid #2B3354;
+    box-shadow: 0 2px 0 #2B3354, inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .pill-lush-green { background: color-mix(in srgb, var(--px-tint-success-bg) 55%, var(--px-surface-card)); color: var(--px-tint-success-ink); }
@@ -2004,13 +2102,14 @@ onMounted(() => {
 
 .xp-badge {
     font-family: var(--font-heading);
-    font-weight: 800;
+    font-weight: 900;
     font-size: 0.74rem;
-    color: var(--px-tint-warn-ink);
-    background: color-mix(in srgb, var(--px-tint-warn-bg) 55%, var(--px-surface-card));
-    padding: 0.2rem 0.55rem;
+    color: #92400E;
+    background: linear-gradient(180deg, #FEF3C7 0%, #FDE68A 100%);
+    padding: 0.2rem 0.6rem;
     border-radius: 9999px;
-    border: 1px solid var(--px-tint-warn-line);
+    border: 2px solid #2B3354;
+    box-shadow: 0 2.5px 0 #2B3354, inset 0 1px 0 #FFFFFF;
 }
 
 .bubble-title {
@@ -2307,41 +2406,80 @@ onMounted(() => {
     position: fixed;
     inset: 0;
     z-index: 100;
-    background: rgba(15, 23, 42, 0.45);
+    background: rgba(15, 23, 42, 0.55);
     backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 1.25rem;
+    padding: 2.5rem 1.25rem 1.25rem;
 }
 
 .modal-card {
     position: relative;
     width: 100%;
-    max-width: 480px;
-    background: var(--px-surface-card);
-    border-radius: 28px;
-    padding: 2rem;
-    box-shadow: 0 24px 48px rgba(var(--px-shadow-rgb), 0.25);
-    border: 3px solid var(--px-card-border);
+    max-width: 490px;
+    background: linear-gradient(165deg, var(--px-surface-card) 0%, color-mix(in srgb, var(--px-tint-info-bg) 45%, var(--px-surface-card)) 100%);
+    border-radius: 34px;
+    padding: 2.5rem 2rem 2rem;
+    box-shadow:
+        0 14px 0 #2B3354,
+        0 28px 56px rgba(var(--px-shadow-rgb), 0.38),
+        inset 0 3px 2px var(--px-rim-top),
+        inset 0 -8px 18px rgba(56, 189, 248, 0.14);
+    border: 4px solid #2B3354;
+}
+
+.modal-crest-badge {
+    position: absolute;
+    top: -32px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 66px;
+    height: 66px;
+    border-radius: 22px;
+    background: linear-gradient(145deg, #FFE082 0%, #F59E0B 55%, #D97706 100%);
+    border: 3.5px solid #2B3354;
+    box-shadow:
+        0 6px 0 #2B3354,
+        0 12px 24px rgba(217, 119, 6, 0.4),
+        inset 0 2px 2px rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    z-index: 5;
 }
 
 .modal-close-btn {
     position: absolute;
-    top: 1.25rem;
-    right: 1.25rem;
-    width: 36px;
-    height: 36px;
+    top: 1.15rem;
+    right: 1.15rem;
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
-    background: var(--px-surface-soft);
-    border: none;
-    font-size: 1.1rem;
-    font-weight: 800;
-    color: var(--px-ink-muted);
+    background: var(--px-surface-card);
+    border: 3px solid #2B3354;
+    box-shadow: 0 4px 0 #2B3354;
+    font-size: 1.05rem;
+    font-weight: 900;
+    color: var(--px-ink);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce), background 0.2s ease;
+}
+
+.modal-close-btn:hover {
+    transform: translate3d(0, -2px, 0) scale(1.06);
+    box-shadow: 0 6px 0 #2B3354;
+    background: var(--px-tint-danger-bg);
+    color: var(--px-tint-danger-ink);
+}
+
+.modal-close-btn:active {
+    transform: translate3d(0, 2px, 0) scaleX(1.04) scaleY(0.94);
+    box-shadow: 0 1px 0 #2B3354;
 }
 
 .modal-header {
@@ -2428,12 +2566,14 @@ onMounted(() => {
 }
 
 .btn-bubble-manage-content {
+    position: relative;
+    overflow: hidden;
     width: 100%;
-    background: linear-gradient(145deg, #10B981 0%, #059669 100%);
-    border: 2px solid #064E3B;
+    background: linear-gradient(180deg, #34D399 0%, #10B981 48%, #059669 100%);
+    border: 2.5px solid #2B3354;
     color: #FFFFFF;
-    border-radius: 14px;
-    padding: 0.65rem 0.95rem;
+    border-radius: 16px;
+    padding: 0.68rem 0.95rem;
     font-family: var(--font-heading);
     font-weight: 900;
     font-size: 0.82rem;
@@ -2443,55 +2583,66 @@ onMounted(() => {
     align-items: center;
     justify-content: center;
     box-shadow:
-        0 3.5px 0 #064E3B,
-        0 6px 14px rgba(5, 150, 105, 0.3),
-        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.7),
-        inset -1.5px -1.5px 3px rgba(6, 78, 59, 0.35);
-    transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
+        0 4.5px 0 #2B3354,
+        0 8px 16px rgba(5, 150, 105, 0.32),
+        inset 0 2px 1px rgba(255, 255, 255, 0.75),
+        inset 0 -3px 6px rgba(6, 78, 59, 0.3);
+    transform: translate3d(0, 0, 0);
+    transition: transform 0.22s var(--spring-bounce), box-shadow 0.22s var(--spring-bounce);
     user-select: none;
 }
 
+.btn-bubble-manage-content::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 38%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: translate3d(-140%, 0, 0) skewX(-24deg);
+    pointer-events: none;
+}
+
+.btn-bubble-manage-content:hover::after {
+    animation: pixarShineSweep 0.65s ease-out forwards;
+}
+
 .btn-bubble-manage-content:hover {
-    background: linear-gradient(145deg, #34D399 0%, #059669 100%);
-    transform: translateY(-2px);
+    background: linear-gradient(180deg, #6EE7B7 0%, #10B981 50%, #059669 100%);
+    transform: translate3d(0, -3px, 0) scale(1.02);
     box-shadow:
-        0 5.5px 0 #064E3B,
-        0 10px 20px rgba(5, 150, 105, 0.45),
-        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.9);
+        0 7px 0 #2B3354,
+        0 12px 22px rgba(5, 150, 105, 0.45),
+        inset 0 2px 2px rgba(255, 255, 255, 0.9);
 }
 
 .btn-bubble-manage-content:active {
-    transform: translateY(2px);
-    box-shadow: 0 1px 0 #064E3B;
-}
-
-.btn-bubble-manage-content:active {
-    transform: translateY(2px);
-    border-bottom-width: 2px;
-    box-shadow: 0 1px 2px rgba(34, 197, 94, 0.2);
+    transform: translate3d(0, 3px, 0) scaleX(1.04) scaleY(0.94);
+    box-shadow: 0 1.5px 0 #2B3354;
 }
 
 .btn-bubble-quiz {
-    background: linear-gradient(145deg, #f97316 0%, #ea580c 100%);
-    border: 2px solid #9a3412;
+    background: linear-gradient(180deg, #FB923C 0%, #F97316 48%, #EA580C 100%);
+    border: 2.5px solid #2B3354;
     box-shadow:
-        0 3.5px 0 #9a3412,
-        0 6px 14px rgba(234, 88, 12, 0.35),
-        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.7),
-        inset -1.5px -1.5px 3px rgba(154, 52, 18, 0.35);
+        0 4.5px 0 #2B3354,
+        0 8px 16px rgba(234, 88, 12, 0.35),
+        inset 0 2px 1px rgba(255, 255, 255, 0.75),
+        inset 0 -3px 6px rgba(154, 52, 18, 0.3);
 }
 
 .btn-bubble-quiz:hover {
-    background: linear-gradient(145deg, #fb923c 0%, #ea580c 100%);
+    background: linear-gradient(180deg, #FDBA74 0%, #F97316 50%, #EA580C 100%);
     box-shadow:
-        0 5.5px 0 #9a3412,
-        0 10px 20px rgba(234, 88, 12, 0.45),
-        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.9);
+        0 7px 0 #2B3354,
+        0 12px 22px rgba(234, 88, 12, 0.45),
+        inset 0 2px 2px rgba(255, 255, 255, 0.9);
 }
 
 .btn-bubble-quiz:active {
-    transform: translateY(2px);
-    box-shadow: 0 1px 0 #9a3412;
+    transform: translate3d(0, 3px, 0) scaleX(1.04) scaleY(0.94);
+    box-shadow: 0 1.5px 0 #2B3354;
 }
 
 .quiz-count-tag {
@@ -2541,58 +2692,82 @@ onMounted(() => {
 }
 
 .modal-view-quiz-btn {
-    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    background: linear-gradient(180deg, #FB923C 0%, #F97316 48%, #EA580C 100%);
     color: #ffffff;
-    border: none;
+    border: 2.5px solid #2B3354;
     padding: 0.65rem 1.25rem;
-    border-radius: 14px;
+    border-radius: 16px;
     font-family: var(--font-heading);
     font-weight: 900;
     font-size: 0.9rem;
     cursor: pointer;
-    box-shadow: 0 4px 0 #9a3412, 0 8px 14px rgba(234, 88, 12, 0.35);
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 5px 0 #2B3354, 0 10px 18px rgba(234, 88, 12, 0.35), inset 0 2px 1px rgba(255, 255, 255, 0.65);
+    transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
 }
 
 .modal-view-quiz-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 0 #9a3412, 0 10px 18px rgba(234, 88, 12, 0.45);
+    transform: translate3d(0, -3px, 0) scale(1.02);
+    box-shadow: 0 7px 0 #2B3354, 0 14px 22px rgba(234, 88, 12, 0.45), inset 0 2px 1px rgba(255, 255, 255, 0.8);
 }
 
 .modal-view-quiz-btn:active {
-    transform: translateY(2px);
-    box-shadow: 0 1px 0 #9a3412;
+    transform: translate3d(0, 3px, 0) scaleX(1.04) scaleY(0.94);
+    box-shadow: 0 1.5px 0 #2B3354;
 }
 
 .modal-actions-footer {
     display: flex;
     justify-content: flex-end;
     gap: 0.75rem;
+    flex-wrap: wrap;
 }
 
 .modal-secondary-btn {
     background: var(--px-surface-soft);
-    color: var(--px-ink-muted);
-    border: none;
+    color: var(--px-ink);
+    border: 2.5px solid #2B3354;
     padding: 0.65rem 1.25rem;
-    border-radius: 14px;
+    border-radius: 16px;
     font-family: var(--font-heading);
     font-weight: 800;
     font-size: 0.9rem;
     cursor: pointer;
+    box-shadow: 0 4px 0 #2B3354, inset 0 1.5px 1px rgba(255, 255, 255, 0.8);
+    transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
+}
+
+.modal-secondary-btn:hover {
+    transform: translate3d(0, -2px, 0);
+    box-shadow: 0 6px 0 #2B3354;
+}
+
+.modal-secondary-btn:active {
+    transform: translate3d(0, 2px, 0) scaleX(1.04) scaleY(0.94);
+    box-shadow: 0 1.5px 0 #2B3354;
 }
 
 .modal-primary-btn {
-    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    background: linear-gradient(180deg, #34D399 0%, #10B981 48%, #059669 100%);
     color: #ffffff;
-    border: none;
+    border: 2.5px solid #2B3354;
     padding: 0.65rem 1.35rem;
-    border-radius: 14px;
+    border-radius: 16px;
     font-family: var(--font-heading);
     font-weight: 900;
     font-size: 0.9rem;
     cursor: pointer;
-    box-shadow: 0 4px 0 #9a3412, 0 8px 14px rgba(234, 88, 12, 0.35);
+    box-shadow: 0 5px 0 #2B3354, 0 10px 18px rgba(16, 185, 129, 0.35), inset 0 2px 1px rgba(255, 255, 255, 0.7);
+    transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
+}
+
+.modal-primary-btn:hover {
+    transform: translate3d(0, -3px, 0) scale(1.02);
+    box-shadow: 0 7px 0 #2B3354, 0 14px 22px rgba(16, 185, 129, 0.45), inset 0 2px 1px rgba(255, 255, 255, 0.85);
+}
+
+.modal-primary-btn:active {
+    transform: translate3d(0, 3px, 0) scaleX(1.04) scaleY(0.94);
+    box-shadow: 0 1.5px 0 #2B3354;
 }
 
 .modal-review-btn {
@@ -2959,13 +3134,15 @@ onMounted(() => {
     position: relative;
     max-width: 520px;
     width: 100%;
-    background: color-mix(in srgb, var(--px-surface-card) 94%, transparent);
-    backdrop-filter: blur(14px);
-    border-radius: 32px;
+    background: linear-gradient(165deg, var(--px-surface-card) 0%, color-mix(in srgb, var(--px-tint-info-bg) 55%, var(--px-surface-card)) 100%);
+    border-radius: 36px;
     padding: 3rem 2rem;
     text-align: center;
-    box-shadow: var(--neu-card-shadow);
-    border: 3px solid var(--px-card-border);
+    box-shadow:
+        0 12px 0 #2B3354,
+        0 28px 52px rgba(28, 22, 62, 0.22),
+        inset 0 3px 2px var(--px-rim-top);
+    border: 4px solid #2B3354;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -2991,6 +3168,8 @@ onMounted(() => {
     letter-spacing: 0.08em;
     color: var(--px-tint-info-ink);
     background: var(--px-tint-info-bg);
+    border: 2px solid #2B3354;
+    box-shadow: 0 3px 0 #2B3354;
     padding: 0.3rem 0.85rem;
     border-radius: 9999px;
     margin-bottom: 0.85rem;
@@ -3013,27 +3192,27 @@ onMounted(() => {
 }
 
 .btn-3d-create-first-lecture {
-    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-    border: none;
-    border-radius: 18px;
+    background: linear-gradient(180deg, #FB923C 0%, #F97316 48%, #EA580C 100%);
+    border: 3px solid #2B3354;
+    border-radius: 20px;
     padding: 1rem 2rem;
     font-family: var(--font-heading);
     font-weight: 900;
     font-size: 1.05rem;
     color: #ffffff;
-    box-shadow: 0 5px 0 #9a3412, 0 10px 22px rgba(234, 88, 12, 0.4);
+    box-shadow: 0 6px 0 #2B3354, 0 12px 24px rgba(234, 88, 12, 0.4), inset 0 2px 1px rgba(255, 255, 255, 0.7);
     cursor: pointer;
-    transition: all 0.2s var(--spring-bounce);
+    transition: transform 0.22s var(--spring-bounce), box-shadow 0.22s var(--spring-bounce);
 }
 
 .btn-3d-create-first-lecture:hover {
-    transform: translateY(-3px) scale(1.02);
-    box-shadow: 0 8px 0 #9a3412, 0 14px 28px rgba(234, 88, 12, 0.5);
+    transform: translate3d(0, -3px, 0) scale(1.03);
+    box-shadow: 0 9px 0 #2B3354, 0 16px 28px rgba(234, 88, 12, 0.5), inset 0 2px 2px rgba(255, 255, 255, 0.85);
 }
 
 .btn-3d-create-first-lecture:active {
-    transform: translateY(3px);
-    box-shadow: 0 2px 0 #9a3412;
+    transform: translate3d(0, 3px, 0) scaleX(1.04) scaleY(0.94);
+    box-shadow: 0 2px 0 #2B3354;
 }
 
 .empty-action-row {

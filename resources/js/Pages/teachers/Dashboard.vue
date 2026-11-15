@@ -677,17 +677,34 @@ const openModule = (mod) => {
     align-items: center;
     justify-content: center;
     gap: 0.45rem;
-    transition: transform 0.14s var(--spring-bounce, cubic-bezier(0.34, 1.56, 0.64, 1)), box-shadow 0.14s var(--spring-bounce, cubic-bezier(0.34, 1.56, 0.64, 1)), filter 0.14s ease;
+    transition: transform 0.2s var(--spring-bounce, cubic-bezier(0.34, 1.56, 0.64, 1)), box-shadow 0.2s var(--spring-bounce, cubic-bezier(0.34, 1.56, 0.64, 1)), filter 0.14s ease;
     outline: none;
     user-select: none;
     position: relative;
+    overflow: hidden;
+}
+
+.btn-3d::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 38%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: translate3d(-145%, 0, 0) skewX(-24deg);
+    pointer-events: none;
+}
+
+.btn-3d:hover::after {
+    animation: pixarShineSweep 0.65s ease-out forwards;
 }
 
 .btn-3d:active {
-    transform: translateY(4px) !important;
+    transform: translate3d(0, 4px, 0) scaleX(1.04) scaleY(0.94) !important;
     box-shadow:
         0 1px 0 #1D2440,
-        inset 3px 3px 6px rgba(0, 0, 0, 0.22),
+        inset 3px 3px 6px rgba(29, 36, 64, 0.22),
         inset -2px -2px 5px rgba(255, 255, 255, 0.4) !important;
 }
 
@@ -953,18 +970,18 @@ const openModule = (mod) => {
 
 /* Tactile 3D Lift on Hover with Dynamic Shadow Expansion */
 .kingdom-card:hover {
-    transform: translate3d(0, -9px, 0) scale(1.025);
+    transform: translate3d(0, -10px, 0) rotate(-0.8deg) scale(1.028);
     box-shadow:
-        0 14px 0 var(--frame-pedestal),
-        0 24px 38px -4px var(--frame-glow),
-        0 36px 60px -10px var(--frame-ambient),
+        0 15px 0 var(--frame-pedestal),
+        0 26px 40px -4px var(--frame-glow),
+        0 38px 62px -10px var(--frame-ambient),
         inset 0 3px 2px rgba(255, 255, 255, 1),
         inset 0 -8px 16px -4px var(--frame-belly-shadow);
 }
 
 /* Playful Pixar Squash & Stretch on Active Click */
 .kingdom-card:active {
-    transform: translate3d(0, 4px, 0) scale(0.985, 0.975);
+    transform: translate3d(0, 4px, 0) scaleX(1.02) scaleY(0.96);
     box-shadow:
         0 3px 0 var(--frame-pedestal),
         0 8px 16px -2px var(--frame-glow),
@@ -1101,6 +1118,7 @@ const openModule = (mod) => {
     inset: 0;
     pointer-events: none;
     z-index: 4;
+    overflow: hidden;
     background: linear-gradient(
         135deg,
         rgba(255, 255, 255, 0.42) 0%,
@@ -1108,6 +1126,22 @@ const openModule = (mod) => {
         transparent 52%
     );
     transition: opacity 0.3s ease;
+}
+
+.frame-lens-glare::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 45%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.65) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: translate3d(-150%, 0, 0) skewX(-24deg);
+    pointer-events: none;
+}
+
+.kingdom-card:hover .frame-lens-glare::after {
+    animation: pixarShineSweep 0.75s ease-out forwards;
 }
 
 /* Interactive Hover Action Pill */
@@ -1949,8 +1983,25 @@ const openModule = (mod) => {
 .quest-row__gloss {
     position: absolute;
     inset: 0;
+    overflow: hidden;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 38%);
     pointer-events: none;
+}
+
+.quest-row__gloss::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 45%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.62) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: translate3d(-150%, 0, 0) skewX(-24deg);
+    pointer-events: none;
+}
+
+.quest-row:hover .quest-row__gloss::after {
+    animation: pixarShineSweep 0.75s ease-out forwards;
 }
 
 /* 3D icon orb perched on the banner corner */
@@ -2168,7 +2219,7 @@ const openModule = (mod) => {
 }
 
 .quest-btn:not(:disabled):active .quest-btn__face {
-    transform: translateY(-1px) scale(0.98, 0.95);
+    transform: translateY(-1px) scaleX(1.04) scaleY(0.93);
     transition-duration: 0.06s;
 }
 

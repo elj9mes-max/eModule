@@ -348,6 +348,9 @@ const submitGrade = () => {
             <div class="floating-sparkle sp-2">🎯</div>
             <div class="floating-sparkle sp-3">⭐</div>
             <div class="floating-sparkle sp-4">📝</div>
+            <span class="results-memory-orb orb-1"></span>
+            <span class="results-memory-orb orb-2"></span>
+            <span class="results-memory-orb orb-3"></span>
         </div>
 
         <!-- Top Navigation Bar -->
@@ -996,20 +999,56 @@ const submitGrade = () => {
     50% { transform: translateY(-8px) rotate(6deg); }
 }
 
+.results-memory-orb {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: pixarOrbFloat 8.5s ease-in-out infinite;
+}
+
+.results-memory-orb.orb-1 {
+    top: 15%;
+    left: 8%;
+    width: 32px;
+    height: 32px;
+    background: radial-gradient(circle at 30% 28%, #FFFFFF 0%, #FFD028 42%, #F59E0B 82%, rgba(217, 119, 6, 0.2) 100%);
+    box-shadow: 0 0 24px rgba(255, 208, 40, 0.55), inset 0 -4px 8px rgba(180, 83, 9, 0.35);
+}
+
+.results-memory-orb.orb-2 {
+    top: 42%;
+    right: 6%;
+    width: 26px;
+    height: 26px;
+    background: radial-gradient(circle at 30% 28%, #FFFFFF 0%, #3DB2FF 45%, #0284C7 85%, rgba(2, 132, 199, 0.2) 100%);
+    box-shadow: 0 0 20px rgba(61, 178, 255, 0.52), inset 0 -4px 8px rgba(3, 105, 161, 0.35);
+    animation-delay: -2.8s;
+}
+
+.results-memory-orb.orb-3 {
+    bottom: 16%;
+    left: 12%;
+    width: 28px;
+    height: 28px;
+    background: radial-gradient(circle at 30% 28%, #FFFFFF 0%, #3CE6A6 45%, #059669 85%, rgba(5, 150, 105, 0.2) 100%);
+    box-shadow: 0 0 20px rgba(60, 230, 166, 0.5), inset 0 -4px 8px rgba(4, 120, 87, 0.35);
+    animation-delay: -5.1s;
+}
+
 /* Top Navigation Bar: Compact Tactile Toy-Vinyl Header */
 .top-nav-bar {
     position: sticky;
     top: 0;
     z-index: 40;
-    background: rgba(255, 255, 255, 0.92);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(241, 245, 249, 0.94) 100%);
     backdrop-filter: blur(14px);
-    border-bottom: 2.5px solid #CBD5E1;
-    padding: 0.55rem clamp(1rem, 2.5vw, 2.25rem);
+    border-bottom: 3px solid #2B3354;
+    padding: 0.65rem clamp(1rem, 2.5vw, 2.25rem);
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04), 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+    box-shadow: 0 4px 0 rgba(43, 51, 84, 0.14), 0 8px 20px rgba(28, 22, 62, 0.08), inset 0 2px 0 rgba(255, 255, 255, 0.9);
 }
 
 .nav-left, .nav-right {
@@ -1023,28 +1062,28 @@ const submitGrade = () => {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
-    border: 2px solid #CBD5E1;
+    background: linear-gradient(180deg, #FFFFFF 0%, #EFF6FF 100%);
+    border: 2.5px solid #2B3354;
     border-radius: 9999px;
-    padding: 0.38rem 0.95rem;
+    padding: 0.4rem 1rem;
     font-family: 'Fredoka', sans-serif;
-    font-weight: 700;
+    font-weight: 800;
     font-size: 0.84rem;
-    color: #475569;
+    color: #1D2440;
     cursor: pointer;
-    box-shadow: 0 2.5px 0 #94A3B8, 0 4px 8px rgba(15, 23, 42, 0.05);
-    transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.12s, color 0.12s;
+    box-shadow: 0 3.5px 0 #2B3354, 0 6px 12px rgba(29, 36, 64, 0.1), inset 0 1.5px 1px #FFFFFF;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.12s;
 }
 
 .btn-3d-back:hover {
-    transform: translateY(-1.5px);
-    color: #0F172A;
-    box-shadow: 0 4px 0 #94A3B8, 0 6px 12px rgba(15, 23, 42, 0.08);
+    transform: translate3d(0, -2.5px, 0) scale(1.02);
+    color: #1D4ED8;
+    box-shadow: 0 5.5px 0 #2B3354, 0 10px 16px rgba(37, 99, 235, 0.16), inset 0 1.5px 1px #FFFFFF;
 }
 
 .btn-3d-back:active {
-    transform: translateY(1.5px);
-    box-shadow: 0 1px 0 #94A3B8;
+    transform: translate3d(0, 2px, 0) scaleX(1.04) scaleY(0.94);
+    box-shadow: 0 1px 0 #2B3354;
 }
 
 .btn-3d-back:focus-visible,
@@ -1117,27 +1156,29 @@ const submitGrade = () => {
 }
 
 .btn-studio-edit {
-    background: linear-gradient(180deg, #FEF3C7 0%, #FDE68A 100%);
-    border: 2px solid #F59E0B;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, #FFE661 0%, #FFBF0F 55%, #E39900 100%);
+    border: 2.5px solid #2B3354;
     border-radius: 9999px;
-    padding: 0.38rem 0.95rem;
+    padding: 0.4rem 1.05rem;
     font-family: 'Fredoka', sans-serif;
-    font-weight: 800;
+    font-weight: 900;
     font-size: 0.84rem;
-    color: #92400E;
+    color: #261800;
     cursor: pointer;
-    box-shadow: 0 2.5px 0 #D97706, 0 4px 8px rgba(245, 158, 11, 0.18);
-    transition: transform 0.12s, box-shadow 0.12s;
+    box-shadow: 0 3.5px 0 #2B3354, 0 6px 12px rgba(245, 158, 11, 0.28), inset 0 2px 1px rgba(255, 255, 255, 0.85);
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .btn-studio-edit:hover {
-    transform: translateY(-1.5px);
-    box-shadow: 0 4px 0 #D97706, 0 6px 12px rgba(245, 158, 11, 0.25);
+    transform: translate3d(0, -2.5px, 0) scale(1.02);
+    box-shadow: 0 5.5px 0 #2B3354, 0 10px 16px rgba(245, 158, 11, 0.36), inset 0 2px 1px #FFFFFF;
 }
 
 .btn-studio-edit:active {
-    transform: translateY(1.5px);
-    box-shadow: 0 1px 0 #D97706;
+    transform: translate3d(0, 2px, 0) scaleX(1.04) scaleY(0.94);
+    box-shadow: 0 1px 0 #2B3354;
 }
 
 .teacher-chip {
@@ -1181,15 +1222,41 @@ const submitGrade = () => {
 }
 
 .quiz-header-card {
-    background: linear-gradient(180deg, #FFFFFF 0%, #FAFCFF 100%);
-    border: 3px solid #CBD5E1;
-    border-radius: 1.25rem;
-    padding: 1.25rem 1.4rem;
-    box-shadow: 0 5px 0 #CBD5E1, 0 10px 20px rgba(30, 41, 59, 0.04), inset 0 2px 0 rgba(255, 255, 255, 0.9);
+    background: linear-gradient(160deg, #FFFFFF 0%, #F0F7FF 65%, #E0F2FE 100%);
+    border: 3.5px solid #2B3354;
+    border-radius: 1.5rem;
+    padding: 1.35rem 1.5rem;
+    box-shadow:
+        0 8px 0 #2B3354,
+        0 18px 32px rgba(28, 22, 62, 0.14),
+        inset 0 3px 2px rgba(255, 255, 255, 0.95),
+        inset 0 -6px 14px rgba(56, 189, 248, 0.15);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     position: relative;
+    overflow: hidden;
+    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.quiz-header-card::before {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 18px;
+    right: 18px;
+    height: 16px;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+}
+
+.quiz-header-card:hover {
+    transform: translate3d(0, -4px, 0) scale(1.01);
+    box-shadow:
+        0 12px 0 #2B3354,
+        0 24px 40px rgba(28, 22, 62, 0.18),
+        inset 0 3px 2px #FFFFFF;
 }
 
 .kicker-badge-row {
@@ -1299,36 +1366,76 @@ const submitGrade = () => {
 }
 
 .bento-tile {
-    background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
-    border: 3px solid #CBD5E1;
-    border-radius: 1.15rem;
-    padding: 0.95rem 1.15rem;
-    box-shadow: 0 4.5px 0 #CBD5E1, 0 8px 16px rgba(15, 23, 42, 0.03), inset 0 1.5px 0 rgba(255, 255, 255, 0.9);
+    background: linear-gradient(160deg, #FFFFFF 0%, #F8FAFC 65%, #EEF2FF 100%);
+    border: 3px solid #2B3354;
+    border-radius: 1.35rem;
+    padding: 1rem 1.2rem;
+    box-shadow:
+        0 6.5px 0 #2B3354,
+        0 14px 24px rgba(28, 22, 62, 0.12),
+        inset 0 2.5px 2px rgba(255, 255, 255, 0.95),
+        inset 0 -5px 10px rgba(148, 163, 184, 0.18);
     display: flex;
     align-items: center;
-    gap: 0.85rem;
-    transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.12s;
+    gap: 0.9rem;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     position: relative;
     overflow: hidden;
 }
 
+.bento-tile::before {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 14px;
+    right: 14px;
+    height: 12px;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+}
+
+.bento-tile::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 45%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.65) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: translate3d(-150%, 0, 0) skewX(-24deg);
+    pointer-events: none;
+}
+
+.bento-tile:hover::after {
+    animation: pixarShineSweep 0.7s ease-out forwards;
+}
+
 .bento-tile:hover {
-    transform: translateY(-1.5px);
-    box-shadow: 0 6px 0 #94A3B8, 0 10px 20px rgba(15, 23, 42, 0.06);
+    transform: translate3d(0, -5px, 0) rotate(-0.6deg) scale(1.02);
+    box-shadow:
+        0 10px 0 #2B3354,
+        0 20px 30px rgba(28, 22, 62, 0.18),
+        inset 0 2.5px 2px #FFFFFF;
+}
+
+.bento-tile:hover .tile-icon {
+    transform: scale(1.12) rotate(-6deg);
 }
 
 .tile-icon {
     font-size: 1.75rem;
-    width: 2.85rem;
-    height: 2.85rem;
-    background: radial-gradient(circle at 35% 30%, #FFFFFF 0%, #EFF6FF 100%);
-    border: 2px solid #BFDBFE;
-    border-radius: 0.95rem;
+    width: 3rem;
+    height: 3rem;
+    background: radial-gradient(circle at 35% 30%, #FFFFFF 0%, #DBEAFE 100%);
+    border: 2.5px solid #2B3354;
+    border-radius: 1rem;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.8), 0 2px 4px rgba(37, 99, 235, 0.08);
+    box-shadow: 0 3px 0 #2B3354, inset 0 2px 3px rgba(255, 255, 255, 0.9);
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .tile-content {
@@ -1509,27 +1616,33 @@ const submitGrade = () => {
 }
 
 .student-submission-row {
-    background: #FFFFFF;
-    border: 2.5px solid #CBD5E1;
-    border-radius: 1.15rem;
-    padding: 0.85rem 1.25rem;
+    background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+    border: 3px solid #2B3354;
+    border-radius: 1.35rem;
+    padding: 0.95rem 1.35rem;
     display: grid;
     grid-template-columns: minmax(220px, 1.8fr) minmax(160px, 1.2fr) minmax(190px, 1.3fr) auto;
     align-items: center;
     gap: 1rem;
-    box-shadow: 0 3.5px 0 #CBD5E1, 0 6px 12px rgba(15, 23, 42, 0.02);
-    transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.12s;
+    box-shadow:
+        0 5.5px 0 #2B3354,
+        0 12px 22px rgba(28, 22, 62, 0.08),
+        inset 0 2px 1px rgba(255, 255, 255, 0.95);
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .student-submission-row:hover {
-    transform: translateY(-1.5px);
-    box-shadow: 0 5px 0 #94A3B8, 0 8px 16px rgba(15, 23, 42, 0.05);
+    transform: translate3d(0, -3px, 0) scale(1.006);
+    box-shadow:
+        0 8.5px 0 #2B3354,
+        0 16px 28px rgba(28, 22, 62, 0.14),
+        inset 0 2px 1px #FFFFFF;
 }
 
 .student-submission-row.row-is-pending {
-    border-color: #FCD34D;
-    background: linear-gradient(180deg, #FFFDF5 0%, #FEFCE8 100%);
-    box-shadow: 0 4px 0 #F59E0B, 0 8px 16px rgba(245, 158, 11, 0.1);
+    border-color: #2B3354;
+    background: linear-gradient(160deg, #FFFDF5 0%, #FEF3C7 100%);
+    box-shadow: 0 6px 0 #2B3354, 0 12px 24px rgba(245, 158, 11, 0.18), inset 0 2px 1px #FFFFFF;
 }
 
 .col-student-info {
@@ -1670,51 +1783,52 @@ const submitGrade = () => {
 }
 
 .btn-grade-trigger {
-    border: none;
+    position: relative;
+    overflow: hidden;
+    border: 2.5px solid #2B3354;
     border-radius: 9999px;
-    padding: 0.48rem 1.15rem;
+    padding: 0.5rem 1.2rem;
     font-family: 'Fredoka', sans-serif;
-    font-weight: 800;
+    font-weight: 900;
     font-size: 0.84rem;
     cursor: pointer;
-    transition: transform 0.12s, box-shadow 0.12s;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
     white-space: nowrap;
 }
 
 .btn-must-grade {
-    background: linear-gradient(180deg, #FBBF24 0%, #D97706 100%);
-    color: #FFFFFF;
-    box-shadow: 0 3px 0 #92400E, 0 6px 12px rgba(245, 158, 11, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4);
-    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+    background: linear-gradient(180deg, #FFE661 0%, #F59E0B 50%, #D97706 100%);
+    color: #261800;
+    box-shadow: 0 4px 0 #2B3354, 0 8px 14px rgba(245, 158, 11, 0.32), inset 0 2px 1px rgba(255, 255, 255, 0.8);
 }
 
 .btn-must-grade:hover {
-    transform: translateY(-1.5px);
-    box-shadow: 0 4.5px 0 #92400E, 0 8px 16px rgba(245, 158, 11, 0.38);
+    transform: translate3d(0, -2.5px, 0) scale(1.03);
+    box-shadow: 0 6px 0 #2B3354, 0 12px 18px rgba(245, 158, 11, 0.42), inset 0 2px 1px #FFFFFF;
 }
 
 .btn-must-grade:active {
-    transform: translateY(1.5px);
-    box-shadow: 0 1px 0 #92400E;
+    transform: translate3d(0, 2.5px, 0) scaleX(1.04) scaleY(0.94);
+    box-shadow: 0 1px 0 #2B3354;
 }
 
 .btn-view-answers {
-    background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
-    border: 2px solid #CBD5E1;
-    color: #334155;
-    box-shadow: 0 2.5px 0 #CBD5E1, 0 4px 8px rgba(15, 23, 42, 0.04);
+    background: linear-gradient(180deg, #FFFFFF 0%, #EFF6FF 100%);
+    border: 2.5px solid #2B3354;
+    color: #1D2440;
+    box-shadow: 0 3.5px 0 #2B3354, 0 6px 10px rgba(28, 22, 62, 0.08), inset 0 1.5px 1px #FFFFFF;
 }
 
 .btn-view-answers:hover {
-    transform: translateY(-1.5px);
-    background: #F8FAFC;
-    color: #0F172A;
-    box-shadow: 0 4px 0 #CBD5E1;
+    transform: translate3d(0, -2.5px, 0) scale(1.02);
+    background: #EFF6FF;
+    color: #1D4ED8;
+    box-shadow: 0 5.5px 0 #2B3354, 0 10px 16px rgba(37, 99, 235, 0.15);
 }
 
 .btn-view-answers:active {
-    transform: translateY(1.5px);
-    box-shadow: 0 1px 0 #CBD5E1;
+    transform: translate3d(0, 2px, 0) scaleX(1.04) scaleY(0.94);
+    box-shadow: 0 1px 0 #2B3354;
 }
 
 /* Empty State */
@@ -1842,21 +1956,21 @@ const submitGrade = () => {
 
 .blueprint-q-card {
     background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
-    border: 2px solid #CBD5E1;
-    border-radius: 1.15rem;
-    padding: 1.15rem;
+    border: 3px solid #2B3354;
+    border-radius: 1.35rem;
+    padding: 1.25rem;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     min-height: 100%;
     box-sizing: border-box;
-    box-shadow: 0 3px 0 #CBD5E1, 0 4px 8px rgba(15, 23, 42, 0.02);
-    transition: transform 0.12s, box-shadow 0.12s;
+    box-shadow: 0 6px 0 #2B3354, 0 12px 22px rgba(28, 22, 62, 0.08), inset 0 2px 1px #FFFFFF;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .blueprint-q-card:hover {
-    transform: translateY(-1.5px);
-    box-shadow: 0 5px 0 #94A3B8, 0 8px 14px rgba(15, 23, 42, 0.05);
+    transform: translate3d(0, -4px, 0) rotate(-0.4deg) scale(1.012);
+    box-shadow: 0 9px 0 #2B3354, 0 18px 28px rgba(28, 22, 62, 0.14), inset 0 2px 1px #FFFFFF;
 }
 
 .q-card-head {
@@ -2027,16 +2141,16 @@ const submitGrade = () => {
 
 .grading-modal-card {
     background: #FFFFFF;
-    border: 3.5px solid #3B82F6;
-    border-radius: 1.5rem;
-    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.28), 0 6px 0 #1D4ED8;
+    border: 4px solid #2B3354;
+    border-radius: 1.85rem;
+    box-shadow: 0 14px 0 #2B3354, 0 28px 56px rgba(15, 23, 42, 0.35), inset 0 3px 2px #FFFFFF;
     width: 100%;
     max-inline-size: min(92vw, 860px);
     max-height: 88vh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    animation: popModal 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    animation: popModal 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @keyframes popModal {
@@ -2457,28 +2571,28 @@ const submitGrade = () => {
 }
 
 .btn-save-grade-action {
-    border: none;
+    border: 2.5px solid #2B3354;
     background: linear-gradient(180deg, #4ADE80 0%, #16A34A 100%);
     border-radius: 9999px;
-    padding: 0.55rem 1.35rem;
+    padding: 0.55rem 1.4rem;
     font-family: 'Fredoka', sans-serif;
-    font-weight: 800;
+    font-weight: 900;
     font-size: 0.9rem;
     color: #FFFFFF;
     cursor: pointer;
-    box-shadow: 0 3px 0 #15803D, 0 6px 14px rgba(34, 197, 94, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4);
-    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
-    transition: transform 0.12s, box-shadow 0.12s;
+    box-shadow: 0 4px 0 #2B3354, 0 8px 16px rgba(34, 197, 94, 0.32), inset 0 2px 1px rgba(255, 255, 255, 0.55);
+    text-shadow: 0 1px 1px rgba(28, 22, 62, 0.25);
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .btn-save-grade-action:hover:not(:disabled) {
-    transform: translateY(-1.5px);
-    box-shadow: 0 4.5px 0 #15803D, 0 8px 16px rgba(34, 197, 94, 0.38);
+    transform: translate3d(0, -2.5px, 0) scale(1.02);
+    box-shadow: 0 6px 0 #2B3354, 0 12px 20px rgba(34, 197, 94, 0.42), inset 0 2px 1px rgba(255, 255, 255, 0.75);
 }
 
 .btn-save-grade-action:active:not(:disabled) {
-    transform: translateY(1.5px);
-    box-shadow: 0 1px 0 #15803D;
+    transform: translate3d(0, 2.5px, 0) scaleX(1.04) scaleY(0.94);
+    box-shadow: 0 1px 0 #2B3354;
 }
 
 .btn-save-grade-action:disabled {

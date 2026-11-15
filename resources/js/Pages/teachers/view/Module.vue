@@ -902,15 +902,31 @@ const copyJoinCode = async () => {
 }
 
 .btn-nav-create:hover {
-    transform: translate3d(0, -2px, 0) scale(1.02);
+    transform: translate3d(0, -3px, 0) scale(1.03);
     box-shadow:
-        0 6.5px 0 #8C250E,
-        0 14px 26px rgba(255, 107, 74, 0.48),
+        0 7.5px 0 #8C250E,
+        0 16px 28px rgba(255, 107, 74, 0.52),
         inset 0 2px 2px rgba(255, 255, 255, 0.9);
 }
 
+.btn-nav-create::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 38%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: translate3d(-140%, 0, 0) skewX(-24deg);
+    pointer-events: none;
+}
+
+.btn-nav-create:hover::after {
+    animation: pixarShineSweep 0.65s ease-out forwards;
+}
+
 .btn-nav-create:active {
-    transform: translate3d(0, 3px, 0) scaleX(1.03) scaleY(0.95);
+    transform: translate3d(0, 3px, 0) scaleX(1.04) scaleY(0.94);
     box-shadow:
         0 1.5px 0 #8C250E,
         inset 0 2px 4px rgba(140, 37, 14, 0.5);
@@ -1162,6 +1178,7 @@ const copyJoinCode = async () => {
 
 .milestone-choice-card {
     position: relative;
+    overflow: hidden;
     border: 3.5px solid var(--game-border);
     border-radius: 28px;
     padding: 1.85rem 1.5rem;
@@ -1172,12 +1189,12 @@ const copyJoinCode = async () => {
     cursor: pointer;
     user-select: none;
     box-shadow:
-        0 8px 0 var(--game-border),
-        0 16px 30px rgba(29, 36, 64, 0.14),
-        inset 0 2.5px 2px rgba(255, 255, 255, 1),
-        inset 0 -4px 8px rgba(160, 175, 210, 0.35);
+        0 9px 0 var(--game-border),
+        0 18px 34px rgba(29, 36, 64, 0.16),
+        inset 0 3px 2px rgba(255, 255, 255, 1),
+        inset 0 -5px 10px rgba(160, 175, 210, 0.35);
     transform: translate3d(0, 0, 0);
-    transition: transform 0.28s var(--spring-bounce), box-shadow 0.28s var(--spring-bounce);
+    transition: transform 0.3s var(--spring-bounce), box-shadow 0.3s var(--spring-bounce);
 }
 
 .milestone-choice-card::before {
@@ -1186,20 +1203,46 @@ const copyJoinCode = async () => {
     inset: 3px 10px auto 10px;
     height: 38%;
     border-radius: 24px 24px 60px 60px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 100%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0) 100%);
     pointer-events: none;
+    z-index: 1;
 }
 
-.milestone-choice-card:hover {
-    transform: translate3d(0, -6px, 0) scale(1.02);
+.milestone-choice-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 42%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.65) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: translate3d(-150%, 0, 0) skewX(-24deg);
+    pointer-events: none;
+    z-index: 2;
+}
+
+.milestone-choice-card:hover::after {
+    animation: pixarShineSweep 0.75s ease-out forwards;
+}
+
+.milestone-choice-card.card-lecture:hover {
+    transform: translate3d(0, -8px, 0) rotate(-1deg) scale(1.025);
     box-shadow:
-        0 14px 0 var(--game-border),
-        0 24px 42px rgba(29, 36, 64, 0.2),
-        inset 0 2.5px 2px rgba(255, 255, 255, 1);
+        0 15px 0 var(--game-border),
+        0 26px 46px rgba(16, 185, 129, 0.24),
+        inset 0 3px 2px rgba(255, 255, 255, 1);
+}
+
+.milestone-choice-card.card-quiz:hover {
+    transform: translate3d(0, -8px, 0) rotate(1deg) scale(1.025);
+    box-shadow:
+        0 15px 0 var(--game-border),
+        0 26px 46px rgba(37, 99, 235, 0.24),
+        inset 0 3px 2px rgba(255, 255, 255, 1);
 }
 
 .milestone-choice-card:active {
-    transform: translate3d(0, 2px, 0) scale(0.985);
+    transform: translate3d(0, 3px, 0) scaleX(1.03) scaleY(0.95) !important;
     box-shadow:
         0 3px 0 var(--game-border),
         inset 0 2px 4px rgba(160, 175, 210, 0.45);
@@ -1396,6 +1439,7 @@ const copyJoinCode = async () => {
 
 .quiz-type-card {
     position: relative;
+    overflow: hidden;
     border: 3px solid var(--game-border);
     border-radius: 24px;
     padding: 1.25rem 1.15rem;
@@ -1404,12 +1448,12 @@ const copyJoinCode = async () => {
     cursor: pointer;
     user-select: none;
     box-shadow:
-        0 5px 0 var(--game-border),
-        0 10px 20px rgba(29, 36, 64, 0.1),
-        inset 0 2px 2px rgba(255, 255, 255, 1),
-        inset 0 -2px 4px rgba(160, 175, 210, 0.35);
+        0 6px 0 var(--game-border),
+        0 12px 22px rgba(29, 36, 64, 0.12),
+        inset 0 2.5px 2px rgba(255, 255, 255, 1),
+        inset 0 -3px 6px rgba(160, 175, 210, 0.35);
     transform: translate3d(0, 0, 0);
-    transition: transform 0.25s var(--spring-bounce), box-shadow 0.25s var(--spring-bounce), border-color 0.2s ease;
+    transition: transform 0.28s var(--spring-bounce), box-shadow 0.28s var(--spring-bounce), border-color 0.2s ease;
 }
 
 .quiz-type-card::before {
@@ -1418,16 +1462,37 @@ const copyJoinCode = async () => {
     inset: 2px 6px auto 6px;
     height: 32%;
     border-radius: 20px 20px 40px 40px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0) 100%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0) 100%);
     pointer-events: none;
 }
 
+.quiz-type-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 45%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.65) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: translate3d(-150%, 0, 0) skewX(-24deg);
+    pointer-events: none;
+}
+
+.quiz-type-card:hover::after {
+    animation: pixarShineSweep 0.7s ease-out forwards;
+}
+
 .quiz-type-card:hover {
-    transform: translate3d(0, -4px, 0) scale(1.02);
+    transform: translate3d(0, -6px, 0) rotate(-0.8deg) scale(1.025);
     box-shadow:
-        0 9px 0 var(--game-border),
-        0 18px 28px rgba(29, 36, 64, 0.16),
-        inset 0 2px 2px rgba(255, 255, 255, 1);
+        0 11px 0 var(--game-border),
+        0 20px 30px rgba(29, 36, 64, 0.18),
+        inset 0 2.5px 2px rgba(255, 255, 255, 1);
+}
+
+.quiz-type-card:active {
+    transform: translate3d(0, 2px, 0) scaleX(1.03) scaleY(0.95);
+    box-shadow: 0 2px 0 var(--game-border);
 }
 
 .quiz-type-card.is-selected {

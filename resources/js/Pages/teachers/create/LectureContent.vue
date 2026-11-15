@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { defineWord, generateLectureAssist } from '@/Services/geminiAi.js';
 import { useSaveQueue } from '@/Composables/useSaveQueue.js';
 import { DEFAULT_PAPER_THEME_ID, findPaperTheme, paperThemes } from '@/Services/paperThemes.js';
+import LagoonPaperBackdrop from '@/Components/LagoonPaperBackdrop.vue';
 
 const props = defineProps({
     user: {
@@ -1810,12 +1811,19 @@ onBeforeUnmount(() => {
                         :key="pt.id"
                         type="button"
                         class="paper-theme-chip"
-                        :class="{ 'is-active': activePaperTheme.id === pt.id }"
-                        :style="{ backgroundColor: pt.bg, borderColor: pt.border }"
+                        :class="{
+                            'is-active': activePaperTheme.id === pt.id,
+                            'is-graphic-chip': Boolean(pt.graphic),
+                        }"
+                        :style="{
+                            background: pt.chipGradient || pt.bg,
+                            borderColor: pt.border,
+                            color: pt.text,
+                        }"
                         :title="pt.label"
                         @click="form.paper_theme = pt.id"
                     >
-                        {{ pt.label.split(' ')[0] }}
+                        <span v-if="pt.icon" aria-hidden="true">{{ pt.icon }} </span>{{ pt.label.split(' ')[0] }}
                     </button>
                 </div>
             </div>
@@ -2198,7 +2206,13 @@ onBeforeUnmount(() => {
                     <div
                         v-if="viewMode === 'canvas'"
                         class="paper-artboard-sheet"
-                        :class="{ 'paper-is-lined': activePaperTheme.lined }"
+                        :class="[
+                            `paper-theme-${activePaperTheme.id}`,
+                            {
+                                'paper-is-lined': activePaperTheme.lined,
+                                'paper-has-graphic': Boolean(activePaperTheme.graphic),
+                            },
+                        ]"
                         :style="{
                             backgroundColor: activePaperTheme.bg,
                             color: activePaperTheme.text,
@@ -2210,6 +2224,11 @@ onBeforeUnmount(() => {
                         @dragleave.prevent="isDraggingFile = false"
                         @drop.prevent="handleFileDrop"
                     >
+                        <!-- Pixar Volumetric Graphic Backdrop for Story, Forest & Lagoon Paper Themes -->
+                        <LagoonPaperBackdrop
+                            v-if="activePaperTheme.graphic"
+                            :theme="activePaperTheme.graphic"
+                        />
                         <!-- Top Document Metadata Ribbon inside the Sheet -->
                         <div class="sheet-top-meta-bar">
                             <span class="sheet-type-chip">
@@ -2389,9 +2408,20 @@ onBeforeUnmount(() => {
 
                         <div
                             class="device-screen-body"
-                            :class="{ 'paper-is-lined': activePaperTheme.lined }"
+                            :class="[
+                                `paper-theme-${activePaperTheme.id}`,
+                                {
+                                    'paper-is-lined': activePaperTheme.lined,
+                                    'paper-has-graphic': Boolean(activePaperTheme.graphic),
+                                },
+                            ]"
                             :style="{ backgroundColor: activePaperTheme.bg, color: activePaperTheme.text }"
                         >
+                            <LagoonPaperBackdrop
+                                v-if="activePaperTheme.graphic"
+                                :theme="activePaperTheme.graphic"
+                                compact
+                            />
                             <span class="preview-kicker-pill">
                                 LIVE STUDENT VIEW • PAGE #{{ activeEditingPageIndex }}
                             </span>
@@ -3126,14 +3156,28 @@ onBeforeUnmount(() => {
 }
 
 .paper-theme-chip {
-    padding: 0.2rem 0.48rem;
-    border-radius: 6px;
+    padding: 0.2rem 0.52rem;
+    border-radius: 7px;
     border: 1.5px solid #CBD5E1;
     font-family: var(--font-heading);
     font-size: 0.66rem;
     font-weight: 700;
     color: #334155;
     cursor: pointer;
+    transition: transform 0.16s var(--spring-bounce), box-shadow 0.16s ease;
+}
+
+.paper-theme-chip:hover {
+    transform: translate3d(0, -1px, 0);
+}
+
+.paper-theme-chip:active {
+    transform: translate3d(0, 1px, 0) scaleX(1.035) scaleY(0.95);
+}
+
+.paper-theme-chip.is-lagoon-chip {
+    border-color: #38BDF8;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.85);
 }
 
 .paper-theme-chip.is-active {
@@ -3669,6 +3713,9 @@ onBeforeUnmount(() => {
 }
 
 .paper-artboard-sheet {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
     width: 100%;
     max-width: 820px;
     min-height: 680px;
@@ -3681,7 +3728,152 @@ onBeforeUnmount(() => {
     display: flex;
     flex-direction: column;
     gap: 0.95rem;
-    transition: background-color 0.25s ease, border-color 0.25s ease, transform 0.2s ease;
+    transition: background-color 0.25s ease, border-color 0.25s ease, transform 0.2s ease, box-shadow 0.25s ease;
+}
+
+.paper-artboard-sheet > :not(.pixar-lagoon-paper-backdrop) {
+    position: relative;
+    z-index: 2;
+}
+
+/* Pixar Volumetric Graphic Paper Canvases (Lagoon, Forest & Story) */
+.paper-artboard-sheet.paper-has-graphic {
+    padding-bottom: 6.5rem;
+}
+
+.paper-artboard-sheet.paper-has-graphic .sheet-top-meta-bar {
+    backdrop-filter: blur(6px);
+    padding: 0.5rem 0.85rem;
+    border-radius: 14px;
+}
+
+.paper-artboard-sheet.paper-has-graphic .sheet-title-field-wrap {
+    backdrop-filter: blur(4px);
+    padding: 0.35rem 0.85rem;
+    border-radius: 14px;
+}
+
+.paper-artboard-sheet.paper-has-graphic .sheet-document-body-wrap {
+    backdrop-filter: blur(4px);
+    border-radius: 18px;
+    padding: 1rem 1.25rem;
+}
+
+/* 1. Lagoon Breeze (sky) */
+.paper-artboard-sheet.paper-theme-sky {
+    border: 2.5px solid #38BDF8;
+    box-shadow:
+        0 10px 0 #0284C7,
+        0 24px 52px rgba(3, 105, 161, 0.24),
+        inset 0 2px 3px rgba(255, 255, 255, 0.85);
+}
+
+.paper-artboard-sheet.paper-theme-sky .sheet-top-meta-bar {
+    background: rgba(255, 255, 255, 0.68);
+    border: 1.5px solid rgba(125, 211, 252, 0.78);
+    box-shadow: 0 3px 10px rgba(2, 132, 199, 0.08);
+}
+
+.paper-artboard-sheet.paper-theme-sky .sheet-type-chip {
+    background: linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 100%);
+    color: #0369A1;
+    border: 1px solid #7DD3FC;
+}
+
+.paper-artboard-sheet.paper-theme-sky .sheet-title-field-wrap {
+    background: rgba(255, 255, 255, 0.62);
+    border: 1.5px solid rgba(125, 211, 252, 0.65);
+}
+
+.paper-artboard-sheet.paper-theme-sky .sheet-document-body-wrap {
+    background: rgba(240, 253, 255, 0.72);
+    border: 1.5px solid rgba(125, 211, 252, 0.72);
+    box-shadow:
+        inset 0 2px 3px rgba(255, 255, 255, 0.9),
+        0 8px 24px rgba(3, 105, 161, 0.08);
+}
+
+.paper-artboard-sheet.paper-theme-sky .wysiwyg-story-surface:empty::before {
+    color: #0369A1;
+    opacity: 0.68;
+}
+
+/* 2. Forest Scroll (emerald) */
+.paper-artboard-sheet.paper-theme-emerald {
+    border: 2.5px solid #34D399;
+    box-shadow:
+        0 10px 0 #059669,
+        0 24px 52px rgba(6, 78, 59, 0.22),
+        inset 0 2px 3px rgba(255, 255, 255, 0.85);
+}
+
+.paper-artboard-sheet.paper-theme-emerald .sheet-top-meta-bar {
+    background: rgba(255, 255, 255, 0.68);
+    border: 1.5px solid rgba(110, 231, 183, 0.82);
+    box-shadow: 0 3px 10px rgba(5, 150, 105, 0.08);
+}
+
+.paper-artboard-sheet.paper-theme-emerald .sheet-type-chip {
+    background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);
+    color: #065F46;
+    border: 1px solid #6EE7B7;
+}
+
+.paper-artboard-sheet.paper-theme-emerald .sheet-title-field-wrap {
+    background: rgba(255, 255, 255, 0.64);
+    border: 1.5px solid rgba(110, 231, 183, 0.7);
+}
+
+.paper-artboard-sheet.paper-theme-emerald .sheet-document-body-wrap {
+    background: rgba(240, 253, 244, 0.74);
+    border: 1.5px solid rgba(110, 231, 183, 0.75);
+    box-shadow:
+        inset 0 2px 3px rgba(255, 255, 255, 0.9),
+        0 8px 24px rgba(6, 78, 59, 0.08);
+}
+
+.paper-artboard-sheet.paper-theme-emerald .wysiwyg-story-surface:empty::before {
+    color: #065F46;
+    opacity: 0.68;
+}
+
+/* 3. Story Parchment (parchment) */
+.paper-artboard-sheet.paper-theme-parchment {
+    border: 2.5px solid #FBBF24;
+    box-shadow:
+        0 10px 0 #D97706,
+        0 24px 52px rgba(146, 64, 14, 0.22),
+        inset 0 2px 3px rgba(255, 255, 255, 0.9);
+}
+
+.paper-artboard-sheet.paper-theme-parchment .sheet-top-meta-bar {
+    background: rgba(255, 253, 245, 0.74);
+    border: 1.5px solid rgba(251, 191, 36, 0.78);
+    box-shadow: 0 3px 10px rgba(180, 83, 9, 0.08);
+}
+
+.paper-artboard-sheet.paper-theme-parchment .sheet-type-chip {
+    background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+    color: #92400E;
+    border: 1px solid #FBBF24;
+}
+
+.paper-artboard-sheet.paper-theme-parchment .sheet-title-field-wrap {
+    background: rgba(255, 253, 245, 0.68);
+    border: 1.5px solid rgba(251, 191, 36, 0.68);
+}
+
+.paper-artboard-sheet.paper-theme-parchment .sheet-document-body-wrap {
+    background: rgba(255, 253, 245, 0.76);
+    border: 1.5px solid rgba(251, 191, 36, 0.72);
+    box-shadow:
+        inset 0 2px 3px rgba(255, 255, 255, 0.92),
+        0 8px 24px rgba(146, 64, 14, 0.08);
+}
+
+.paper-artboard-sheet.paper-theme-parchment .wysiwyg-story-surface:empty::before {
+    color: #92400E;
+    opacity: 0.68;
 }
 
 .paper-artboard-sheet.paper-is-lined,
@@ -4048,6 +4240,9 @@ onBeforeUnmount(() => {
 }
 
 .device-screen-body {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
     flex: 1 1 auto;
     background: #FFFFFF;
     transition: background-color 0.25s ease;
@@ -4056,6 +4251,32 @@ onBeforeUnmount(() => {
     display: flex;
     flex-direction: column;
     gap: 0.65rem;
+}
+
+.device-screen-body > :not(.pixar-lagoon-paper-backdrop) {
+    position: relative;
+    z-index: 2;
+}
+
+.device-screen-body.paper-theme-sky .preview-rich-story-card {
+    background: rgba(240, 253, 255, 0.74);
+    backdrop-filter: blur(4px);
+    border-color: rgba(56, 189, 248, 0.65);
+    color: #0C4A6E;
+}
+
+.device-screen-body.paper-theme-emerald .preview-rich-story-card {
+    background: rgba(240, 253, 244, 0.74);
+    backdrop-filter: blur(4px);
+    border-color: rgba(52, 211, 153, 0.65);
+    color: #064E3B;
+}
+
+.device-screen-body.paper-theme-parchment .preview-rich-story-card {
+    background: rgba(255, 253, 245, 0.78);
+    backdrop-filter: blur(4px);
+    border-color: rgba(251, 191, 36, 0.68);
+    color: #292524;
 }
 
 .preview-kicker-pill {

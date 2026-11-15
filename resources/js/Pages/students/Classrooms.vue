@@ -561,6 +561,14 @@ onBeforeUnmount(() => cancelAnimationFrame(tiltFrame));
     .classroom-card:hover .card-enter-face {
         transform: translateY(-7px);
     }
+
+    .classroom-card:hover .card-medallion {
+        transform: translateZ(42px) scale(1.08) rotate(-4deg);
+    }
+
+    .classroom-card:hover .card-scene::after {
+        animation: pixarShineSweep 0.75s ease-out forwards;
+    }
 }
 
 .classroom-card:active {
@@ -569,7 +577,7 @@ onBeforeUnmount(() => cancelAnimationFrame(tiltFrame));
 }
 
 .classroom-card:active .card-enter-face {
-    transform: translateY(-1px) scale(0.98, 0.94);
+    transform: translateY(-1px) scaleX(1.04) scaleY(0.93);
     transition-duration: 0.06s;
 }
 
@@ -605,6 +613,19 @@ onBeforeUnmount(() => cancelAnimationFrame(tiltFrame));
     box-shadow:
         inset 0 3px 8px rgba(var(--px-shadow-rgb), 0.16),
         inset 0 -2px 0 rgba(255, 255, 255, 0.35);
+}
+
+.card-scene::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 45%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.65) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: translate3d(-150%, 0, 0) skewX(-24deg);
+    pointer-events: none;
+    z-index: 3;
 }
 
 .scene-hills {
@@ -719,6 +740,7 @@ onBeforeUnmount(() => cancelAnimationFrame(tiltFrame));
         0 5px 0 var(--room-ledge),
         0 12px 16px -6px color-mix(in srgb, var(--room-accent) 60%, rgba(var(--px-shadow-rgb), 0.6));
     transform: translateZ(34px);
+    transition: transform 0.32s var(--spring-bounce);
 }
 
 /* Specular glint from the top-left key light */

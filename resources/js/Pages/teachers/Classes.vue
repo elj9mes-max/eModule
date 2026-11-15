@@ -823,17 +823,34 @@ const viewClassModules = (classroom) => {
     align-items: center;
     justify-content: center;
     gap: 0.45rem;
-    transition: transform 0.14s var(--spring-bounce, cubic-bezier(0.34, 1.56, 0.64, 1)), box-shadow 0.14s var(--spring-bounce, cubic-bezier(0.34, 1.56, 0.64, 1)), filter 0.14s ease;
+    transition: transform 0.2s var(--spring-bounce, cubic-bezier(0.34, 1.56, 0.64, 1)), box-shadow 0.2s var(--spring-bounce, cubic-bezier(0.34, 1.56, 0.64, 1)), filter 0.14s ease;
     outline: none;
     user-select: none;
     position: relative;
+    overflow: hidden;
+}
+
+.btn-3d::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 38%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: translate3d(-145%, 0, 0) skewX(-24deg);
+    pointer-events: none;
+}
+
+.btn-3d:hover::after {
+    animation: pixarShineSweep 0.65s ease-out forwards;
 }
 
 .btn-3d:active {
-    transform: translateY(4px) !important;
+    transform: translate3d(0, 4px, 0) scaleX(1.04) scaleY(0.94) !important;
     box-shadow:
         0 1px 0 #1D2440,
-        inset 3px 3px 6px rgba(0, 0, 0, 0.22),
+        inset 3px 3px 6px rgba(29, 36, 64, 0.22),
         inset -2px -2px 5px rgba(255, 255, 255, 0.4) !important;
 }
 
@@ -945,28 +962,46 @@ const viewClassModules = (classroom) => {
 .classroom-card {
     position: relative;
     background: var(--neu-surface, linear-gradient(145deg, #FFFFFF 0%, #F5F0E4 100%));
-    border-radius: 28px;
+    border-radius: 30px;
     border: 3.5px solid var(--game-border, #1D2440);
-    padding: 1.15rem;
+    padding: 1.2rem;
     box-shadow:
-        0 8px 0 var(--game-border, #1D2440),
+        0 9px 0 var(--game-border, #1D2440),
         -5px -5px 12px rgba(255, 255, 255, 0.95),
-        8px 16px 28px rgba(29, 36, 64, 0.14),
+        8px 18px 32px rgba(29, 36, 64, 0.16),
         var(--neu-bevel-light, inset 3px 3px 6px rgba(255, 255, 255, 0.95)),
         var(--neu-bevel-dark, inset -4px -4px 8px rgba(194, 185, 166, 0.35));
     display: flex;
     flex-direction: column;
     gap: 0.95rem;
-    transition: transform 0.22s var(--spring-bounce, cubic-bezier(0.34, 1.56, 0.64, 1)), box-shadow 0.22s ease;
+    transform: translate3d(0, 0, 0);
+    transition: transform 0.32s var(--spring-bounce, cubic-bezier(0.34, 1.56, 0.64, 1)), box-shadow 0.32s var(--spring-bounce, cubic-bezier(0.34, 1.56, 0.64, 1));
     box-sizing: border-box;
 }
 
+.classroom-card::before {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 20px;
+    right: 20px;
+    height: 16px;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+    z-index: 3;
+}
+
 .classroom-card:hover {
-    transform: translateY(-4px);
+    transform: translate3d(0, -8px, 0) rotate(-0.6deg) scale(1.018);
     box-shadow:
-        0 12px 0 var(--game-border, #1D2440),
+        0 14px 0 var(--game-border, #1D2440),
         -6px -6px 16px rgba(255, 255, 255, 0.95),
-        10px 22px 34px rgba(29, 36, 64, 0.2);
+        12px 26px 40px rgba(29, 36, 64, 0.22);
+}
+
+.classroom-card:hover .diorama-mascot-pod {
+    transform: scale(1.14) rotate(-8deg) translateY(-2px);
 }
 
 /* Pop-Up Diorama Window */
@@ -1025,8 +1060,25 @@ const viewClassModules = (classroom) => {
 .frame-lens-glare {
     position: absolute;
     inset: 0;
+    overflow: hidden;
     pointer-events: none;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.12) 35%, transparent 60%);
+}
+
+.frame-lens-glare::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 45%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.65) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: translate3d(-150%, 0, 0) skewX(-24deg);
+    pointer-events: none;
+}
+
+.classroom-card:hover .frame-lens-glare::after {
+    animation: pixarShineSweep 0.75s ease-out forwards;
 }
 
 /* Floating 3D Mascot Emblem Orb */
@@ -1043,11 +1095,12 @@ const viewClassModules = (classroom) => {
     align-items: center;
     justify-content: center;
     box-shadow:
-        0 4px 10px rgba(0, 0, 0, 0.25),
+        0 4px 10px rgba(29, 36, 64, 0.25),
         0 2.5px 0 #1D2440,
         inset 2px 2px 4px rgba(255, 255, 255, 0.9),
         inset -2px -2px 4px rgba(180, 83, 9, 0.4);
     z-index: 2;
+    transition: transform 0.28s var(--spring-bounce, cubic-bezier(0.34, 1.56, 0.64, 1));
 }
 
 .mascot-emoji {
@@ -1134,15 +1187,15 @@ const viewClassModules = (classroom) => {
 }
 
 .pixar-code-keycard:hover {
-    transform: translateY(-2px);
+    transform: translate3d(0, -3px, 0) scale(1.015);
     box-shadow:
-        0 5.5px 0 #92400E,
-        0 8px 16px rgba(180, 83, 9, 0.25),
+        0 6px 0 #92400E,
+        0 10px 18px rgba(180, 83, 9, 0.28),
         inset 2px 2px 3px rgba(255, 255, 255, 0.95);
 }
 
 .pixar-code-keycard:active {
-    transform: translateY(2px);
+    transform: translate3d(0, 2px, 0) scaleX(1.03) scaleY(0.95);
     box-shadow: 0 1px 0 #92400E;
 }
 
@@ -1251,29 +1304,47 @@ const viewClassModules = (classroom) => {
 }
 
 .pixar-btn-card {
+    position: relative;
+    overflow: hidden;
     font-family: var(--font-game, 'Fredoka', sans-serif);
     font-weight: 900;
     font-size: 0.8rem;
     border-radius: 9999px;
-    border: 2px solid #1D2440;
-    padding: 0.55rem 0.5rem;
+    border: 2.5px solid #1D2440;
+    padding: 0.58rem 0.65rem;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.35rem;
-    transition: transform 0.14s var(--spring-bounce), box-shadow 0.14s var(--spring-bounce);
+    transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
     outline: none;
     user-select: none;
     white-space: nowrap;
 }
 
+.pixar-btn-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 38%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: translate3d(-145%, 0, 0) skewX(-24deg);
+    pointer-events: none;
+}
+
+.pixar-btn-card:hover::after {
+    animation: pixarShineSweep 0.65s ease-out forwards;
+}
+
 .pixar-btn-card:hover {
-    transform: translateY(-2px);
+    transform: translate3d(0, -3px, 0) scale(1.02);
 }
 
 .pixar-btn-card:active {
-    transform: translateY(3px) !important;
+    transform: translate3d(0, 3px, 0) scaleX(1.04) scaleY(0.94) !important;
 }
 
 .btn-roster {

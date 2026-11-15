@@ -5,6 +5,7 @@ import { useSound } from '@/Services/soundManager';
 import { flushCacheTags, prefetchRoute } from '@/Composables/usePrefetch';
 import { usePixarTheme, useWorldOnDocument } from '@/Composables/usePixarTheme';
 import RewardCelebrationModal from '@/Components/RewardCelebrationModal.vue';
+import LagoonPaperBackdrop from '@/Components/LagoonPaperBackdrop.vue';
 import { DEFAULT_PAPER_THEME_ID, findPaperTheme } from '@/Services/paperThemes.js';
 import { csrfHeaders } from '@/Services/csrf';
 import { markReturnToMapFocus } from '@/Composables/useMapReturnFocus';
@@ -873,9 +874,19 @@ onBeforeUnmount(() => {
                     <article
                         v-if="currentPage"
                         class="student-studio-paper-sheet"
-                        :class="[`paper-theme-${currentPaperTheme.id}`, { 'paper-is-lined': currentPaperTheme.lined }]"
+                        :class="[
+                            `paper-theme-${currentPaperTheme.id}`,
+                            {
+                                'paper-is-lined': currentPaperTheme.lined,
+                                'paper-has-graphic': Boolean(currentPaperTheme.graphic),
+                            },
+                        ]"
                         :style="{ '--reader-scale': readerZoomPercent / 100, ...paperSheetStyle }"
                     >
+                        <LagoonPaperBackdrop
+                            v-if="currentPaperTheme.graphic"
+                            :theme="currentPaperTheme.graphic"
+                        />
                         <!-- Paper Sheet Top Meta Header (Matches Teacher Studio Page Header) -->
                         <div class="paper-sheet-meta-bar">
                             <div class="paper-meta-left">
@@ -1989,6 +2000,9 @@ onBeforeUnmount(() => {
    4. THE 1:1 STUDIO PAPER ARTBOARD SHEET (EXACT TEACHER DESIGN MATCH)
    ========================================================================== */
 .student-studio-paper-sheet {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
     --reader-scale: 1;
     width: 100%;
     max-width: 820px;
@@ -2003,10 +2017,88 @@ onBeforeUnmount(() => {
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
+    transition: background-color 0.25s ease, border-color 0.25s ease;
 }
 
-.student-studio-paper-sheet {
-    transition: background-color 0.25s ease, border-color 0.25s ease;
+.student-studio-paper-sheet > :not(.pixar-lagoon-paper-backdrop) {
+    position: relative;
+    z-index: 2;
+}
+
+.student-studio-paper-sheet.paper-has-graphic {
+    padding-bottom: 6.5rem;
+}
+
+.student-studio-paper-sheet.paper-has-graphic .paper-sheet-meta-bar {
+    backdrop-filter: blur(6px);
+    padding: 0.65rem 0.95rem;
+    border-radius: 16px;
+}
+
+.student-studio-paper-sheet.paper-has-graphic .student-paper-content-body {
+    backdrop-filter: blur(4px);
+    border-radius: 18px;
+    padding: 1.1rem 1.35rem;
+}
+
+.student-studio-paper-sheet.paper-theme-sky {
+    border-color: #38BDF8;
+    box-shadow:
+        0 10px 0 #0284C7,
+        0 24px 52px rgba(3, 105, 161, 0.22);
+}
+
+.student-studio-paper-sheet.paper-theme-sky .paper-sheet-meta-bar {
+    background: rgba(255, 255, 255, 0.68);
+    border: 1.5px solid rgba(125, 211, 252, 0.78);
+}
+
+.student-studio-paper-sheet.paper-theme-sky .student-paper-content-body {
+    background: rgba(240, 253, 255, 0.72);
+    border: 1.5px solid rgba(125, 211, 252, 0.72);
+    box-shadow:
+        inset 0 2px 3px rgba(255, 255, 255, 0.9),
+        0 8px 24px rgba(3, 105, 161, 0.08);
+}
+
+.student-studio-paper-sheet.paper-theme-emerald {
+    border-color: #34D399;
+    box-shadow:
+        0 10px 0 #059669,
+        0 24px 52px rgba(6, 78, 59, 0.22);
+}
+
+.student-studio-paper-sheet.paper-theme-emerald .paper-sheet-meta-bar {
+    background: rgba(255, 255, 255, 0.68);
+    border: 1.5px solid rgba(110, 231, 183, 0.82);
+}
+
+.student-studio-paper-sheet.paper-theme-emerald .student-paper-content-body {
+    background: rgba(240, 253, 244, 0.74);
+    border: 1.5px solid rgba(110, 231, 183, 0.75);
+    box-shadow:
+        inset 0 2px 3px rgba(255, 255, 255, 0.9),
+        0 8px 24px rgba(6, 78, 59, 0.08);
+}
+
+.student-studio-paper-sheet.paper-theme-parchment {
+    border-color: #FBBF24;
+    box-shadow:
+        0 10px 0 #D97706,
+        0 24px 52px rgba(146, 64, 14, 0.22);
+}
+
+.student-studio-paper-sheet.paper-theme-parchment .paper-sheet-meta-bar {
+    background: rgba(255, 253, 245, 0.74);
+    border: 1.5px solid rgba(251, 191, 36, 0.78);
+}
+
+.student-studio-paper-sheet.paper-theme-parchment .student-paper-content-body {
+    background: rgba(255, 253, 245, 0.76);
+    border: 1.5px solid rgba(251, 191, 36, 0.72);
+    box-shadow:
+        inset 0 2px 3px rgba(255, 255, 255, 0.92),
+        0 8px 24px rgba(146, 64, 14, 0.08);
 }
 
 .student-studio-paper-sheet.paper-is-lined {
