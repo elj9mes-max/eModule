@@ -1,6 +1,7 @@
 <script setup>
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import ClaySearchBar from '@/Components/ClaySearchBar.vue';
 import TeacherLayout from '@/Components/TeacherLayout.vue';
 import { flushAllClientCache } from '@/Composables/usePrefetch';
 import { useSound } from '@/Services/soundManager';
@@ -35,6 +36,21 @@ const showCreateModal = ref(false);
 const showAssignModal = ref(false);
 const activeClassroomForAssign = ref(null);
 const copiedCodeId = ref(null);
+const classroomSearch = ref('');
+
+/** Classrooms matching the search text by name, grade level or class code. */
+const filteredClassrooms = computed(() => {
+    const needle = classroomSearch.value.trim().toLowerCase();
+
+    if (needle === '') {
+        return props.classrooms;
+    }
+
+    return props.classrooms.filter((classroom) =>
+        [classroom.name, classroom.grade_level, classroom.class_code]
+            .some((field) => String(field ?? '').toLowerCase().includes(needle)),
+    );
+});
 const actionNotice = ref(null);
 
 const createForm = useForm({
@@ -166,11 +182,16 @@ const viewClassModules = (classroom) => {
                 <div class="header-title-block">
                     <div class="header-kicker">CLASSROOM GUILDS</div>
                     <h1 class="panel-title">🏫 Your Classrooms</h1>
-                    <p class="panel-sub">
-                        Organize your students into separate rooms, assign reading adventure modules, and view fair classroom leaderboards!
-                    </p>
+
                 </div>
                 <div class="header-buttons">
+                    <ClaySearchBar
+                        v-if="classrooms.length > 0"
+                        v-model="classroomSearch"
+                        label="Search classrooms"
+                        placeholder="Search rooms, grade or code…"
+                        :result-count="filteredClassrooms.length"
+                    />
                     <button
                         type="button"
                         class="btn-3d btn-primary-action"
@@ -182,9 +203,20 @@ const viewClassModules = (classroom) => {
             </div>
 
             <!-- Classrooms Diorama Grid -->
-            <div v-if="classrooms.length > 0" class="classrooms-grid">
+            <div v-if="classrooms.length > 0 && filteredClassrooms.length === 0" class="search-empty-card">
+                <div class="search-empty-orb" aria-hidden="true">🔍</div>
+                <div class="search-empty-copy">
+                    <h2 class="search-empty-title">No rooms match “{{ classroomSearch.trim() }}”</h2>
+                    <p class="search-empty-desc">Try a different classroom name, grade level or class code.</p>
+                </div>
+                <button type="button" class="btn-3d btn-primary-action" @click="classroomSearch = ''">
+                    <span>↺ CLEAR SEARCH</span>
+                </button>
+            </div>
+
+            <div v-else-if="classrooms.length > 0" class="classrooms-grid">
                 <article
-                    v-for="c in classrooms"
+                    v-for="c in filteredClassrooms"
                     :key="c.id"
                     class="classroom-card"
                     :class="`theme-${c.theme || 'forest'}`"
@@ -447,13 +479,7 @@ const viewClassModules = (classroom) => {
                             <span>🏆 Room Leaderboard</span>
                         </button>
 
-                        <button
-                            type="button"
-                            class="pixar-btn-card btn-assign"
-                            @click="openAssignModal(c)"
-                        >
-                            <span>➕ Assign World</span>
-                        </button>
+
                     </div>
                 </article>
             </div>
@@ -834,6 +860,80 @@ const viewClassModules = (classroom) => {
 }
 
 /* ==========================================================================
+   SEARCH EMPTY STATE
+   ========================================================================== */
+.header-buttons {
+    align-items: center;
+}
+
+@media (min-width: 641px) {
+    .header-buttons {
+        flex-wrap: nowrap;
+    }
+
+    .header-buttons > .btn-3d {
+        flex: none;
+        white-space: nowrap;
+    }
+}
+
+.search-empty-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 1rem 1.25rem;
+    border: 3px dashed #94A3C4;
+    border-radius: 22px;
+    background: linear-gradient(180deg, #FFFFFF 0%, #F3EFE4 100%);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.9), 0 8px 18px -8px rgba(29, 36, 64, 0.2);
+}
+
+.search-empty-copy {
+    flex: 1;
+    min-width: 12rem;
+}
+
+.search-empty-orb {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    font-size: 1.4rem;
+    background: radial-gradient(circle at 32% 26%, #FFF7D1 0%, #FBBF24 55%, #B45309 100%);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.6), 0 3px 0 #92400E;
+    animation: search-empty-bob 3.5s ease-in-out infinite;
+}
+
+.search-empty-title {
+    margin: 0;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 1.05rem;
+    font-weight: 900;
+    color: var(--game-navy, #1D2440);
+    word-break: break-word;
+}
+
+.search-empty-desc {
+    margin: 0.15rem 0 0;
+    font-family: var(--font-ui, 'Nunito', sans-serif);
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #6C7594;
+}
+
+@keyframes search-empty-bob {
+    50% { transform: translateY(-5px) rotate(-6deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .search-empty-orb {
+        animation: none;
+    }
+}
+
+/* ==========================================================================
    CLASSROOMS PIXAR DIORAMA GRID & CARDS
    ========================================================================== */
 .classrooms-grid {
@@ -1145,7 +1245,7 @@ const viewClassModules = (classroom) => {
 /* Card 3D Footer Action Buttons */
 .card-footer-actions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 0.65rem;
     margin-top: 0.2rem;
 }

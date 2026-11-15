@@ -1,6 +1,7 @@
 <script setup>
 import { Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import ClaySearchBar from '@/Components/ClaySearchBar.vue';
 import TeacherLayout from '@/Components/TeacherLayout.vue';
 import { flushAllClientCache, prefetchRoute } from '@/Composables/usePrefetch';
 
@@ -44,6 +45,44 @@ const filterByClassroom = (classId) => {
 };
 
 const copiedCodeId = ref(null);
+const moduleSearch = ref('');
+
+const MODULE_VIEW_STORAGE_KEY = 'teacher-dashboard-module-view';
+
+/** Reads the preferred module layout, defaulting to the list view. */
+const readStoredModuleView = () => {
+    try {
+        return window.localStorage.getItem(MODULE_VIEW_STORAGE_KEY) === 'grid' ? 'grid' : 'list';
+    } catch {
+        return 'list';
+    }
+};
+
+const moduleView = ref(typeof window === 'undefined' ? 'list' : readStoredModuleView());
+
+const setModuleView = (view) => {
+    moduleView.value = view;
+
+    try {
+        window.localStorage.setItem(MODULE_VIEW_STORAGE_KEY, view);
+    } catch {
+        // Storage unavailable (private mode): keep the in-memory choice only.
+    }
+};
+
+/** Modules matching the search text by title, join code or status. */
+const filteredModules = computed(() => {
+    const needle = moduleSearch.value.trim().toLowerCase();
+
+    if (needle === '') {
+        return props.modules;
+    }
+
+    return props.modules.filter((mod) =>
+        [mod.title, mod.join_code, mod.status]
+            .some((field) => String(field ?? '').toLowerCase().includes(needle)),
+    );
+});
 
 const copyModuleCode = async (mod) => {
     if (!mod?.join_code) return;
@@ -164,11 +203,49 @@ const openModule = (mod) => {
                         <h1 class="panel-title">
                             🏰 {{ selected_classroom ? `${selected_classroom.name} • Modules` : 'Your Modules' }}
                         </h1>
-                        <p class="panel-sub">
-                            {{ selected_classroom ? `Showing reading adventure worlds assigned to ${selected_classroom.name}.` : 'Select a module to manage lectures, multimedia lessons, reading quests, and milestones.' }}
-                        </p>
+
                     </div>
                     <div class="header-buttons">
+                        <ClaySearchBar
+                            v-if="modules.length > 0"
+                            v-model="moduleSearch"
+                            label="Search modules"
+                            placeholder="Search modules or code…"
+                            :result-count="filteredModules.length"
+                        />
+                        <div v-if="modules.length > 0" class="view-toggle" role="group" aria-label="Module layout">
+                            <button
+                                type="button"
+                                class="view-toggle__btn"
+                                :class="{ 'is-active': moduleView === 'list' }"
+                                :aria-pressed="moduleView === 'list'"
+                                title="List view"
+                                @click="setModuleView('list')"
+                            >
+                                <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                                    <rect x="2" y="3" width="16" height="4" rx="2" fill="currentColor" />
+                                    <rect x="2" y="8" width="16" height="4" rx="2" fill="currentColor" />
+                                    <rect x="2" y="13" width="16" height="4" rx="2" fill="currentColor" />
+                                </svg>
+                                <span class="sr-only">List view</span>
+                            </button>
+                            <button
+                                type="button"
+                                class="view-toggle__btn"
+                                :class="{ 'is-active': moduleView === 'grid' }"
+                                :aria-pressed="moduleView === 'grid'"
+                                title="Grid view"
+                                @click="setModuleView('grid')"
+                            >
+                                <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                                    <rect x="2" y="2" width="7" height="7" rx="2.2" fill="currentColor" />
+                                    <rect x="11" y="2" width="7" height="7" rx="2.2" fill="currentColor" />
+                                    <rect x="2" y="11" width="7" height="7" rx="2.2" fill="currentColor" />
+                                    <rect x="11" y="11" width="7" height="7" rx="2.2" fill="currentColor" />
+                                </svg>
+                                <span class="sr-only">Grid view</span>
+                            </button>
+                        </div>
                         <button
                             type="button"
                             class="btn-3d btn-ranking-action"
@@ -179,9 +256,7 @@ const openModule = (mod) => {
                         >
                             <span>🏆 {{ selected_classroom ? 'CLASS RANKING' : 'STUDENT RANKING' }}</span>
                         </button>
-                        <button type="button" class="btn-3d btn-grade-action" @mouseenter="prefetchTeacherRoute('/teachers/grading', ['teacher-grading'])" @focus="prefetchTeacherRoute('/teachers/grading', ['teacher-grading'])" @click="goToGrading">
-                            <span>📝 GRADE SUBMISSIONS <strong v-if="pending_grading_count > 0" class="btn-pending-tag">({{ pending_grading_count }})</strong></span>
-                        </button>
+
                         <button type="button" class="btn-3d btn-primary-action" @mouseenter="prefetchTeacherRoute(createModuleUrl, ['teacher-modules'])" @focus="prefetchTeacherRoute(createModuleUrl, ['teacher-modules'])" @click="goToCreateModule">
                             <span>✨ + ADD NEW MODULE</span>
                         </button>
@@ -263,9 +338,136 @@ const openModule = (mod) => {
                     </defs>
                 </svg>
 
-                <div v-if="modules.length > 0" class="kingdoms-grid">
+                <div v-if="modules.length > 0 && filteredModules.length === 0" class="search-empty-card">
+                    <div class="search-empty-orb" aria-hidden="true">🔍</div>
+                    <div class="search-empty-copy">
+                        <h2 class="search-empty-title">No modules match “{{ moduleSearch.trim() }}”</h2>
+                        <p class="search-empty-desc">Try another module title, join code, or “draft” / “published”.</p>
+                    </div>
+                    <button type="button" class="btn-3d btn-primary-action" @click="moduleSearch = ''">
+                        <span>↺ CLEAR SEARCH</span>
+                    </button>
+                </div>
+
+                <div v-else-if="modules.length > 0 && moduleView === 'list'" class="quest-list">
+                    <article
+                        v-for="(mod, index) in filteredModules"
+                        :key="mod.id"
+                        v-memo="[mod.id, mod.title, mod.description, mod.grade_level, mod.icon, mod.theme, mod.status, mod.is_new, mod.cover_image_url, mod.join_code, mod.lectures_count, mod.xp_bonus, copiedCodeId === mod.id, togglingModuleId === mod.id]"
+                        class="quest-row"
+                        :class="`theme-${mod.theme}`"
+                        :style="{ '--i': Math.min(index, 8) }"
+                        role="button"
+                        tabindex="0"
+                        :aria-label="'Open learning module: ' + mod.title"
+                        @mouseenter="prefetchTeacherRoute(moduleUrl(mod), ['teacher-modules', `module-${mod.slug}`])"
+                        @focus="prefetchTeacherRoute(moduleUrl(mod), ['teacher-modules', `module-${mod.slug}`])"
+                        @click="openModule(mod)"
+                        @keydown.enter.self="openModule(mod)"
+                        @keydown.space.self.prevent="openModule(mod)"
+                    >
+                        <!-- Banner: cover art in a sculpted clay window -->
+                        <div class="quest-row__banner">
+                            <div class="quest-row__window">
+                                <img
+                                    v-if="mod.cover_image_url"
+                                    :src="mod.cover_image_url"
+                                    :alt="mod.title"
+                                    loading="lazy"
+                                    decoding="async"
+                                    class="quest-row__img"
+                                />
+                                <div v-else class="quest-row__scene" aria-hidden="true">
+                                    <span class="quest-row__sun"></span>
+                                    <span class="quest-row__cloud quest-row__cloud--a"></span>
+                                    <span class="quest-row__cloud quest-row__cloud--b"></span>
+                                    <span class="quest-row__hill quest-row__hill--back"></span>
+                                    <span class="quest-row__hill quest-row__hill--front"></span>
+                                </div>
+                                <span class="quest-row__gloss" aria-hidden="true"></span>
+                            </div>
+                            <span class="quest-row__icon" aria-hidden="true">{{ mod.icon || '📘' }}</span>
+                            <span v-if="mod.is_new" class="quest-row__sticker">✨ NEW</span>
+                        </div>
+
+                        <!-- Content: meta chips, title, description, stats and actions -->
+                        <div class="quest-row__body">
+                            <div class="quest-row__meta">
+                                <span class="quest-chip quest-chip--grade">🎒 {{ mod.grade_level || 'All Grades' }}</span>
+                                <span
+                                    class="quest-chip"
+                                    :class="mod.status === 'published' ? 'quest-chip--live' : 'quest-chip--draft'"
+                                >
+                                    {{ mod.status === 'published' ? '🌟 Live' : '📝 Draft' }}
+                                </span>
+                            </div>
+
+                            <h2 class="quest-row__title" :title="mod.title">{{ mod.title }}</h2>
+
+                            <p class="quest-row__desc" :class="{ 'is-placeholder': !mod.description }">
+                                {{ mod.description || 'No description yet. Open the module to tell students what adventure awaits!' }}
+                            </p>
+
+                            <div class="quest-row__footer">
+                                <ul class="quest-row__stats" aria-label="Module stats">
+                                    <li class="quest-stat">
+                                        <span aria-hidden="true">📖</span>
+                                        <strong>{{ mod.lectures_count ?? 0 }}</strong>
+                                        {{ (mod.lectures_count ?? 0) === 1 ? 'lesson' : 'lessons' }}
+                                    </li>
+                                    <li v-if="mod.xp_bonus" class="quest-stat">
+                                        <span aria-hidden="true">⭐</span>
+                                        <strong>+{{ mod.xp_bonus }}</strong> XP
+                                    </li>
+                                </ul>
+
+                                <div class="quest-row__actions">
+                                    <button
+                                        v-if="mod.join_code"
+                                        type="button"
+                                        class="quest-btn quest-btn--code"
+                                        :class="{ 'is-copied': copiedCodeId === mod.id }"
+                                        :title="`Quest code ${mod.join_code}. Click to copy`"
+                                        @click.stop="copyModuleCode(mod)"
+                                    >
+                                        <span class="quest-btn__face">
+                                            <span aria-hidden="true">{{ copiedCodeId === mod.id ? '✅' : '🔑' }}</span>
+                                            <strong class="quest-code">{{ mod.join_code }}</strong>
+                                            <span class="quest-btn__hint">{{ copiedCodeId === mod.id ? 'Copied!' : 'Copy' }}</span>
+                                        </span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        class="quest-btn"
+                                        :class="mod.status === 'draft' ? 'quest-btn--publish' : 'quest-btn--unpublish'"
+                                        :disabled="togglingModuleId === mod.id"
+                                        :aria-label="mod.status === 'draft' ? 'Publish module' : 'Unpublish module (set to draft)'"
+                                        @click.stop="toggleModuleStatus(mod)"
+                                    >
+                                        <span class="quest-btn__face">
+                                            <span aria-hidden="true">{{ togglingModuleId === mod.id ? '⏳' : (mod.status === 'draft' ? '🚀' : '🙈') }}</span>
+                                            {{ togglingModuleId === mod.id ? 'Saving…' : (mod.status === 'draft' ? 'Publish' : 'Unpublish') }}
+                                        </span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        class="quest-btn quest-btn--open"
+                                        :aria-label="'Open ' + mod.title"
+                                        @click.stop="openModule(mod)"
+                                    >
+                                        <span class="quest-btn__face">Open <span class="quest-btn__arrow" aria-hidden="true">➔</span></span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+
+                <div v-else-if="modules.length > 0" class="kingdoms-grid">
                     <div
-                        v-for="mod in modules"
+                        v-for="mod in filteredModules"
                         :key="mod.id"
                         v-memo="[mod.id, mod.title, mod.theme, mod.status, mod.is_new, mod.cover_image_url, mod.join_code, copiedCodeId === mod.id, togglingModuleId === mod.id]"
                         class="kingdom-card"
@@ -1365,6 +1567,71 @@ const openModule = (mod) => {
 }
 
 /* Empty Modules State */
+.header-buttons {
+    align-items: center;
+}
+
+@media (min-width: 641px) {
+    .header-buttons {
+        flex-wrap: nowrap;
+    }
+
+    .header-buttons > .btn-3d {
+        flex: none;
+        white-space: nowrap;
+    }
+}
+
+.search-empty-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 1rem 1.25rem;
+    border: 3px dashed #94A3C4;
+    border-radius: 22px;
+    background: linear-gradient(180deg, #FFFFFF 0%, #F3EFE4 100%);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.9), 0 8px 18px -8px rgba(29, 36, 64, 0.2);
+}
+
+.search-empty-copy {
+    flex: 1;
+    min-width: 12rem;
+}
+
+.search-empty-orb {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    font-size: 1.4rem;
+    background: radial-gradient(circle at 32% 26%, #FFF7D1 0%, #FBBF24 55%, #B45309 100%);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.6), 0 3px 0 #92400E;
+    animation: search-empty-bob 3.5s ease-in-out infinite;
+}
+
+.search-empty-title {
+    margin: 0;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 1.05rem;
+    font-weight: 900;
+    color: var(--game-navy, #1D2440);
+    word-break: break-word;
+}
+
+.search-empty-desc {
+    margin: 0.15rem 0 0;
+    font-family: var(--font-ui, 'Nunito', sans-serif);
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #6C7594;
+}
+
+@keyframes search-empty-bob {
+    50% { transform: translateY(-5px) rotate(-6deg); }
+}
+
 .empty-modules-card {
     background: var(--neu-surface);
     border: 3.5px solid var(--game-border);
@@ -1418,6 +1685,615 @@ const openModule = (mod) => {
 @media (max-width: 720px) {
     .kingdoms-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+/* ==========================================================================
+   VIEW TOGGLE (LIST / GRID)
+   ========================================================================== */
+.view-toggle {
+    flex: none;
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border: 2.5px solid #1D2440;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, #F3EFE4 0%, #FFFFFF 100%);
+    box-shadow: inset 0 3px 6px rgba(29, 36, 64, 0.18), 0 3px 0 #1D2440;
+}
+
+.view-toggle__btn {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 9999px;
+    background: transparent;
+    color: #8A92AD;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease;
+}
+
+.view-toggle__btn.is-active {
+    color: #FFFFFF;
+    background: radial-gradient(circle at 32% 26%, #8FD0FF 0%, #2395EB 55%, #0E5287 100%);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.5), 0 2px 0 #0E5287;
+    transform: translateY(-1px);
+}
+
+@media (hover: hover) {
+    .view-toggle__btn:not(.is-active):hover {
+        color: #2395EB;
+        transform: translateY(-2px);
+    }
+}
+
+.view-toggle__btn:active {
+    transform: translateY(1px) scale(0.94);
+    transition-duration: 0.06s;
+}
+
+.view-toggle__btn:focus-visible {
+    outline: 3px solid #FBBF24;
+    outline-offset: 2px;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ==========================================================================
+   LIST VIEW: FULL-WIDTH CLAY QUEST ROWS (30VH)
+   ========================================================================== */
+.quest-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+    padding: 0.75rem 0 2.5rem;
+}
+
+.quest-row {
+    --quest-hue: 255;
+    --quest-ink: #1D2440;
+    --quest-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    position: relative;
+    display: grid;
+    grid-template-columns: clamp(12rem, 36%, 30rem) minmax(0, 1fr);
+    gap: clamp(1rem, 2.2vw, 2rem);
+    width: 100%;
+    height: 30vh;
+    min-height: 15rem;
+    padding: 12px clamp(16px, 2.2vw, 28px) 12px 12px;
+    border-radius: 32px;
+    border: 3.5px solid rgba(255, 255, 255, 0.95);
+    background:
+        radial-gradient(120% 140% at 100% 0%, rgba(255, 255, 255, 0.75) 0%, transparent 45%),
+        linear-gradient(135deg, var(--frame-grad-1) 0%, var(--frame-grad-2) 40%, var(--frame-grad-3) 80%, var(--frame-grad-4) 100%);
+    box-shadow:
+        0 7px 0 var(--frame-pedestal),
+        0 16px 26px -10px var(--frame-glow),
+        inset 0 3px 2px rgba(255, 255, 255, 0.98),
+        inset 0 -8px 16px -6px var(--frame-belly-shadow);
+    isolation: isolate;
+    cursor: pointer;
+    outline: none;
+    user-select: none;
+    animation: quest-pop 0.6s var(--quest-spring) both;
+    animation-delay: calc(var(--i, 0) * 70ms);
+    transition: transform 0.35s var(--quest-spring);
+}
+
+.quest-row.theme-forest { --quest-hue: 158; }
+.quest-row.theme-ocean { --quest-hue: 240; }
+.quest-row.theme-cosmic { --quest-hue: 295; }
+.quest-row.theme-volcano { --quest-hue: 40; }
+
+/* Bigger lift shadow cross-faded on a pseudo-element (no animated box-shadow) */
+.quest-row::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: 0 30px 44px -14px var(--frame-ambient), 0 14px 0 -4px var(--frame-pedestal);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: -1;
+}
+
+@media (hover: hover) {
+    .quest-row:hover {
+        transform: translateY(-5px) rotate(-0.35deg);
+    }
+
+    .quest-row:hover::after {
+        opacity: 1;
+    }
+
+    .quest-row:hover .quest-row__img,
+    .quest-row:hover .quest-row__scene {
+        transform: scale(1.06);
+    }
+
+    .quest-row:hover .quest-row__icon {
+        transform: translateY(-4px) rotate(-8deg) scale(1.08);
+    }
+}
+
+.quest-row:active {
+    transform: translateY(2px) scale(0.995);
+    transition-duration: 0.08s;
+}
+
+.quest-row:focus-visible {
+    outline: 4px solid #FBBF24;
+    outline-offset: 5px;
+}
+
+/* ---------- Banner ---------- */
+.quest-row__banner {
+    position: relative;
+    min-height: 0;
+    height: 100%;
+}
+
+.quest-row__window {
+    position: relative;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 24px;
+    border: 6px solid var(--frame-bezel-1);
+    background: oklch(86% 0.08 var(--quest-hue));
+    box-shadow:
+        0 0 0 2px rgba(255, 255, 255, 0.9),
+        inset 0 5px 12px rgba(10, 18, 45, 0.3);
+}
+
+.quest-row__img,
+.quest-row__scene {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.quest-row__img {
+    display: block;
+    object-fit: cover;
+}
+
+/* Lightweight CSS cartoon landscape used when no cover image exists */
+.quest-row__scene {
+    background: linear-gradient(180deg, oklch(84% 0.09 var(--quest-hue)) 0%, oklch(94% 0.05 calc(var(--quest-hue) + 30)) 70%);
+}
+
+.quest-row__sun {
+    position: absolute;
+    top: 14%;
+    right: 14%;
+    width: 22%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #FFF9D6 0%, #FDE047 45%, #F59E0B 100%);
+    box-shadow: 0 0 0 10px rgba(253, 224, 71, 0.25), 0 0 0 22px rgba(253, 224, 71, 0.12);
+}
+
+.quest-row__cloud {
+    position: absolute;
+    height: 14%;
+    border-radius: 999px;
+    background: #FFFFFF;
+    box-shadow: inset 0 -4px 0 rgba(29, 36, 64, 0.06);
+    animation: quest-drift 7s ease-in-out infinite alternate;
+}
+
+.quest-row__cloud::before {
+    content: "";
+    position: absolute;
+    left: 22%;
+    bottom: 45%;
+    width: 46%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: inherit;
+}
+
+.quest-row__cloud--a {
+    top: 20%;
+    left: 10%;
+    width: 30%;
+}
+
+.quest-row__cloud--b {
+    top: 36%;
+    left: 48%;
+    width: 20%;
+    opacity: 0.85;
+    animation-duration: 9s;
+}
+
+.quest-row__hill {
+    position: absolute;
+    border-radius: 50% 50% 0 0;
+}
+
+.quest-row__hill--back {
+    left: -15%;
+    bottom: -38%;
+    width: 85%;
+    height: 85%;
+    background: radial-gradient(circle at 40% 20%, oklch(80% 0.13 calc(var(--quest-hue) - 40)) 0%, oklch(62% 0.15 calc(var(--quest-hue) - 40)) 100%);
+}
+
+.quest-row__hill--front {
+    right: -20%;
+    bottom: -48%;
+    width: 95%;
+    height: 90%;
+    background: radial-gradient(circle at 35% 18%, oklch(84% 0.15 135) 0%, oklch(64% 0.17 145) 100%);
+}
+
+.quest-row__gloss {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 38%);
+    pointer-events: none;
+}
+
+/* 3D icon orb perched on the banner corner */
+.quest-row__icon {
+    position: absolute;
+    left: -6px;
+    bottom: -6px;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    font-size: 1.85rem;
+    line-height: 1;
+    background: radial-gradient(circle at 32% 26%, #FFFFFF 0%, var(--frame-bezel-2) 50%, var(--frame-bezel-1) 100%);
+    border: 3px solid #FFFFFF;
+    box-shadow: 0 4px 0 var(--frame-pedestal), 0 10px 16px -4px var(--frame-glow), inset 0 -4px 6px rgba(29, 36, 64, 0.1);
+    transition: transform 0.4s var(--quest-spring);
+}
+
+.quest-row__sticker {
+    position: absolute;
+    top: -8px;
+    left: -6px;
+    z-index: 2;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.05em;
+    color: #5B3A00;
+    background: linear-gradient(180deg, #FEF3A8 0%, #FBBF24 100%);
+    border: 2.5px solid #FFFFFF;
+    box-shadow: 0 3px 0 #B45309, 0 6px 10px -2px rgba(180, 83, 9, 0.4);
+    transform: rotate(-8deg);
+}
+
+/* ---------- Body ---------- */
+.quest-row__body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.5rem;
+    min-width: 0;
+    min-height: 0;
+    padding-block: 0.35rem;
+}
+
+.quest-row__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.quest-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.22rem 0.65rem;
+    border-radius: 999px;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    border: 2px solid rgba(255, 255, 255, 0.95);
+    box-shadow: 0 2px 0 rgba(29, 36, 64, 0.12), inset 0 1.5px 0 rgba(255, 255, 255, 0.7);
+    white-space: nowrap;
+}
+
+.quest-chip--grade {
+    color: oklch(38% 0.12 var(--quest-hue));
+    background: oklch(95% 0.04 var(--quest-hue));
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.quest-chip--live {
+    color: #065F46;
+    background: linear-gradient(180deg, #D1FAE5 0%, #A7F3D0 100%);
+}
+
+.quest-chip--draft {
+    color: #9F1239;
+    background: linear-gradient(180deg, #FFE4E6 0%, #FECDD3 100%);
+}
+
+.quest-row__title {
+    margin: 0;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: clamp(1.15rem, 0.9rem + 1vw, 1.75rem);
+    font-weight: 800;
+    line-height: 1.12;
+    letter-spacing: -0.005em;
+    color: var(--quest-ink);
+    text-shadow: 0 2px 0 rgba(255, 255, 255, 0.9);
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+}
+
+.quest-row__desc {
+    margin: 0;
+    max-width: 68ch;
+    font-family: var(--font-ui, 'Nunito', sans-serif);
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1.5;
+    color: #4A5373;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.quest-row__desc.is-placeholder {
+    font-style: italic;
+    color: #7D86A3;
+}
+
+.quest-row__footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.35rem;
+}
+
+.quest-row__stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.quest-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 0.7rem;
+    border-radius: 14px;
+    font-family: var(--font-ui, 'Nunito', sans-serif);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #4A5373;
+    background: rgba(255, 255, 255, 0.7);
+    box-shadow: inset 0 2px 4px rgba(29, 36, 64, 0.1);
+}
+
+.quest-stat strong {
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-weight: 800;
+    color: var(--quest-ink);
+}
+
+.quest-row__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    padding-top: 6px;
+}
+
+/* ---------- Transform-only 3D press buttons ---------- */
+.quest-btn {
+    --btn-edge: #0E5287;
+    --btn-hi: #8FD0FF;
+    --btn-base: #2395EB;
+    --btn-ink: #FFFFFF;
+
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: var(--btn-edge);
+    cursor: pointer;
+    filter: drop-shadow(0 5px 6px rgba(29, 36, 64, 0.18));
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+.quest-btn__face {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 40px;
+    padding: 0.5rem 1rem;
+    border-radius: inherit;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    color: var(--btn-ink);
+    background: linear-gradient(180deg, var(--btn-hi) 0%, var(--btn-base) 60%);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.5), inset 0 -3px 0 rgba(0, 0, 0, 0.1);
+    transform: translateY(-5px);
+    transition: transform 0.25s var(--quest-spring);
+}
+
+@media (hover: hover) {
+    .quest-btn:not(:disabled):hover .quest-btn__face {
+        transform: translateY(-7px);
+    }
+
+    .quest-btn--open:hover .quest-btn__arrow {
+        transform: translateX(3px);
+    }
+}
+
+.quest-btn:not(:disabled):active .quest-btn__face {
+    transform: translateY(-1px) scale(0.98, 0.95);
+    transition-duration: 0.06s;
+}
+
+.quest-btn:focus-visible {
+    outline: 3px solid #FBBF24;
+    outline-offset: 4px;
+}
+
+.quest-btn:disabled {
+    cursor: progress;
+    opacity: 0.75;
+}
+
+.quest-btn__arrow {
+    display: inline-block;
+    transition: transform 0.25s var(--quest-spring);
+}
+
+.quest-btn__hint {
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    opacity: 0.75;
+}
+
+.quest-code {
+    font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    font-size: 0.9rem;
+    letter-spacing: 0.12em;
+}
+
+.quest-btn--code {
+    --btn-edge: #B45309;
+    --btn-hi: #FEF9C3;
+    --btn-base: #FDE047;
+    --btn-ink: #5B3A00;
+}
+
+.quest-btn--code.is-copied {
+    --btn-edge: #047857;
+    --btn-hi: #D1FAE5;
+    --btn-base: #6EE7B7;
+    --btn-ink: #064E3B;
+}
+
+.quest-btn--publish {
+    --btn-edge: #047857;
+    --btn-hi: #86EFAC;
+    --btn-base: #22C55E;
+    --btn-ink: #FFFFFF;
+}
+
+.quest-btn--unpublish {
+    --btn-edge: #9F1239;
+    --btn-hi: #FFE4E6;
+    --btn-base: #FDA4AF;
+    --btn-ink: #881337;
+}
+
+/* ---------- Motion ---------- */
+@keyframes quest-pop {
+    0% { transform: translateY(18px) scale(0.96); opacity: 0; }
+    60% { transform: translateY(-4px) scale(1.01, 0.99); opacity: 1; }
+    100% { transform: none; opacity: 1; }
+}
+
+@keyframes quest-drift {
+    to { transform: translateX(14px); }
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 900px) {
+    .quest-row {
+        height: auto;
+        min-height: 30vh;
+    }
+
+    .quest-row__banner {
+        min-height: 12rem;
+    }
+
+    .quest-row__footer {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 640px) {
+    .quest-row {
+        grid-template-columns: 1fr;
+        height: auto;
+        min-height: 30vh;
+        padding: 10px 10px 16px;
+        gap: 0.85rem;
+    }
+
+    .quest-row__banner {
+        height: auto;
+        aspect-ratio: 16 / 8;
+    }
+
+    .quest-row__body {
+        padding-inline: 0.4rem;
+    }
+
+    .quest-row__title {
+        -webkit-line-clamp: 2;
+    }
+
+    .quest-row__footer {
+        align-items: stretch;
+    }
+
+    .quest-row__actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .quest-btn--open {
+        grid-column: 1 / -1;
+    }
+
+    .quest-btn__face {
+        width: 100%;
+        min-height: 44px;
     }
 }
 
