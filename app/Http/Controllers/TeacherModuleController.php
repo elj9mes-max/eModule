@@ -183,7 +183,17 @@ class TeacherModuleController extends Controller
         }
 
         $initialType = (string) $request->query('type', 'multiple-choice');
+        $initialQuizSlug = (string) $request->query('quiz', '');
         $studioData = $this->cache->getTeacherQuizStudioData($module);
+
+        if ($initialQuizSlug !== '') {
+            $matchingQuiz = collect($studioData['existingQuizzes'])->first(
+                fn (array $q): bool => $q['slug'] === $initialQuizSlug || (string) $q['id'] === $initialQuizSlug
+            );
+            if ($matchingQuiz) {
+                $initialType = str_replace('_', '-', (string) $matchingQuiz['type']);
+            }
+        }
 
         return Inertia::render('teachers/create/quizes/QuizStudio', [
             'user' => [
@@ -194,6 +204,7 @@ class TeacherModuleController extends Controller
             ],
             'module' => $studioData['module'],
             'initialQuizType' => $initialType,
+            'initialQuizSlug' => $initialQuizSlug !== '' ? $initialQuizSlug : null,
             'existingQuizzes' => $studioData['existingQuizzes'],
         ]);
     }

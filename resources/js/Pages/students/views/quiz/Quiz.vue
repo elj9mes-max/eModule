@@ -7,6 +7,7 @@ import { useSound } from '@/Services/soundManager';
 import { flushCacheTags, prefetchRoute } from '@/Composables/usePrefetch';
 import { usePixarTheme, useWorldOnDocument } from '@/Composables/usePixarTheme';
 import RewardCelebrationModal from '@/Components/RewardCelebrationModal.vue';
+import StudentLayout from '@/Components/StudentLayout.vue';
 
 const {
     playPop,
@@ -922,11 +923,12 @@ const progressPercentage = computed(() => {
 const scoreSummary = computed(() => {
     const q = activeQuiz.value;
     if (!q) {
-        return { earned: 0, total: 10, pct: 100, stars: 3, passed: true };
+        return { earned: 0, total: 10, pct: 100, correctCount: 0, stars: 0, gems: 0, passed: true };
     }
 
     let earned = 0;
     let total = 0;
+    let correctCount = 0;
 
     if (quizType.value === 'multiple_choice') {
         for (const question of q.questions || []) {
@@ -936,6 +938,7 @@ const scoreSummary = computed(() => {
             const correctIds = (question.options || []).filter((o) => o.is_correct).map((o) => o.id);
             if (picked.length === correctIds.length && correctIds.every((id) => picked.includes(id))) {
                 earned += pts;
+                correctCount++;
             }
         }
     } else if (quizType.value === 'color_the_conflict') {
@@ -944,6 +947,7 @@ const scoreSummary = computed(() => {
             total += pts;
             if (colorSelected.value[card.id] === card.conflict_type) {
                 earned += pts;
+                correctCount++;
             }
         }
     } else if (quizType.value === 'the_conflict_map') {
@@ -952,6 +956,7 @@ const scoreSummary = computed(() => {
             total += pts;
             if (mapAssignments.value[ev.id] === ev.target_conflict_type) {
                 earned += pts;
+                correctCount++;
             }
         }
     } else if (quizType.value === 'matching_type') {
@@ -960,6 +965,7 @@ const scoreSummary = computed(() => {
             total += pts;
             if (matchingSelected.value[item.id] === item.correct_choice_letter) {
                 earned += pts;
+                correctCount++;
             }
         }
     } else if (quizType.value === 'evaluation') {
@@ -971,6 +977,7 @@ const scoreSummary = computed(() => {
             const blanksOk = st?.blanks?.every((b) => b && b.trim().length >= 2);
             if (pickedOpt?.is_correct && blanksOk) {
                 earned += pts;
+                correctCount++;
             }
         }
     } else if (quizType.value === 'reflection') {
@@ -980,6 +987,7 @@ const scoreSummary = computed(() => {
             const words = getReflectionWordCount(prompt.id);
             if (words >= Number(prompt.min_words || 5)) {
                 earned += pts;
+                correctCount++;
             }
         }
     }
@@ -988,13 +996,18 @@ const scoreSummary = computed(() => {
     const pct = Math.round((earned / safeTotal) * 100);
     const passThreshold = Number(q.passing_percentage || 70);
     const passed = pct >= passThreshold;
-    const stars = pct >= 90 ? 3 : pct >= passThreshold ? 2 : pct >= 40 ? 1 : 0;
+    const starsPerCorrect = Math.max(0, Number(q.stars_per_correct ?? 1));
+    const gemsPerCorrect = Math.max(0, Number(q.gems_per_correct ?? 10));
+    const stars = correctCount * starsPerCorrect;
+    const gems = correctCount * gemsPerCorrect;
 
     return {
         earned,
         total: safeTotal,
         pct,
+        correctCount,
         stars,
+        gems,
         passed,
         passThreshold,
     };
@@ -1056,6 +1069,8 @@ const quizReward = computed(() => {
             passed: true,
             stars: null,
             starsGained: 0,
+            gems: null,
+            gemsGained: 0,
             xp: 0,
             level: null,
             totalXp: null,
@@ -1072,7 +1087,9 @@ const quizReward = computed(() => {
             state: 'earned',
             passed: summary.passed,
             stars: summary.stars,
-            starsGained: 0,
+            starsGained: summary.stars,
+            gems: summary.gems,
+            gemsGained: summary.gems,
             xp: summary.passed ? Number(activeQuiz.value?.xp_reward || 150) : 50,
             level: null,
             totalXp: null,
@@ -1080,26 +1097,35 @@ const quizReward = computed(() => {
             metrics: [
                 { label: 'SCORE', value: `${summary.pct}%` },
                 { label: 'POINTS', value: `${summary.earned} / ${summary.total}` },
+                { label: 'STARS', value: `+${summary.stars} ⭐` },
+                { label: 'GEMS', value: `+${summary.gems} 💎` },
             ],
-            message: summary.passed ? '' : `Passing is ${passThreshold}%. Keep practicing to earn all 3 stars!`,
+            message: summary.passed ? '' : `Passing is ${passThreshold}%. Keep practicing to earn more stars and gems!`,
         };
     }
+
+    const starsObtained = Number(attempt.stars ?? 0);
+    const gemsObtained = Number(attempt.gems_earned ?? 0);
 
     const metrics = [
         { label: 'SCORE', value: `${Math.round(Number(attempt.percentage || 0))}%` },
         { label: 'POINTS', value: `${attempt.score} / ${attempt.max_score}` },
+        { label: 'STARS', value: `+${starsObtained} ⭐` },
+        { label: 'GEMS', value: `+${gemsObtained} 💎` },
     ];
-    const failedNote = attempt.is_passed ? '' : `Passing is ${passThreshold}%. Keep practicing to earn all 3 stars!`;
+    const failedNote = attempt.is_passed ? '' : `Passing is ${passThreshold}%. Keep practicing to earn more stars and gems!`;
 
     if (progression) {
-        const gainedSomething = Number(progression.xp_delta) > 0 || Number(progression.star_delta) > 0;
+        const gainedSomething = Number(progression.xp_delta) > 0 || Number(progression.star_delta) > 0 || Number(progression.gem_delta) > 0;
 
         return {
             state: gainedSomething ? 'earned' : 'repeat',
             passed: Boolean(attempt.is_passed),
-            stars: Number(attempt.stars || 0),
-            starsGained: Number(progression.star_delta || 0),
-            xp: Number(progression.xp_delta || 0),
+            stars: starsObtained,
+            starsGained: Number(progression.star_delta ?? 0),
+            gems: gemsObtained,
+            gemsGained: Number(progression.gem_delta ?? 0),
+            xp: Number(progression.xp_delta ?? 0),
             level: progression.level ?? null,
             totalXp: progression.total_xp ?? null,
             leveledUp: Boolean(progression.leveled_up),
@@ -1111,8 +1137,10 @@ const quizReward = computed(() => {
     return {
         state: 'review',
         passed: Boolean(attempt.is_passed),
-        stars: Number(attempt.stars || 0),
+        stars: starsObtained,
         starsGained: 0,
+        gems: gemsObtained,
+        gemsGained: 0,
         xp: Number(attempt.xp_earned || 0),
         level: null,
         totalXp: null,
@@ -1247,12 +1275,18 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <Head :title="`${activeQuiz?.title || 'Quiz Arena'} • ${activeModule?.title || 'WEBREAD'}`" />
+    <StudentLayout
+        :user="user"
+        active-nav="modules"
+        :hide-dock="true"
+        :full-width="true"
+    >
+        <Head :title="`${activeQuiz?.title || 'Quiz Arena'} • ${activeModule?.title || 'WEBREAD'}`" />
 
-    <div class="clay-student-quiz-shell" :data-pixar-theme="activeWorld">
-        <!-- =========================================================================
-             1. STICKY 3D CLAY QUIZ HUD BAR
-             ========================================================================= -->
+        <div class="clay-student-quiz-shell" :data-pixar-theme="activeWorld">
+            <!-- =========================================================================
+                 1. STICKY 3D CLAY QUIZ HUD BAR
+                 ========================================================================= -->
         <header class="clay-quiz-sticky-hud" role="banner">
             <div class="quiz-hud-top-row">
                 <!-- Left: Back to Map + Quiz Title & Format Pill -->
@@ -2037,7 +2071,7 @@ onBeforeUnmount(() => {
                  ===================================================================== -->
             <section v-else-if="quizType === 'evaluation'" class="quiz-format-stage eval-quiz-stage">
                 <!-- Shared Word Helpers Bank -->
-                <div
+                <!-- <div
                     v-if="activeQuiz.word_helpers && activeQuiz.word_helpers.length > 0"
                     class="clay-word-helpers-bar"
                 >
@@ -2056,7 +2090,7 @@ onBeforeUnmount(() => {
                             + {{ word }}
                         </button>
                     </div>
-                </div>
+                </div> -->
 
                 <div
                     v-for="(item, eIdx) in viewAllMode ? activeQuiz.evaluation_items : [currentItem]"
@@ -2373,6 +2407,8 @@ onBeforeUnmount(() => {
             :passed="quizReward.passed"
             :stars="quizReward.stars"
             :stars-gained="quizReward.starsGained"
+            :gems="quizReward.gems"
+            :gems-gained="quizReward.gemsGained"
             :xp-amount="quizReward.xp"
             :level="quizReward.level"
             :total-xp="quizReward.totalXp"
@@ -2393,20 +2429,17 @@ onBeforeUnmount(() => {
                 <p class="feedback-text">"{{ latestTeacherFeedback }}"</p>
             </div>
         </RewardCelebrationModal>
-    </div>
+        </div>
+    </StudentLayout>
 </template>
 
 <style scoped>
 .clay-student-quiz-shell {
-    min-height: 100vh;
-    min-height: 100dvh;
-    background:
-        radial-gradient(ellipse 60% 52% at 20% 14%, var(--px-sun-bloom, rgba(56, 189, 248, 0.18)) 0%, transparent 68%),
-        radial-gradient(ellipse 52% 48% at 82% 24%, var(--px-secondary-bloom, rgba(250, 204, 21, 0.18)) 0%, transparent 70%),
-        linear-gradient(166deg, var(--px-sky-top, #eff6ff) 0%, var(--px-sky-mid, #f8fafc) 54%, var(--px-sky-bottom, #fefce8) 100%);
+    min-height: auto;
+    background: transparent;
     font-family: var(--px-font-body, 'Nunito', sans-serif);
     color: var(--px-ink, #0f172a);
-    padding-bottom: 4rem;
+    padding-bottom: 2.5rem;
     transition: background 380ms var(--px-ease-settle, ease);
 }
 
@@ -2554,14 +2587,16 @@ onBeforeUnmount(() => {
    1. STICKY TOP QUIZ HUD
    ========================================================================== */
 .clay-quiz-sticky-hud {
-    position: sticky;
-    top: 0;
-    z-index: 40;
+    position: relative;
+    z-index: 20;
     background: linear-gradient(180deg, var(--px-surface-card, rgba(255, 255, 255, 0.94)) 0%, var(--px-surface-card-bottom, rgba(248, 250, 252, 0.94)) 100%);
     backdrop-filter: blur(12px);
-    border-bottom: 3px solid var(--px-card-border, #cbd5e1);
+    border: 3px solid var(--px-card-border, #cbd5e1);
+    border-radius: 24px;
     box-shadow: 0 8px 24px rgba(var(--px-shadow-rgb, 15, 23, 42), 0.12);
     padding: 0.75rem 1.25rem;
+    margin-top: 0.25rem;
+    margin-bottom: 0.85rem;
 }
 
 .quiz-hud-top-row {

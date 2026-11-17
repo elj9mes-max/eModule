@@ -19,6 +19,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'description',
     'reading_passage',
     'xp_reward',
+    'stars_per_correct',
+    'gems_per_correct',
     'passing_percentage',
     'time_limit_seconds',
     'sort_order',
@@ -37,6 +39,8 @@ class Quiz extends Model
     protected $attributes = [
         'type' => QuizType::MultipleChoice,
         'xp_reward' => 150,
+        'stars_per_correct' => 1,
+        'gems_per_correct' => 10,
         'passing_percentage' => 70,
         'is_published' => true,
         'sort_order' => 0,
@@ -52,6 +56,8 @@ class Quiz extends Model
         return [
             'type' => QuizType::class,
             'xp_reward' => 'integer',
+            'stars_per_correct' => 'integer',
+            'gems_per_correct' => 'integer',
             'passing_percentage' => 'integer',
             'time_limit_seconds' => 'integer',
             'sort_order' => 'integer',

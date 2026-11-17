@@ -28,6 +28,10 @@ const props = defineProps({
         type: String,
         default: 'multiple-choice',
     },
+    initialQuizSlug: {
+        type: String,
+        default: null,
+    },
     existingQuizzes: {
         type: Array,
         default: () => [],
@@ -169,6 +173,8 @@ const conflictCategories = [
 
 const xpPresets = [100, 150, 200, 250, 500];
 const passPresets = [60, 70, 75, 80, 90];
+const starPresets = [1, 2, 3, 5];
+const gemPresets = [5, 10, 25, 50];
 const wordPresets = [50, 100, 150, 250, 500];
 const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
 const getLetter = (index) => String.fromCharCode(65 + (index % 26));
@@ -308,6 +314,8 @@ const studioState = reactive({
     title: '',
     description: '',
     xp_reward: 150,
+    stars_per_correct: 1,
+    gems_per_correct: 10,
     passing_percentage: 70,
     time_limit_seconds: null,
     is_published: true,
@@ -882,17 +890,22 @@ const applyStarterTemplate = (formatId = activeFormatId.value) => {
     triggerStudioToast(`Loaded starter template for ${activeFormatMeta.value.name}!`);
 };
 
+const editingQuizId = ref(null);
+
 // Load an existing saved quiz from the module into the Studio canvas
-const loadExistingQuizIntoStudio = (savedQuiz) => {
+const loadExistingQuizIntoStudio = (savedQuiz, isCopy = false) => {
     const targetFormat = normalizeInitialFormat(savedQuiz.type);
     activeFormatId.value = targetFormat;
     activeSlideIndex.value = 0;
+    editingQuizId.value = isCopy ? null : (savedQuiz.id || null);
 
-    studioState.title = `${savedQuiz.title} (Copy)`;
+    studioState.title = isCopy ? `${savedQuiz.title} (Copy)` : savedQuiz.title;
     studioState.description = savedQuiz.description || '';
     studioState.xp_reward = savedQuiz.xp_reward || 150;
+    studioState.stars_per_correct = savedQuiz.stars_per_correct ?? 1;
+    studioState.gems_per_correct = savedQuiz.gems_per_correct ?? 10;
     studioState.passing_percentage = savedQuiz.passing_percentage || 70;
-    studioState.time_limit_seconds = savedQuiz.time_limit_seconds || null;
+    studioState.time_limit_seconds = null;
     studioState.is_published = Boolean(savedQuiz.is_published ?? true);
     studioState.contexts =
         savedQuiz.contexts && savedQuiz.contexts.length > 0
@@ -929,7 +942,7 @@ const loadExistingQuizIntoStudio = (savedQuiz) => {
     }
 
     captureHistorySnapshot();
-    triggerStudioToast(`Loaded "${savedQuiz.title}" into Studio!`);
+    triggerStudioToast(isCopy ? `Loaded template from "${savedQuiz.title}"!` : `Editing "${savedQuiz.title}" in Studio!`);
 };
 
 const deleteSavedQuiz = (savedQuiz) => {
@@ -972,11 +985,14 @@ const buildSubmissionPayload = () => {
         }));
 
     const basePayload = {
+        quiz_id: editingQuizId.value || null,
         title: studioState.title.trim(),
-        description: studioState.description?.trim() || null,
+        description: null,
         xp_reward: Number(studioState.xp_reward) || 150,
+        stars_per_correct: Number(studioState.stars_per_correct) ?? 1,
+        gems_per_correct: Number(studioState.gems_per_correct) ?? 10,
         passing_percentage: Number(studioState.passing_percentage) || 70,
-        time_limit_seconds: studioState.time_limit_seconds ? Number(studioState.time_limit_seconds) : null,
+        time_limit_seconds: null,
         is_published: Boolean(studioState.is_published),
         contexts: nonEmptyContexts.length > 0 ? nonEmptyContexts : null,
     };
@@ -1142,6 +1158,15 @@ watch(
 onMounted(() => {
     captureHistorySnapshot();
     window.addEventListener('keydown', handleGlobalKeydown);
+
+    if (props.initialQuizSlug && props.existingQuizzes?.length) {
+        const found = props.existingQuizzes.find(
+            (q) => q.slug === props.initialQuizSlug || String(q.id) === String(props.initialQuizSlug)
+        );
+        if (found) {
+            loadExistingQuizIntoStudio(found, false);
+        }
+    }
 });
 
 onBeforeUnmount(() => {
@@ -1178,6 +1203,12 @@ onBeforeUnmount(() => {
                 >
                     <span>{{ activeFormatMeta.icon }}</span>
                     <strong>{{ activeFormatMeta.name }}</strong>
+                </div>
+
+                <!-- Editing Existing Quiz Badge -->
+                <div v-if="editingQuizId" class="active-format-pill" style="background-color: #EEF2FF; border-color: #C7D2FE; color: #4338CA;">
+                    <span>✏️</span>
+                    <strong>Editing Existing Quiz</strong>
                 </div>
             </div>
 
@@ -1248,7 +1279,7 @@ onBeforeUnmount(() => {
                     :disabled="isSubmitting"
                     @click="publishQuizFromStudio"
                 >
-                    <span>{{ isSubmitting ? 'Publishing...' : '🚀 Publish Quiz' }}</span>
+                    <span>{{ isSubmitting ? 'Saving...' : (editingQuizId ? '💾 Save Changes' : '🚀 Publish Quiz') }}</span>
                 </button>
             </div>
         </header>
@@ -1295,7 +1326,7 @@ onBeforeUnmount(() => {
                         <span class="rail-lbl">Formats</span>
                     </button>
 
-                    <button
+                    <!-- <button
                         type="button"
                         class="rail-tab-btn"
                         :class="{ 'is-active': activeLeftTab === 'context' && isLeftDrawerOpen }"
@@ -1307,7 +1338,7 @@ onBeforeUnmount(() => {
                     >
                         <span class="rail-icon">📜</span>
                         <span class="rail-lbl">Passages</span>
-                    </button>
+                    </button> -->
 
                     <button
                         type="button"
@@ -1476,20 +1507,79 @@ onBeforeUnmount(() => {
                         </div>
                     </div>
 
-                    <!-- TAB 4: SCORING, XP & TIMER SETTINGS -->
+                    <!-- TAB 4: SCORING, XP & GAMIFICATION RULES -->
                     <div v-else-if="activeLeftTab === 'settings'" class="shelf-scroll-content">
-                        <div class="shelf-field-group">
-                            <label class="shelf-label">Quiz Directions / Description</label>
-                            <textarea
-                                v-model="studioState.description"
-                                rows="3"
-                                class="studio-textarea"
-                                placeholder="Instructions shown to students before starting..."
-                            ></textarea>
+                        <!-- Rewards Rule Callout -->
+                        <div class="reward-rules-callout">
+                            <span class="callout-icon">🏆</span>
+                            <div class="callout-body">
+                                <strong>Rewards Rule</strong>
+                                <p>Only correct answers grant ⭐ Star and 💎 Gem rewards. Incorrect questions award 0 rewards.</p>
+                            </div>
                         </div>
 
+                        <!-- ⭐ Stars Reward Per Correct Answer -->
                         <div class="shelf-field-group">
-                            <label class="shelf-label">XP Reward Bounty ({{ studioState.xp_reward }} XP)</label>
+                            <label class="shelf-label">
+                                <span>⭐ Stars Per Correct Answer</span>
+                                <span class="shelf-label-badge">+{{ studioState.stars_per_correct }} Stars</span>
+                            </label>
+                            <div class="preset-chips-row">
+                                <button
+                                    v-for="st in starPresets"
+                                    :key="st"
+                                    type="button"
+                                    class="preset-chip chip-star"
+                                    :class="{ 'is-active': Number(studioState.stars_per_correct) === st }"
+                                    @click="studioState.stars_per_correct = st"
+                                >
+                                    +{{ st }} ⭐
+                                </button>
+                            </div>
+                            <input
+                                v-model.number="studioState.stars_per_correct"
+                                type="number"
+                                min="0"
+                                max="100"
+                                class="studio-input"
+                                placeholder="e.g. 1"
+                            />
+                        </div>
+
+                        <!-- 💎 Gems Reward Per Correct Answer -->
+                        <div class="shelf-field-group">
+                            <label class="shelf-label">
+                                <span>💎 Gems Per Correct Answer</span>
+                                <span class="shelf-label-badge">+{{ studioState.gems_per_correct }} Gems</span>
+                            </label>
+                            <div class="preset-chips-row">
+                                <button
+                                    v-for="gm in gemPresets"
+                                    :key="gm"
+                                    type="button"
+                                    class="preset-chip chip-gem"
+                                    :class="{ 'is-active': Number(studioState.gems_per_correct) === gm }"
+                                    @click="studioState.gems_per_correct = gm"
+                                >
+                                    +{{ gm }} 💎
+                                </button>
+                            </div>
+                            <input
+                                v-model.number="studioState.gems_per_correct"
+                                type="number"
+                                min="0"
+                                max="500"
+                                class="studio-input"
+                                placeholder="e.g. 10"
+                            />
+                        </div>
+
+                        <!-- XP Reward Bounty -->
+                        <div class="shelf-field-group">
+                            <label class="shelf-label">
+                                <span>⚡ XP Completion Bounty</span>
+                                <span class="shelf-label-badge">+{{ studioState.xp_reward }} XP</span>
+                            </label>
                             <div class="preset-chips-row">
                                 <button
                                     v-for="xp in xpPresets"
@@ -1511,8 +1601,12 @@ onBeforeUnmount(() => {
                             />
                         </div>
 
+                        <!-- Passing Score -->
                         <div class="shelf-field-group">
-                            <label class="shelf-label">Passing Score ({{ studioState.passing_percentage }}%)</label>
+                            <label class="shelf-label">
+                                <span>🎯 Passing Score Threshold</span>
+                                <span class="shelf-label-badge">{{ studioState.passing_percentage }}%</span>
+                            </label>
                             <div class="preset-chips-row">
                                 <button
                                     v-for="pct in passPresets"
@@ -1525,17 +1619,12 @@ onBeforeUnmount(() => {
                                     {{ pct }}%
                                 </button>
                             </div>
-                        </div>
-
-                        <div class="shelf-field-group">
-                            <label class="shelf-label">Optional Time Limit (Seconds)</label>
                             <input
-                                v-model.number="studioState.time_limit_seconds"
+                                v-model.number="studioState.passing_percentage"
                                 type="number"
-                                min="10"
-                                max="7200"
+                                min="1"
+                                max="100"
                                 class="studio-input"
-                                placeholder="No timer (leave blank)"
                             />
                         </div>
 
@@ -1630,7 +1719,7 @@ onBeforeUnmount(() => {
                                     placeholder="Write or paste the story passage or conflict scenario here..."
                                     @blur="captureHistorySnapshot"
                                 ></textarea>
-                                <div class="context-hint-row">
+                                <!-- <div class="context-hint-row">
                                     <input
                                         v-model="ctx.hint"
                                         type="text"
@@ -1645,7 +1734,7 @@ onBeforeUnmount(() => {
                                     >
                                         ✕
                                     </button>
-                                </div>
+                                </div> -->
                             </div>
                         </div>
                     </section>
@@ -1780,12 +1869,12 @@ onBeforeUnmount(() => {
                                         :placeholder="`Enter Choice ${optionLetters[oIdx]} text...`"
                                     />
 
-                                    <input
+                                    <!-- <input
                                         v-model="opt.feedback"
                                         type="text"
                                         class="studio-input opt-feedback-input"
                                         placeholder="Optional feedback when student picks this..."
-                                    />
+                                    /> -->
                                 </div>
                             </div>
 
@@ -1799,7 +1888,7 @@ onBeforeUnmount(() => {
                                         placeholder="Clue shown if student needs help..."
                                     />
                                 </div>
-                                <div>
+                                <!-- <div>
                                     <label class="field-label">✨ Answer Explanation (Optional)</label>
                                     <input
                                         v-model="currentSlideItem.explanation"
@@ -1807,7 +1896,7 @@ onBeforeUnmount(() => {
                                         class="studio-input"
                                         placeholder="Why is this answer correct?"
                                     />
-                                </div>
+                                </div> -->
                             </div>
                         </div>
 
@@ -1877,7 +1966,7 @@ onBeforeUnmount(() => {
                                         placeholder="Shown when matched..."
                                     />
                                 </div>
-                                <div>
+                                <!-- <div>
                                     <label class="field-label">↩ Retry Feedback</label>
                                     <input
                                         v-model="currentSlideItem.feedback_incorrect"
@@ -1885,7 +1974,7 @@ onBeforeUnmount(() => {
                                         class="studio-input"
                                         placeholder="Shown if wrong color picked..."
                                     />
-                                </div>
+                                </div> -->
                             </div>
                         </div>
 
@@ -1995,7 +2084,7 @@ onBeforeUnmount(() => {
                                         placeholder="Clue for placing this event card..."
                                     />
                                 </div>
-                                <div>
+                                <!-- <div>
                                     <label class="field-label">✨ Explanation (Optional)</label>
                                     <input
                                         v-model="currentSlideItem.explanation"
@@ -2003,7 +2092,7 @@ onBeforeUnmount(() => {
                                         class="studio-input"
                                         placeholder="Why does this event belong in that zone?"
                                     />
-                                </div>
+                                </div> -->
                             </div>
                         </div>
 
@@ -2056,7 +2145,7 @@ onBeforeUnmount(() => {
                                                 placeholder="Optional hint..."
                                             />
                                         </div>
-                                        <div>
+                                        <!-- <div>
                                             <label class="field-label">✨ Explanation (Optional)</label>
                                             <input
                                                 v-model="currentSlideItem.explanation"
@@ -2064,7 +2153,7 @@ onBeforeUnmount(() => {
                                                 class="studio-input"
                                                 placeholder="Optional explanation..."
                                             />
-                                        </div>
+                                        </div> -->
                                     </div>
                                 </div>
 
@@ -2125,7 +2214,7 @@ onBeforeUnmount(() => {
                              ========================================================= -->
                         <div v-else-if="activeFormatId === 'evaluation'" class="engine-body">
                             <!-- Word Helper Bank Bar -->
-                            <div class="word-helpers-bar">
+                            <!-- <div class="word-helpers-bar">
                                 <div class="word-helpers-head">
                                     <span class="field-label">
                                         🧰 Shared Word Helper Bank (Students can tap or reference these words)
@@ -2158,7 +2247,7 @@ onBeforeUnmount(() => {
                                         <button type="button" @click="removeWordHelperChip(wIdx)">✕</button>
                                     </span>
                                 </div>
-                            </div>
+                            </div> -->
 
                             <div class="engine-row-two-col">
                                 <div>
@@ -2238,14 +2327,14 @@ onBeforeUnmount(() => {
                                             v-model="opt.option_text"
                                             type="text"
                                             class="studio-input"
-                                            placeholder="Button Label (e.g., Heroic & Responsible)"
+                                            placeholder="Right or Wrong"
                                         />
-                                        <input
+                                        <!-- <input
                                             v-model="opt.stance_value"
                                             type="text"
                                             class="studio-input opt-feedback-input"
                                             placeholder="Value inserted into [stance] token..."
-                                        />
+                                        /> -->
                                     </div>
                                 </div>
                             </div>
@@ -3777,6 +3866,61 @@ onBeforeUnmount(() => {
     background: #4F46E5;
     border-color: #312E81;
     color: #FFFFFF;
+}
+
+.preset-chip.chip-star.is-active {
+    background: linear-gradient(180deg, #FDE047 0%, #EAB308 100%);
+    border-color: #A16207;
+    color: #713F12;
+}
+
+.preset-chip.chip-gem.is-active {
+    background: linear-gradient(180deg, #67E8F9 0%, #06B6D4 100%);
+    border-color: #0E7490;
+    color: #164E63;
+}
+
+.reward-rules-callout {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    padding: 0.75rem 0.95rem;
+    background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+    border: 2px solid #F59E0B;
+    border-radius: 14px;
+    box-shadow: 0 3px 0 #D97706, inset 0 1px 1px rgba(255, 255, 255, 0.8);
+    margin-bottom: 1.15rem;
+}
+
+.reward-rules-callout .callout-icon {
+    font-size: 1.35rem;
+    line-height: 1;
+}
+
+.reward-rules-callout .callout-body strong {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 800;
+    color: #92400E;
+    margin-bottom: 0.2rem;
+}
+
+.reward-rules-callout .callout-body p {
+    margin: 0;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: #78350F;
+}
+
+.shelf-label-badge {
+    margin-left: auto;
+    font-size: 0.74rem;
+    font-weight: 800;
+    color: #1E293B;
+    background: #F1F5F9;
+    padding: 0.15rem 0.45rem;
+    border-radius: 8px;
+    border: 1px solid #CBD5E1;
 }
 
 .mini-add-choice-btn,

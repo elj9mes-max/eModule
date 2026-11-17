@@ -25,12 +25,15 @@ class StoreColorConflictQuizRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'quiz_id' => ['nullable', 'integer'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'contexts' => ['nullable', 'array'],
             'contexts.*.scenario' => ['required_with:contexts', 'string'],
             'contexts.*.hint' => ['nullable', 'string', 'max:1000'],
             'xp_reward' => ['required', 'integer', 'min:10', 'max:50000'],
+            'stars_per_correct' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'gems_per_correct' => ['nullable', 'integer', 'min:0', 'max:500'],
             'passing_percentage' => ['required', 'integer', 'min:1', 'max:100'],
             'time_limit_seconds' => ['nullable', 'integer', 'min:10', 'max:7200'],
             'is_published' => ['nullable', 'boolean'],

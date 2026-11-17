@@ -375,6 +375,13 @@ const goToViewQuiz = (step) => {
     }
 };
 
+const goToEditQuiz = (step) => {
+    if (props.module?.slug && step?.slug) {
+        const quizType = (step.quizType || 'multiple-choice').replace(/_/g, '-');
+        router.visit(`/teachers/modules/${props.module.slug}/quizzes/studio?quiz=${step.slug}&type=${quizType}`);
+    }
+};
+
 onMounted(() => {
     if (steps.value.length > 0) {
         selectedStep.value = steps.value[0];
@@ -764,14 +771,22 @@ onMounted(() => {
 
                             <!-- Manage/View Milestone Action Button (Bottom of Speech Bubble Card) -->
                             <div v-if="module?.slug && step?.slug" class="speech-bubble-manage-row">
-                                <button
-                                    v-if="step.type === 'quiz'"
-                                    type="button"
-                                    class="btn-bubble-manage-content btn-bubble-quiz"
-                                    @click.stop="goToViewQuiz(step)"
-                                >
-                                    <span>🎯 View Quiz Result ➔</span>
-                                </button>
+                                <div v-if="step.type === 'quiz'" class="bubble-quiz-actions-grid">
+                                    <button
+                                        type="button"
+                                        class="btn-bubble-manage-content btn-bubble-quiz"
+                                        @click.stop="goToViewQuiz(step)"
+                                    >
+                                        <span>🎯 View Quiz Result ➔</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn-bubble-manage-content btn-bubble-edit-quiz"
+                                        @click.stop="goToEditQuiz(step)"
+                                    >
+                                        <span>✏️ Edit Quiz</span>
+                                    </button>
+                                </div>
                                 <button
                                     v-else
                                     type="button"
@@ -935,6 +950,15 @@ onMounted(() => {
                             @click="() => { showModal = false; goToViewQuiz(selectedStep); }"
                         >
                             <span>🎯 View Quiz Result ➔</span>
+                        </button>
+
+                        <button
+                            v-if="selectedStep.type === 'quiz' && module?.slug && selectedStep?.slug"
+                            type="button"
+                            class="modal-edit-quiz-btn"
+                            @click="() => { showModal = false; goToEditQuiz(selectedStep); }"
+                        >
+                            <span>✏️ Edit Quiz</span>
                         </button>
 
                         <button
@@ -2620,6 +2644,73 @@ onMounted(() => {
 .btn-bubble-manage-content:active {
     transform: translate3d(0, 3px, 0) scaleX(1.04) scaleY(0.94);
     box-shadow: 0 1.5px 0 #2B3354;
+}
+
+.bubble-quiz-actions-grid {
+    display: flex;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.bubble-quiz-actions-grid .btn-bubble-manage-content {
+    flex: 1;
+    min-width: 0;
+    padding: 0.62rem 0.65rem;
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
+.btn-bubble-edit-quiz {
+    background: linear-gradient(180deg, #818CF8 0%, #6366F1 48%, #4F46E5 100%);
+    border: 2.5px solid #2B3354;
+    box-shadow:
+        0 4.5px 0 #2B3354,
+        0 8px 16px rgba(79, 70, 229, 0.35),
+        inset 0 2px 1px rgba(255, 255, 255, 0.75),
+        inset 0 -3px 6px rgba(55, 48, 163, 0.3);
+}
+
+.btn-bubble-edit-quiz:hover {
+    background: linear-gradient(180deg, #A5B4FC 0%, #6366F1 50%, #4F46E5 100%);
+    box-shadow:
+        0 7px 0 #2B3354,
+        0 12px 22px rgba(79, 70, 229, 0.45),
+        inset 0 2px 2px rgba(255, 255, 255, 0.9);
+}
+
+.btn-bubble-edit-quiz:active {
+    transform: translate3d(0, 3px, 0) scaleX(1.04) scaleY(0.94);
+    box-shadow: 0 1.5px 0 #2B3354;
+}
+
+.modal-edit-quiz-btn {
+    background: linear-gradient(180deg, #818CF8 0%, #6366F1 48%, #4F46E5 100%);
+    color: #ffffff;
+    border: 2.5px solid #2B3354;
+    padding: 0.65rem 1.25rem;
+    border-radius: 16px;
+    font-family: var(--font-heading);
+    font-weight: 900;
+    font-size: 0.9rem;
+    cursor: pointer;
+    box-shadow: 0 5px 0 #2B3354, 0 10px 18px rgba(79, 70, 229, 0.35), inset 0 2px 1px rgba(255, 255, 255, 0.65);
+    transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s var(--spring-bounce);
+}
+
+.modal-edit-quiz-btn:hover {
+    transform: translate3d(0, -3px, 0) scale(1.02);
+    box-shadow: 0 7px 0 #2B3354, 0 14px 22px rgba(79, 70, 229, 0.45), inset 0 2px 1px rgba(255, 255, 255, 0.8);
+}
+
+.modal-edit-quiz-btn:active {
+    transform: translate3d(0, 3px, 0) scaleX(1.04) scaleY(0.94);
+    box-shadow: 0 1.5px 0 #2B3354;
+}
+
+@media (max-width: 480px) {
+    .bubble-quiz-actions-grid {
+        flex-direction: column;
+    }
 }
 
 .btn-bubble-quiz {

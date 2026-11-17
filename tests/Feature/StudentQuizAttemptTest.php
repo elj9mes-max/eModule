@@ -76,6 +76,8 @@ test('student can submit quiz answers and have attempt and answers saved to data
         'type' => QuizType::MultipleChoice,
         'passing_percentage' => 70,
         'xp_reward' => 200,
+        'stars_per_correct' => 3,
+        'gems_per_correct' => 10,
         'is_published' => true,
     ]);
 

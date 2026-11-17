@@ -183,7 +183,7 @@ INSTRUCTION;
     }
 
     /**
-     * Generate a short, kid-friendly module description based on module title and grade level.
+     * Generate a concise, subject-accurate, kid-friendly module description based on module title and grade level.
      *
      * @return array<string, mixed>
      */
@@ -193,23 +193,31 @@ INSTRUCTION;
         ?string $theme = null
     ): array {
         $gradeTarget = $gradeLevel ?: 'Grade 3-6 Elementary';
-        $themeContext = $theme ? "Theme/Biome setting: {$theme}." : '';
+        $themeContext = $theme ? "Theme atmosphere: {$theme}." : '';
 
         $systemInstruction = <<<INSTRUCTION
-You are an expert reading gamification curriculum architect for WebRead.
-Given the module title or topic created by a teacher, and target grade level ({$gradeTarget}), craft an engaging, exciting, kid-friendly short description (2 to 4 sentences).
-Explain what reading adventures, skills, vocabulary, and interactive lectures the students will experience in this module. {$themeContext}
-Keep the tone encouraging, adventurous, and motivating for young learners.
+You are an expert educational curriculum specialist and instructional designer for an interactive student learning platform.
+Given a module title, craft a high-quality, engaging, kid-friendly description (2 to 3 sentences) suitable for {$gradeTarget} learners.
+
+Critical Instructions:
+1. Subject & Meaning Focus: Analyze the exact meaning and educational domain of the module title (e.g. Guidance/Socio-Emotional Learning, Science, Mathematics, Reading/Language Arts, Social Studies, Values, Health).
+   - If the title is "Homeroom Guidance", focus directly on self-awareness, personal growth, emotional regulation, empathy, healthy friendships, study habits, and making positive choices.
+   - If the title is about Science (e.g., Solar System, Ecosystems), focus on scientific concepts, curiosity, and observation.
+   - If the title is about Math (e.g., Fractions, Multiplication), focus on problem-solving, numbers, and practical applications.
+   - Only focus on reading comprehension, phonics, or vocabulary if the module title is specifically about reading, literature, or language arts.
+2. Relevant Learning Outcomes: Explain what students will actually understand, discover, or practice in this module based on the subject matter.
+3. Natural Tone & Biome: {$themeContext} Keep the theme/biome as a subtle backdrop or inspiring flavor only; NEVER overshadow the subject with fairytale quests (do NOT invent enchanted trees, magic woods, or fantasy creatures unless the module title is explicitly a creative fantasy writing story).
+4. Avoid Repetitive Formulaic Clichés: Do NOT use cookie-cutter greetings like "Welcome to [Biome], explorers!" or "In this [adjective] adventure, you will journey through...". Write an original, varied, motivating description that speaks directly to why this subject matters.
 
 Return strictly a JSON object conforming to:
 {
-  "description": "Engaging 2-4 sentence module description..."
+  "description": "Clear, subject-focused, inspiring 2-3 sentence description..."
 }
 INSTRUCTION;
 
         $prompt = "Module Title: {$title}\nTarget Grade Level: {$gradeTarget}\n";
         if ($theme) {
-            $prompt .= "Module Theme / World: {$theme}\n";
+            $prompt .= "Visual Theme / Biome: {$theme}\n";
         }
 
         return $this->generateJson($prompt, $systemInstruction);

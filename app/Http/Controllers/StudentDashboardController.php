@@ -57,6 +57,7 @@ class StudentDashboardController extends Controller
             $payload['gamification'] = [
                 'total_xp' => (int) $profile->total_xp,
                 'total_stars' => (int) $profile->total_stars,
+                'total_gems' => (int) ($profile->total_gems ?? 0),
                 'level' => (int) $levelDetails['level'],
                 'level_title' => (string) $levelDetails['title'],
                 'level_badge' => (string) $levelDetails['badge'],
@@ -367,6 +368,22 @@ class StudentDashboardController extends Controller
             'level' => $own['level'],
             'xp_to_top' => $inTop || $lastVisible === null ? 0 : max(1, $lastVisible['xp'] - $own['xp'] + 1),
         ];
+    }
+
+    /**
+     * Display the student gem bazaar shop page.
+     */
+    public function shop(Request $request): Response|RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $user->isStudent()) {
+            return redirect()->route('teachers.dashboard');
+        }
+
+        return Inertia::render('students/Shop', [
+            'user' => $this->formatUserPayload($user),
+        ]);
     }
 
     /**

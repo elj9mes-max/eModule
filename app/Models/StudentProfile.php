@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'user_id',
     'total_xp',
     'total_stars',
+    'total_gems',
     'level',
     'quizzes_passed_count',
     'lectures_completed_count',
@@ -42,6 +43,7 @@ class StudentProfile extends Model
     protected $attributes = [
         'total_xp' => 0,
         'total_stars' => 0,
+        'total_gems' => 0,
         'level' => 1,
         'quizzes_passed_count' => 0,
         'lectures_completed_count' => 0,
@@ -58,6 +60,7 @@ class StudentProfile extends Model
             'user_id' => 'integer',
             'total_xp' => 'integer',
             'total_stars' => 'integer',
+            'total_gems' => 'integer',
             'level' => 'integer',
             'quizzes_passed_count' => 'integer',
             'lectures_completed_count' => 'integer',

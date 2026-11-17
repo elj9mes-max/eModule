@@ -148,8 +148,9 @@ class LevelProgressionService
         int $xpEarned,
         bool $isPassed,
         ?int $excludeAttemptId = null,
+        int $gemsEarned = 0,
     ): array {
-        return DB::transaction(function () use ($student, $quiz, $starsEarned, $xpEarned, $isPassed, $excludeAttemptId): array {
+        return DB::transaction(function () use ($student, $quiz, $starsEarned, $xpEarned, $isPassed, $excludeAttemptId, $gemsEarned): array {
             $profile = StudentProfile::query()->lockForUpdate()->find($student->id);
 
             if (! $profile) {
@@ -162,25 +163,29 @@ class LevelProgressionService
                 ->where('quiz_id', $quiz->id)
                 ->where('status', 'completed')
                 ->when($excludeAttemptId !== null, fn ($q) => $q->where('id', '!=', $excludeAttemptId))
-                ->selectRaw('COALESCE(MAX(stars), 0) as max_stars, COALESCE(MAX(xp_earned), 0) as max_xp, MAX(is_passed) as had_passed')
+                ->selectRaw('COALESCE(MAX(stars), 0) as max_stars, COALESCE(MAX(gems_earned), 0) as max_gems, COALESCE(MAX(xp_earned), 0) as max_xp, MAX(is_passed) as had_passed')
                 ->first();
 
             $prevMaxStars = (int) ($priorStats->max_stars ?? 0);
+            $prevMaxGems = (int) ($priorStats->max_gems ?? 0);
             $prevMaxXp = (int) ($priorStats->max_xp ?? 0);
             $hadPassed = (bool) ($priorStats->had_passed ?? false);
 
             $starDelta = max(0, $starsEarned - $prevMaxStars);
+            $gemDelta = max(0, $gemsEarned - $prevMaxGems);
             $xpDelta = max(0, $xpEarned - $prevMaxXp);
             $isFirstPass = $isPassed && ! $hadPassed;
 
             $oldLevel = $profile->level;
             $newTotalXp = $profile->total_xp + $xpDelta;
             $newTotalStars = $profile->total_stars + $starDelta;
+            $newTotalGems = ($profile->total_gems ?? 0) + $gemDelta;
             $newLevel = $this->calculateLevel($newTotalXp);
             $leveledUp = $newLevel > $oldLevel;
 
             $profile->total_xp = $newTotalXp;
             $profile->total_stars = $newTotalStars;
+            $profile->total_gems = $newTotalGems;
             $profile->level = $newLevel;
             if ($isFirstPass) {
                 $profile->quizzes_passed_count += 1;
@@ -195,8 +200,11 @@ class LevelProgressionService
                 'xp_delta' => $xpDelta,
                 'stars' => $starsEarned,
                 'star_delta' => $starDelta,
+                'gems_earned' => $gemsEarned,
+                'gem_delta' => $gemDelta,
                 'total_xp' => $newTotalXp,
                 'total_stars' => $newTotalStars,
+                'total_gems' => $newTotalGems,
                 'level' => $newLevel,
                 'leveled_up' => $leveledUp,
                 'is_first_pass' => $isFirstPass,
@@ -354,10 +362,11 @@ class LevelProgressionService
                 ->where('user_id', $userId)
                 ->where('status', 'completed')
                 ->groupBy('quiz_id')
-                ->selectRaw('quiz_id, MAX(stars) as max_stars, MAX(xp_earned) as max_xp, MAX(is_passed) as passed')
+                ->selectRaw('quiz_id, MAX(stars) as max_stars, COALESCE(MAX(gems_earned), 0) as max_gems, MAX(xp_earned) as max_xp, MAX(is_passed) as passed')
                 ->get();
 
             $quizStars = (int) $quizStats->sum('max_stars');
+            $quizGems = (int) $quizStats->sum('max_gems');
             $quizXp = (int) $quizStats->sum('max_xp');
             $quizzesPassed = (int) $quizStats->filter(fn ($s) => (bool) $s->passed)->count();
 
@@ -377,6 +386,7 @@ class LevelProgressionService
 
             $profile->total_xp = $totalXp;
             $profile->total_stars = $quizStars;
+            $profile->total_gems = $quizGems;
             $profile->level = $level;
             $profile->quizzes_passed_count = $quizzesPassed;
             $profile->lectures_completed_count = $lecturesCount;

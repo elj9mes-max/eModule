@@ -960,7 +960,7 @@ class EModuleCacheService
         return $this->rememberFlexible($key, 600, 1800, function () use ($module, $quiz): array {
             $siblingQuizzes = $module->quizzes()
                 ->orderBy('sort_order')
-                ->get(['id', 'module_id', 'title', 'slug', 'type', 'description', 'reading_passage', 'xp_reward', 'passing_percentage', 'time_limit_seconds', 'sort_order']);
+                ->get(['id', 'module_id', 'title', 'slug', 'type', 'description', 'reading_passage', 'xp_reward', 'passing_percentage', 'time_limit_seconds', 'stars_per_correct', 'gems_per_correct', 'sort_order']);
 
             $resolvedQuiz = $quiz && $quiz->module_id === $module->id
                 ? $siblingQuizzes->firstWhere('id', $quiz->id)
@@ -1028,7 +1028,8 @@ class EModuleCacheService
                 'score' => $latestAttempt->score,
                 'max_score' => $latestAttempt->max_score,
                 'percentage' => (float) $latestAttempt->percentage,
-                'stars' => $latestAttempt->stars,
+                'stars' => (int) $latestAttempt->stars,
+                'gems_earned' => (int) ($latestAttempt->gems_earned ?? 0),
                 'is_passed' => $latestAttempt->is_passed,
                 'xp_earned' => $latestAttempt->xp_earned,
                 'time_spent_seconds' => $latestAttempt->time_spent_seconds,
@@ -1199,6 +1200,8 @@ class EModuleCacheService
                     'type' => $quiz->type->value,
                     'description' => $quiz->description,
                     'xp_reward' => $quiz->xp_reward,
+                    'stars_per_correct' => $quiz->stars_per_correct ?? 1,
+                    'gems_per_correct' => $quiz->gems_per_correct ?? 10,
                     'passing_percentage' => $quiz->passing_percentage,
                     'time_limit_seconds' => $quiz->time_limit_seconds,
                     'sort_order' => $quiz->sort_order,
@@ -1515,6 +1518,8 @@ class EModuleCacheService
                 'hint' => $ctx->hint,
             ])->values()->all(),
             'xp_reward' => $quiz->xp_reward,
+            'stars_per_correct' => (int) ($quiz->stars_per_correct ?? 1),
+            'gems_per_correct' => (int) ($quiz->gems_per_correct ?? 10),
             'passing_percentage' => $quiz->passing_percentage,
             'time_limit_seconds' => $quiz->time_limit_seconds,
             'sort_order' => $quiz->sort_order,

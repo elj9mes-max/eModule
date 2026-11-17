@@ -95,6 +95,7 @@ class StudentQuizController extends Controller
                 'max_score' => $evaluation['max_score'],
                 'percentage' => $evaluation['percentage'],
                 'stars' => $evaluation['stars'],
+                'gems_earned' => $evaluation['gems_earned'] ?? 0,
                 'is_passed' => $evaluation['is_passed'],
                 'xp_earned' => $evaluation['xp_earned'],
                 'time_spent_seconds' => $timeSpentSeconds,
@@ -127,6 +128,7 @@ class StudentQuizController extends Controller
                 (int) $attempt->xp_earned,
                 (bool) $attempt->is_passed,
                 excludeAttemptId: $attempt->id,
+                gemsEarned: (int) ($attempt->gems_earned ?? 0),
             );
         }
 
@@ -152,6 +154,7 @@ class StudentQuizController extends Controller
                     'max_score' => $attempt->max_score,
                     'percentage' => (float) $attempt->percentage,
                     'stars' => $attempt->stars,
+                    'gems_earned' => $attempt->gems_earned ?? 0,
                     'is_passed' => $attempt->is_passed,
                     'xp_earned' => $attempt->xp_earned,
                     'time_spent_seconds' => $attempt->time_spent_seconds,
@@ -457,14 +460,19 @@ class StudentQuizController extends Controller
         $passThreshold = (float) ($quiz->passing_percentage ?? 70);
         $isPassed = $percentage >= $passThreshold;
 
-        $stars = 0;
-        if ($percentage >= 90) {
-            $stars = 3;
-        } elseif ($percentage >= $passThreshold) {
-            $stars = 2;
-        } elseif ($percentage >= 40) {
-            $stars = 1;
+        // Count correct answers - only correct answers grant star and gem rewards
+        $correctCount = 0;
+        foreach ($records as $rec) {
+            if (! empty($rec['is_correct'])) {
+                $correctCount++;
+            }
         }
+
+        $starsPerCorrect = max(0, (int) ($quiz->stars_per_correct ?? 1));
+        $gemsPerCorrect = max(0, (int) ($quiz->gems_per_correct ?? 10));
+
+        $stars = $correctCount * $starsPerCorrect;
+        $gemsEarned = $correctCount * $gemsPerCorrect;
 
         $baseXp = (int) ($quiz->xp_reward ?? 100);
         $xpEarned = (int) round(($percentage / 100) * $baseXp);
@@ -475,6 +483,7 @@ class StudentQuizController extends Controller
             'max_score' => $safeMax,
             'percentage' => $percentage,
             'stars' => $stars,
+            'gems_earned' => $gemsEarned,
             'is_passed' => $isPassed,
             'xp_earned' => $xpEarned,
             'answer_records' => $records,

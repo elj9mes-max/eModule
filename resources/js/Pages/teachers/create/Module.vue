@@ -3,6 +3,9 @@ import { ref } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import TeacherLayout from '@/Components/TeacherLayout.vue';
 import { generateModuleDescription } from '@/Services/geminiAi.js';
+import { useSound } from '@/Services/soundManager';
+
+const { playClick, playPop, playBoing, playSparkle } = useSound();
 
 const props = defineProps({
     user: {
@@ -72,6 +75,7 @@ const triggerAiModuleDescription = async () => {
         return;
     }
 
+    playClick();
     isGeneratingDesc.value = true;
     aiDescError.value = '';
     aiGeneratedSuccess.value = false;
@@ -79,12 +83,13 @@ const triggerAiModuleDescription = async () => {
     try {
         const result = await generateModuleDescription({
             title,
-            gradeLevel: '',
+            gradeLevel: props.classroom?.name || '',
             theme: form.theme,
         });
 
         if (result?.description) {
             form.description = result.description;
+            playSparkle();
             aiGeneratedSuccess.value = true;
             setTimeout(() => {
                 aiGeneratedSuccess.value = false;
@@ -111,10 +116,16 @@ const form = useForm({
 });
 
 const selectTheme = (themeOption) => {
+    playPop(1.1);
     form.theme = themeOption.id;
     if (['🌲', '🌊', '🚀', '🌋'].includes(form.icon)) {
         form.icon = themeOption.icon;
     }
+};
+
+const selectXpPreset = (preset) => {
+    playPop(1.15);
+    form.xp_bonus = preset;
 };
 
 const applyBannerFile = (file) => {
@@ -126,6 +137,7 @@ const applyBannerFile = (file) => {
     }
     form.cover_image = file;
     coverPreviewUrl.value = URL.createObjectURL(file);
+    playSparkle();
 };
 
 const handleBannerSelect = (event) => {
@@ -140,6 +152,7 @@ const handleBannerDrop = (event) => {
 };
 
 const removeBanner = () => {
+    playClick();
     if (coverPreviewUrl.value) {
         URL.revokeObjectURL(coverPreviewUrl.value);
         coverPreviewUrl.value = null;
@@ -151,10 +164,12 @@ const removeBanner = () => {
 };
 
 const submitModule = () => {
+    playClick();
     form.post('/teachers/modules');
 };
 
 const goToDashboard = () => {
+    playClick();
     router.visit(props.classroom ? `/teachers/dashboard?class_id=${props.classroom.id}` : '/teachers/dashboard');
 };
 </script>
@@ -167,227 +182,227 @@ const goToDashboard = () => {
         active-nav="modules"
         :pending-grading-count="pending_grading_count"
     >
-        <!-- MAIN STAGE: CREATE MODULE FORGE -->
+        <!-- MAIN STAGE: WIDE COMPACT MODULE FORGE -->
         <section class="game-stage">
             <!-- Header Bar -->
             <div class="panel-header-row">
-                <div>
+                <div class="header-title-block">
                     <div class="forge-badge-pill">✨ MODULE ARCHITECT FORGE</div>
                     <h1 class="panel-title">🏰 Create New Module</h1>
-                    <p class="panel-sub">
-                        Craft a new learning module for your students.
-                    </p>
                 </div>
                 <div class="header-buttons">
                     <button type="button" class="btn-3d btn-back-action" @click="goToDashboard">
-                        <span>← BACK TO YOUR MODULES</span>
+                        <span>← BACK TO MODULES</span>
                     </button>
                 </div>
             </div>
 
-            <!-- Builder Grid -->
+            <!-- Wide 2-Column Builder Studio -->
             <div class="builder-grid">
-                <!-- Tactile 3D + Neumorphic Form -->
                 <form class="module-form-card" @submit.prevent="submitModule">
-                    <!-- Section 1: Module Identity -->
-                    <div class="form-section">
-                        <h2 class="section-heading">
-                            <span class="section-num">1</span>
-                            <span>Module Identity & Overview</span>
-                        </h2>
-
-                        <div class="field-group">
-                            <label for="module-title" class="field-label">MODULE TITLE *</label>
-                            <input
-                                id="module-title"
-                                v-model="form.title"
-                                type="text"
-                                class="neu-input"
-                                placeholder="e.g., Whispering Forest: Phonics & Fables"
-                                required
-                            />
-                            <p v-if="form.errors.title" class="field-error">{{ form.errors.title }}</p>
-                        </div>
-
-                        <div class="field-group">
-                            <label for="module-status" class="field-label">MODULE STATUS</label>
-                            <select id="module-status" v-model="form.status" class="neu-select">
-                                <option value="draft">📝 Draft (Hidden)</option>
-                                <option value="published">🌟 Published (Active)</option>
-                            </select>
-                            <p v-if="form.errors.status" class="field-error">{{ form.errors.status }}</p>
-                        </div>
-
-                        <div class="field-group">
-                            <div class="field-header-row">
-                                <label for="module-desc" class="field-label">MODULE DESCRIPTION</label>
-                                <button
-                                    type="button"
-                                    class="ai-generate-desc-btn"
-                                    :class="{ 'is-loading': isGeneratingDesc, 'is-success': aiGeneratedSuccess }"
-                                    :disabled="isGeneratingDesc"
-                                    title="Auto-generate a kid-friendly description from your module title"
-                                    @click="triggerAiModuleDescription"
-                                >
-                                    <span v-if="isGeneratingDesc" class="ai-sparkle-spin">✨</span>
-                                    <span v-else-if="aiGeneratedSuccess" class="ai-check-icon">✓</span>
-                                    <span v-else class="ai-sparkle-icon">✨</span>
-                                    <span class="ai-btn-text">
-                                        {{ isGeneratingDesc ? 'Generating...' : aiGeneratedSuccess ? 'Generated!' : 'Generate with AI' }}
-                                    </span>
-                                </button>
-                            </div>
-                            <textarea
-                                id="module-desc"
-                                v-model="form.description"
-                                rows="3"
-                                class="neu-textarea"
-                                placeholder="Describe what reading skills, stories, and multimedia lectures students will explore inside this module..."
-                            ></textarea>
-                            <p v-if="aiDescError" class="ai-desc-error">{{ aiDescError }}</p>
-                            <p v-if="form.errors.description" class="field-error">{{ form.errors.description }}</p>
-                        </div>
-                    </div>
-
-                    <!-- Section 2: Module Banner / Cover Image & Biome Theme -->
-                    <div class="form-section">
-                        <h2 class="section-heading">
-                            <span class="section-num">2</span>
-                            <span>Module Banner & Biome Theme</span>
-                        </h2>
-
-                        <!-- Module Banner / Cover Image Upload -->
-                        <div class="field-group">
-                            <span class="field-label">UPLOAD MODULE BANNER / COVER IMAGE (OPTIONAL)</span>
-                            <input
-                                ref="bannerInputRef"
-                                type="file"
-                                accept="image/jpeg,image/png,image/webp"
-                                class="hidden-file-input"
-                                @change="handleBannerSelect"
-                            />
-
-                            <div
-                                v-if="!coverPreviewUrl"
-                                class="banner-upload-well"
-                                :class="{ 'dragging-active': isDraggingBanner }"
-                                @click="bannerInputRef?.click()"
-                                @dragover.prevent="isDraggingBanner = true"
-                                @dragleave.prevent="isDraggingBanner = false"
-                                @drop.prevent="handleBannerDrop"
-                            >
-                                <div class="upload-icon-bubble">🖼️</div>
-                                <div class="upload-well-text">
-                                    <span class="upload-main-txt">Click to upload or drag & drop module banner</span>
-                                    <span class="upload-sub-txt">Supports JPG, PNG, WEBP • Recommended 16:9 ratio (Max 5MB)</span>
-                                </div>
-                                <button type="button" class="btn-3d btn-browse-banner" @click.stop="bannerInputRef?.click()">
-                                    <span>📁 CHOOSE IMAGE</span>
-                                </button>
+                    <div class="form-studio-columns">
+                        <!-- LEFT PANE: Identity, Story & Biome Theme -->
+                        <div class="studio-col studio-col--left">
+                            <div class="col-header">
+                                <span class="col-num">1</span>
+                                <h2 class="col-title">Module Identity & Biome Theme</h2>
                             </div>
 
-                            <div v-else class="banner-uploaded-preview-box">
-                                <img :src="coverPreviewUrl" alt="Module Cover Banner Preview" class="banner-uploaded-img" />
-                                <div class="banner-uploaded-bar">
-                                    <span class="banner-file-name">🖼️ {{ form.cover_image?.name || 'Banner Selected' }}</span>
-                                    <div class="banner-bar-actions">
-                                        <button type="button" class="btn-3d btn-change-banner" @click="bannerInputRef?.click()">
-                                            <span>🔄 CHANGE</span>
-                                        </button>
-                                        <button type="button" class="btn-3d btn-remove-banner" @click="removeBanner">
-                                            <span>✖ REMOVE</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            <p v-if="form.errors.cover_image" class="field-error">{{ form.errors.cover_image }}</p>
-                        </div>
-
-                        <div class="field-group">
-                            <span class="field-label">CHOOSE BIOME COLOR THEME</span>
-                            <div class="theme-picker-grid">
-                                <button
-                                    v-for="t in themes"
-                                    :key="t.id"
-                                    type="button"
-                                    class="theme-option-btn"
-                                    :class="[`theme-opt-${t.id}`, { active: form.theme === t.id }]"
-                                    @click="selectTheme(t)"
-                                >
-                                    <span class="theme-opt-icon">{{ t.icon }}</span>
-                                    <span class="theme-opt-title">{{ t.label }}</span>
-                                    <span class="theme-opt-sub">{{ t.desc }}</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Section 3: Gamification & Quest Rules -->
-                    <div class="form-section">
-                        <h2 class="section-heading">
-                            <span class="section-num">3</span>
-                            <span>Quest Rewards</span>
-                        </h2>
-
-                        <div class="field-row-2">
-                            <div class="field-group">
-                                <label for="module-xp" class="field-label">GUILD XP BONUS (COMPLETION REWARD) *</label>
-                                <div class="xp-input-wrap">
+                            <!-- Row: Title & Status -->
+                            <div class="field-row-split">
+                                <div class="field-group flex-1">
+                                    <label for="module-title" class="field-label">MODULE TITLE *</label>
                                     <input
-                                        id="module-xp"
-                                        v-model.number="form.xp_bonus"
-                                        type="number"
-                                        min="0"
-                                        max="100000"
-                                        step="10"
-                                        class="neu-input xp-num-input"
-                                        placeholder="250"
+                                        id="module-title"
+                                        v-model="form.title"
+                                        type="text"
+                                        class="neu-input"
+                                        placeholder="e.g., Whispering Forest: Phonics & Fables"
                                         required
                                     />
-                                    <span class="xp-unit-badge">+XP</span>
+                                    <p v-if="form.errors.title" class="field-error">{{ form.errors.title }}</p>
                                 </div>
-                                <div class="xp-preset-row">
+
+                                <div class="field-group status-group">
+                                    <label for="module-status" class="field-label">STATUS</label>
+                                    <select id="module-status" v-model="form.status" class="neu-select">
+                                        <option value="draft">📝 Draft</option>
+                                        <option value="published">🌟 Live</option>
+                                    </select>
+                                    <p v-if="form.errors.status" class="field-error">{{ form.errors.status }}</p>
+                                </div>
+                            </div>
+
+                            <!-- Description with AI Generate -->
+                            <div class="field-group">
+                                <div class="field-header-row">
+                                    <label for="module-desc" class="field-label">DESCRIPTION</label>
                                     <button
-                                        v-for="preset in xpPresets"
-                                        :key="preset"
                                         type="button"
-                                        class="xp-preset-pill"
-                                        :class="{ active: Number(form.xp_bonus) === preset }"
-                                        @click="form.xp_bonus = preset"
+                                        class="ai-generate-desc-btn"
+                                        :class="{ 'is-loading': isGeneratingDesc, 'is-success': aiGeneratedSuccess }"
+                                        :disabled="isGeneratingDesc"
+                                        title="Auto-generate a kid-friendly description from your title"
+                                        @click="triggerAiModuleDescription"
                                     >
-                                        +{{ preset }} XP
+                                        <span v-if="isGeneratingDesc" class="ai-sparkle-spin">✨</span>
+                                        <span v-else-if="aiGeneratedSuccess" class="ai-check-icon">✓</span>
+                                        <span v-else class="ai-sparkle-icon">✨</span>
+                                        <span class="ai-btn-text">
+                                            {{ isGeneratingDesc ? 'Generating...' : aiGeneratedSuccess ? 'Generated!' : 'Generate with AI' }}
+                                        </span>
                                     </button>
                                 </div>
-                                <p v-if="form.errors.xp_bonus" class="field-error">{{ form.errors.xp_bonus }}</p>
+                                <textarea
+                                    id="module-desc"
+                                    v-model="form.description"
+                                    rows="2"
+                                    class="neu-textarea"
+                                    placeholder="Describe the adventure, reading goals, and challenges waiting inside..."
+                                ></textarea>
+                                <p v-if="aiDescError" class="ai-desc-error">{{ aiDescError }}</p>
+                                <p v-if="form.errors.description" class="field-error">{{ form.errors.description }}</p>
                             </div>
 
+                            <!-- Biome Theme Selector (Compact 4-grid) -->
                             <div class="field-group">
-                                <label for="module-boss" class="field-label">FINAL BOSS CHALLENGE</label>
-                                <input
-                                    id="module-boss"
-                                    v-model="form.boss_name"
-                                    type="text"
-                                    class="neu-input"
-                                    placeholder="Grammar Goblin"
-                                />
+                                <span class="field-label">CHOOSE BIOME THEME</span>
+                                <div class="theme-picker-grid">
+                                    <button
+                                        v-for="t in themes"
+                                        :key="t.id"
+                                        type="button"
+                                        class="theme-option-btn"
+                                        :class="[`theme-opt-${t.id}`, { active: form.theme === t.id }]"
+                                        @click="selectTheme(t)"
+                                    >
+                                        <span class="theme-opt-icon">{{ t.icon }}</span>
+                                        <div class="theme-opt-copy">
+                                            <span class="theme-opt-title">{{ t.label }}</span>
+                                            <span class="theme-opt-sub">{{ t.desc }}</span>
+                                        </div>
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Target classroom: the one the teacher clicked "Add New Module" from -->
-                        <div v-if="classroom" class="target-classroom-badge">
-                            <span class="target-classroom-icon">{{ classroom.icon || '🏫' }}</span>
-                            <span>This module will be added to <strong>{{ classroom.name }}</strong></span>
+                        <!-- RIGHT PANE: Visual Banner & Quest Rewards -->
+                        <div class="studio-col studio-col--right">
+                            <div class="col-header">
+                                <span class="col-num">2</span>
+                                <h2 class="col-title">Cover Art & Quest Rewards</h2>
+                            </div>
+
+                            <!-- Compact Module Banner / Cover Image Upload -->
+                            <div class="field-group">
+                                <span class="field-label">COVER BANNER (OPTIONAL)</span>
+                                <input
+                                    ref="bannerInputRef"
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp"
+                                    class="hidden-file-input"
+                                    @change="handleBannerSelect"
+                                />
+
+                                <div
+                                    v-if="!coverPreviewUrl"
+                                    class="banner-upload-well"
+                                    :class="{ 'dragging-active': isDraggingBanner }"
+                                    @click="bannerInputRef?.click()"
+                                    @dragover.prevent="isDraggingBanner = true"
+                                    @dragleave.prevent="isDraggingBanner = false"
+                                    @drop.prevent="handleBannerDrop"
+                                >
+                                    <div class="upload-icon-bubble">🖼️</div>
+                                    <div class="upload-well-text">
+                                        <span class="upload-main-txt">Click or drag banner image</span>
+                                        <span class="upload-sub-txt">JPG, PNG, WEBP • 16:9 ratio (Max 5MB)</span>
+                                    </div>
+                                    <button type="button" class="btn-3d btn-browse-banner" @click.stop="bannerInputRef?.click()">
+                                        <span>📁 CHOOSE</span>
+                                    </button>
+                                </div>
+
+                                <div v-else class="banner-uploaded-preview-box">
+                                    <img :src="coverPreviewUrl" alt="Module Cover Banner Preview" class="banner-uploaded-img" />
+                                    <div class="banner-uploaded-bar">
+                                        <span class="banner-file-name">🖼️ {{ form.cover_image?.name || 'Banner Selected' }}</span>
+                                        <div class="banner-bar-actions">
+                                            <button type="button" class="btn-3d btn-change-banner" @click="bannerInputRef?.click()">
+                                                <span>🔄 CHANGE</span>
+                                            </button>
+                                            <button type="button" class="btn-3d btn-remove-banner" @click="removeBanner">
+                                                <span>✖ REMOVE</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p v-if="form.errors.cover_image" class="field-error">{{ form.errors.cover_image }}</p>
+                            </div>
+
+                            <!-- Rewards: XP Bonus & Boss Row -->
+                            <div class="field-row-2">
+                                <div class="field-group">
+                                    <label for="module-xp" class="field-label">GUILD XP REWARD *</label>
+                                    <div class="xp-input-wrap">
+                                        <input
+                                            id="module-xp"
+                                            v-model.number="form.xp_bonus"
+                                            type="number"
+                                            min="0"
+                                            max="100000"
+                                            step="10"
+                                            class="neu-input xp-num-input"
+                                            placeholder="250"
+                                            required
+                                        />
+                                        <span class="xp-unit-badge">+XP</span>
+                                    </div>
+                                    <div class="xp-preset-row">
+                                        <button
+                                            v-for="preset in xpPresets"
+                                            :key="preset"
+                                            type="button"
+                                            class="xp-preset-pill"
+                                            :class="{ active: Number(form.xp_bonus) === preset }"
+                                            @click="selectXpPreset(preset)"
+                                        >
+                                            +{{ preset }}
+                                        </button>
+                                    </div>
+                                    <p v-if="form.errors.xp_bonus" class="field-error">{{ form.errors.xp_bonus }}</p>
+                                </div>
+
+                                <div class="field-group">
+                                    <label for="module-boss" class="field-label">BOSS CHALLENGE</label>
+                                    <input
+                                        id="module-boss"
+                                        v-model="form.boss_name"
+                                        type="text"
+                                        class="neu-input"
+                                        placeholder="Grammar Goblin"
+                                    />
+                                </div>
+                            </div>
+
+                            <!-- Target Classroom Badge (If assigned to a room) -->
+                            <div v-if="classroom" class="target-classroom-badge">
+                                <span class="target-classroom-icon">{{ classroom.icon || '🏫' }}</span>
+                                <div class="target-classroom-text">
+                                    <span>Target Classroom:</span>
+                                    <strong>{{ classroom.name }}</strong>
+                                </div>
+                            </div>
                         </div>
-                        <p v-if="form.errors.classroom_id" class="field-error">{{ form.errors.classroom_id }}</p>
                     </div>
 
-                    <!-- Form Actions -->
+                    <!-- Docked Form Footer Actions -->
                     <div class="form-footer-actions">
                         <button type="button" class="btn-3d btn-cancel-action" @click="goToDashboard">
                             <span>CANCEL</span>
                         </button>
                         <button type="submit" class="btn-3d btn-submit-module" :disabled="form.processing">
-                            <span>{{ form.processing ? 'SUMMONING MODULE...' : '✨ CREATE & SAVE MODULE' }}</span>
+                            <span>{{ form.processing ? 'SUMMONING...' : '✨ CREATE & SAVE MODULE' }}</span>
                         </button>
                     </div>
                 </form>
@@ -399,261 +414,206 @@ const goToDashboard = () => {
 <style scoped>
 /* 3D + Neumorphic Tactile Button Base */
 .btn-3d {
-    font-family: var(--font-game);
+    font-family: var(--font-game, 'Fredoka', sans-serif);
     font-weight: 900;
     letter-spacing: 0.04em;
     border-radius: 9999px;
-    border: 2.5px solid #1D2440;
+    border: 2px solid #1D2440;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.45rem;
+    gap: 0.35rem;
     transition: transform 0.14s var(--spring-bounce), box-shadow 0.14s var(--spring-bounce);
     outline: none;
     user-select: none;
 }
 
 .btn-3d:active:not(:disabled) {
-    transform: translateY(4px) !important;
-    box-shadow:
-        0 1px 0 #1D2440,
-        inset 3px 3px 6px rgba(0, 0, 0, 0.22),
-        inset -2px -2px 5px rgba(255, 255, 255, 0.4) !important;
+    transform: translateY(3px) !important;
+    box-shadow: 0 1px 0 #1D2440 !important;
 }
 
 /* ==========================================================================
-   MAIN STAGE & BUILDER LAYOUT
+   MAIN STAGE & WIDER BUILDER LAYOUT
    ========================================================================== */
 .game-stage {
     position: relative;
     z-index: 5;
-    max-width: 1480px;
-    margin: 0.35rem auto 2rem auto;
-    padding: 0 1.5rem;
+    max-width: 1240px;
+    width: 100%;
+    margin: 0.25rem auto 1.5rem auto;
+    padding: 0 1rem;
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: 0.85rem;
+    box-sizing: border-box;
 }
 
+/* Compact Header Bar */
 .panel-header-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 0.85rem;
-    background: var(--neu-surface);
-    border: 3px solid var(--game-border);
-    border-radius: 22px;
-    padding: 0.95rem 1.4rem;
+    gap: 0.65rem;
+    background: var(--neu-surface, linear-gradient(145deg, #FFFFFF 0%, #F5F0E4 100%));
+    border: 2.5px solid var(--game-border, #1D2440);
+    border-radius: 18px;
+    padding: 0.65rem 1rem;
     box-shadow:
-        0 5px 0 var(--game-border),
-        -5px -5px 12px var(--neu-light),
-        8px 12px 22px var(--neu-navy-ambient),
-        var(--neu-bevel-light),
-        var(--neu-bevel-dark);
+        0 4px 0 var(--game-border, #1D2440),
+        -3px -3px 8px var(--neu-light, rgba(255, 255, 255, 0.92)),
+        6px 10px 18px var(--neu-navy-ambient, rgba(29, 36, 64, 0.1)),
+        var(--neu-bevel-light, inset 2px 2px 4px rgba(255, 255, 255, 0.95)),
+        var(--neu-bevel-dark, inset -2px -2px 4px rgba(194, 185, 166, 0.3));
+}
+
+.header-title-block {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
 }
 
 .forge-badge-pill {
     display: inline-block;
     background: linear-gradient(145deg, #F2ECFF 0%, #E2D4FC 100%);
-    border: 2px solid #845EC2;
+    border: 1.5px solid #845EC2;
     color: #58398A;
-    font-size: 0.68rem;
+    font-size: 0.65rem;
     font-weight: 900;
-    padding: 0.16rem 0.65rem;
+    padding: 0.12rem 0.55rem;
     border-radius: 9999px;
     letter-spacing: 0.05em;
-    margin-bottom: 0.25rem;
-    box-shadow:
-        inset 1px 1px 3px rgba(255, 255, 255, 0.9),
-        0 2px 0 rgba(132, 94, 194, 0.28);
+    box-shadow: 0 1.5px 0 rgba(132, 94, 194, 0.28);
 }
 
 .panel-title {
-    font-size: 1.45rem;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 1.25rem;
     font-weight: 900;
     margin: 0;
-    color: var(--game-navy);
-    text-shadow: 1px 2px 0 rgba(255, 255, 255, 0.85);
-}
-
-.panel-sub {
-    font-size: 0.84rem;
-    font-family: var(--font-ui);
-    color: #6C7594;
-    margin: 0.15rem 0 0 0;
-    font-weight: 700;
-    max-width: 620px;
+    color: var(--game-navy, #1D2440);
+    line-height: 1.1;
+    text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 .btn-back-action {
     background: linear-gradient(145deg, #FFFFFF 0%, #EAEFF8 100%);
-    color: var(--game-navy);
-    padding: 0.6rem 1.1rem;
-    font-size: 0.82rem;
-    box-shadow:
-        0 4px 0 var(--game-border),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.95),
-        inset -2px -2px 4px rgba(164, 176, 204, 0.4);
+    color: var(--game-navy, #1D2440);
+    padding: 0.42rem 0.85rem;
+    font-size: 0.74rem;
+    box-shadow: 0 2.5px 0 var(--game-border, #1D2440);
 }
 
 .btn-back-action:hover {
-    transform: translateY(-2px);
-    box-shadow:
-        0 7px 0 var(--game-border),
-        inset 2px 2px 5px rgba(255, 255, 255, 0.95);
+    transform: translateY(-1.5px);
+    box-shadow: 0 4px 0 var(--game-border, #1D2440);
 }
 
-/* Builder Form Container */
+/* Builder Container: Wider Canvas */
 .builder-grid {
-    display: block;
-    max-width: 900px;
-    margin: 0 auto;
+    width: 100%;
 }
 
 /* Form Card */
 .module-form-card {
-    background: var(--neu-surface);
-    border: 3.5px solid var(--game-border);
-    border-radius: 30px;
-    padding: 1.9rem 2rem;
+    background: var(--neu-surface, linear-gradient(145deg, #FFFFFF 0%, #F5F0E4 100%));
+    border: 2.5px solid var(--game-border, #1D2440);
+    border-radius: 22px;
+    padding: 1.2rem 1.4rem;
     display: flex;
     flex-direction: column;
-    gap: 1.75rem;
+    gap: 1.15rem;
     box-shadow:
-        0 9px 0 var(--game-border),
-        -7px -7px 16px var(--neu-light),
-        12px 18px 30px var(--neu-navy-ambient),
-        var(--neu-bevel-light),
-        var(--neu-bevel-dark);
+        0 6px 0 var(--game-border, #1D2440),
+        -5px -5px 12px rgba(255, 255, 255, 0.95),
+        8px 16px 28px rgba(29, 36, 64, 0.12),
+        var(--neu-bevel-light, inset 2px 2px 4px rgba(255, 255, 255, 0.95)),
+        var(--neu-bevel-dark, inset -3px -3px 6px rgba(194, 185, 166, 0.3));
+    box-sizing: border-box;
 }
 
-.form-section {
+/* 2-Column Split Studio Layout */
+.form-studio-columns {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 1.4rem;
+}
+
+.studio-col {
     display: flex;
     flex-direction: column;
-    gap: 1.1rem;
-    padding-bottom: 1.5rem;
+    gap: 0.85rem;
+}
+
+.col-header {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding-bottom: 0.4rem;
     border-bottom: 2px dashed rgba(43, 51, 84, 0.14);
 }
 
-.form-section:last-of-type {
-    border-bottom: none;
-    padding-bottom: 0.25rem;
-}
-
-.section-heading {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    font-size: 1.2rem;
-    font-weight: 900;
-    margin: 0;
-    color: var(--game-navy);
-}
-
-.section-num {
-    width: 32px;
-    height: 32px;
-    border-radius: 10px;
+.col-num {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
     background: linear-gradient(145deg, #38A3F5 0%, #1579C4 100%);
     color: #FFFFFF;
-    border: 2px solid #0E5287;
+    border: 1.5px solid #0E5287;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.92rem;
-    box-shadow:
-        0 3px 0 #0E5287,
-        inset 1px 1px 3px rgba(255, 255, 255, 0.65);
+    font-size: 0.76rem;
+    font-weight: 900;
+    box-shadow: 0 2px 0 #0E5287;
+}
+
+.col-title {
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.98rem;
+    font-weight: 900;
+    color: var(--game-navy, #1D2440);
+    margin: 0;
 }
 
 .field-group {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.25rem;
+}
+
+.field-row-split {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.flex-1 {
+    flex: 1;
+}
+
+.status-group {
+    width: 140px;
 }
 
 .field-row-2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-}
-
-.field-row-3 {
-    display: grid;
-    grid-template-columns: 1.1fr 1.1fr 0.8fr;
-    gap: 1rem;
+    gap: 0.75rem;
 }
 
 .field-header-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 0.5rem;
-}
-
-.ai-generate-desc-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.28rem 0.75rem;
-    background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 50%, #BFDBFE 100%);
-    border: 1.5px solid #93C5FD;
-    border-radius: 9999px;
-    color: #1D4ED8;
-    font-family: var(--font-game);
-    font-size: 0.75rem;
-    font-weight: 800;
-    cursor: pointer;
-    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8);
-    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.ai-generate-desc-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%);
-    border-color: #60A5FA;
-    color: #1E40AF;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-
-.ai-generate-desc-btn:active:not(:disabled) {
-    transform: translateY(1px);
-    box-shadow: 0 1px 2px rgba(37, 99, 235, 0.15);
-}
-
-.ai-generate-desc-btn:disabled {
-    opacity: 0.65;
-    cursor: not-allowed;
-    transform: none;
-}
-
-.ai-generate-desc-btn.is-success {
-    background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
-    border-color: #6EE7B7;
-    color: #065F46;
-}
-
-.ai-sparkle-spin {
-    display: inline-block;
-    animation: ai-spin 1s linear infinite;
-}
-
-@keyframes ai-spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-.ai-desc-error {
-    margin: 0.2rem 0 0 0;
-    font-size: 0.76rem;
-    font-weight: 800;
-    color: #DC2626;
+    gap: 0.4rem;
 }
 
 .field-label {
-    font-size: 0.74rem;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.68rem;
     font-weight: 900;
     letter-spacing: 0.05em;
     color: #5C6684;
@@ -665,180 +625,277 @@ const goToDashboard = () => {
 .neu-select {
     width: 100%;
     background: #EEF1F9;
-    border: 2.5px solid var(--game-border);
-    border-radius: 16px;
-    padding: 0.78rem 1rem;
-    font-family: var(--font-game);
-    font-size: 0.95rem;
+    border: 2px solid var(--game-border, #1D2440);
+    border-radius: 12px;
+    padding: 0.48rem 0.75rem;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.88rem;
     font-weight: 800;
-    color: var(--game-navy);
+    color: var(--game-navy, #1D2440);
     outline: none;
     box-sizing: border-box;
     box-shadow:
-        inset 3px 3px 7px rgba(154, 166, 194, 0.55),
-        inset -3px -3px 7px rgba(255, 255, 255, 0.95),
-        0 1px 0 rgba(255, 255, 255, 0.9);
-    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+        inset 2px 2px 5px rgba(154, 166, 194, 0.45),
+        inset -2px -2px 5px rgba(255, 255, 255, 0.9);
+    transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .neu-input:focus,
 .neu-textarea:focus,
 .neu-select:focus {
-    background: #F6F8FD;
-    border-color: var(--game-blue);
-    box-shadow:
-        inset 3px 3px 7px rgba(35, 149, 235, 0.2),
-        inset -3px -3px 7px rgba(255, 255, 255, 0.98),
-        0 0 0 3px rgba(35, 149, 235, 0.18);
+    background: #F8FAFD;
+    border-color: #2563EB;
+    box-shadow: inset 1px 1px 3px rgba(35, 149, 235, 0.15), 0 0 0 2.5px rgba(35, 149, 235, 0.2);
 }
 
-.neu-input::placeholder,
-.neu-textarea::placeholder {
-    color: #9AA3BA;
-    font-weight: 700;
+.neu-textarea {
+    resize: vertical;
+    min-height: 58px;
+    line-height: 1.35;
+    font-family: var(--font-ui, 'Nunito', sans-serif);
+    font-weight: 600;
+    font-size: 0.84rem;
 }
 
 .field-error {
-    margin: 0.15rem 0 0 0;
-    font-size: 0.78rem;
+    margin: 0.1rem 0 0 0;
+    font-size: 0.72rem;
     font-weight: 800;
     color: #D9381E;
 }
 
-/* Module Banner / Cover Image Upload Well */
+/* AI Generate Description Button */
+.ai-generate-desc-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.55rem;
+    background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 50%, #BFDBFE 100%);
+    border: 1.5px solid #93C5FD;
+    border-radius: 9999px;
+    color: #1D4ED8;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.68rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 1.5px 3px rgba(37, 99, 235, 0.12);
+    transition: all 0.15s ease;
+}
+
+.ai-generate-desc-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%);
+    transform: translateY(-1px);
+}
+
+.ai-desc-error {
+    margin: 0.15rem 0 0 0;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #DC2626;
+}
+
+/* Biome Theme Picker Grid */
+.theme-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.55rem;
+}
+
+.theme-option-btn {
+    background: linear-gradient(145deg, #FFFFFF 0%, #EFF2FA 100%);
+    border: 2px solid var(--game-border, #1D2440);
+    border-radius: 14px;
+    padding: 0.45rem 0.65rem;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    cursor: pointer;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    text-align: left;
+    box-shadow: 0 2.5px 0 var(--game-border, #1D2440);
+    transition: transform 0.14s var(--spring-bounce);
+}
+
+.theme-option-btn:hover {
+    transform: translateY(-1.5px);
+}
+
+.theme-opt-icon {
+    font-size: 1.25rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.theme-opt-copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.theme-opt-title {
+    font-size: 0.82rem;
+    font-weight: 900;
+    color: var(--game-navy, #1D2440);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.theme-opt-sub {
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: #7B85A1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.theme-opt-forest.active {
+    background: linear-gradient(145deg, #ECFCF7 0%, #D0F5E9 100%);
+    border-color: #038F6A;
+    box-shadow: 0 3px 0 #038F6A;
+}
+
+.theme-opt-ocean.active {
+    background: linear-gradient(145deg, #ECF6FE 0%, #D2E9FC 100%);
+    border-color: #1467A6;
+    box-shadow: 0 3px 0 #1467A6;
+}
+
+.theme-opt-cosmic.active {
+    background: linear-gradient(145deg, #F5F0FC 0%, #E3D6F8 100%);
+    border-color: #58398A;
+    box-shadow: 0 3px 0 #58398A;
+}
+
+.theme-opt-volcano.active {
+    background: linear-gradient(145deg, #FFF2EE 0%, #FCDAD1 100%);
+    border-color: #BF3E22;
+    box-shadow: 0 3px 0 #BF3E22;
+}
+
+/* Banner Upload Well */
 .hidden-file-input {
     display: none;
 }
 
 .banner-upload-well {
     background: #EAEEF8;
-    border: 2.5px dashed #8B96B2;
-    border-radius: 20px;
-    padding: 1.15rem 1.35rem;
+    border: 2px dashed #8B96B2;
+    border-radius: 14px;
+    padding: 0.65rem 0.85rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 0.65rem;
     cursor: pointer;
-    box-shadow:
-        inset 3px 3px 7px rgba(154, 166, 194, 0.5),
-        inset -3px -3px 7px rgba(255, 255, 255, 0.95);
-    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s var(--spring-bounce);
+    box-shadow: inset 2px 2px 4px rgba(154, 166, 194, 0.4);
+    transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .banner-upload-well:hover,
 .banner-upload-well.dragging-active {
     background: #F2F5FC;
-    border-color: var(--game-blue);
+    border-color: #2563EB;
 }
 
 .upload-icon-bubble {
-    width: 48px;
-    height: 48px;
-    border-radius: 16px;
-    background: linear-gradient(145deg, #FFFFFF 0%, #E6ECF8 100%);
-    border: 2px solid var(--game-border);
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: #FFFFFF;
+    border: 1.5px solid var(--game-border, #1D2440);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5rem;
+    font-size: 1.2rem;
     flex-shrink: 0;
-    box-shadow:
-        0 3px 0 var(--game-border),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.95);
+    box-shadow: 0 2px 0 var(--game-border, #1D2440);
 }
 
 .upload-well-text {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
     flex: 1;
+    min-width: 0;
 }
 
 .upload-main-txt {
-    font-size: 0.9rem;
+    font-size: 0.78rem;
     font-weight: 900;
-    color: var(--game-navy);
+    color: var(--game-navy, #1D2440);
 }
 
 .upload-sub-txt {
-    font-family: var(--font-ui);
-    font-size: 0.76rem;
+    font-family: var(--font-ui, 'Nunito', sans-serif);
+    font-size: 0.68rem;
     font-weight: 700;
     color: #7B85A1;
 }
 
 .btn-browse-banner {
     background: linear-gradient(145deg, #FFFFFF 0%, #EAEFF8 100%);
-    color: var(--game-navy);
-    padding: 0.55rem 0.95rem;
-    font-size: 0.78rem;
+    color: var(--game-navy, #1D2440);
+    padding: 0.35rem 0.65rem;
+    font-size: 0.7rem;
     flex-shrink: 0;
-    box-shadow:
-        0 3px 0 var(--game-border),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.95);
+    box-shadow: 0 2px 0 var(--game-border, #1D2440);
 }
 
 .banner-uploaded-preview-box {
     background: #EEF1F9;
-    border: 2.5px solid var(--game-border);
-    border-radius: 20px;
+    border: 2px solid var(--game-border, #1D2440);
+    border-radius: 14px;
     overflow: hidden;
-    box-shadow:
-        inset 3px 3px 7px rgba(154, 166, 194, 0.45),
-        0 4px 0 var(--game-border);
+    box-shadow: 0 3px 0 var(--game-border, #1D2440);
 }
 
 .banner-uploaded-img {
     width: 100%;
-    height: 155px;
+    height: 84px;
     object-fit: cover;
     display: block;
-    border-bottom: 2.5px solid var(--game-border);
+    border-bottom: 2px solid var(--game-border, #1D2440);
 }
 
 .banner-uploaded-bar {
-    padding: 0.65rem 1rem;
+    padding: 0.45rem 0.75rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.75rem;
-    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 .banner-file-name {
-    font-size: 0.8rem;
+    font-size: 0.74rem;
     font-weight: 900;
-    color: var(--game-navy);
+    color: var(--game-navy, #1D2440);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 240px;
+    max-width: 180px;
 }
 
 .banner-bar-actions {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.35rem;
 }
 
-.btn-change-banner {
-    background: linear-gradient(145deg, #FFFFFF 0%, #EAEFF8 100%);
-    color: var(--game-navy);
-    padding: 0.4rem 0.75rem;
-    font-size: 0.74rem;
-    box-shadow: 0 3px 0 var(--game-border);
+.btn-change-banner,
+.btn-remove-banner {
+    padding: 0.25rem 0.55rem;
+    font-size: 0.65rem;
+    box-shadow: 0 2px 0 var(--game-border, #1D2440);
 }
 
 .btn-remove-banner {
-    background: linear-gradient(145deg, #FFF5F5 0%, #FFE0E0 100%);
-    color: #CF1322;
-    border-color: #CF1322;
-    padding: 0.4rem 0.75rem;
-    font-size: 0.74rem;
-    box-shadow: 0 3px 0 #CF1322;
+    background: #FFE4E6;
+    color: #BE123C;
+    border-color: #BE123C;
+    box-shadow: 0 2px 0 #BE123C;
 }
 
-/* XP Bonus Integer Input & Presets */
+/* XP Input & Presets */
 .xp-input-wrap {
     position: relative;
     display: flex;
@@ -846,41 +903,40 @@ const goToDashboard = () => {
 }
 
 .xp-num-input {
-    padding-right: 3.4rem;
+    padding-right: 3rem;
 }
 
 .xp-unit-badge {
     position: absolute;
-    right: 0.75rem;
+    right: 0.55rem;
     background: linear-gradient(145deg, #FFE46B 0%, #FFB703 100%);
     color: #573F00;
-    border: 1.5px solid #8A6400;
-    border-radius: 8px;
-    padding: 0.15rem 0.45rem;
-    font-size: 0.7rem;
+    border: 1px solid #8A6400;
+    border-radius: 6px;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.65rem;
     font-weight: 900;
     pointer-events: none;
-    box-shadow: 0 2px 0 #8A6400;
 }
 
 .xp-preset-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-top: 0.25rem;
+    gap: 0.25rem;
+    margin-top: 0.15rem;
 }
 
 .xp-preset-pill {
-    background: linear-gradient(145deg, #FFFFFF 0%, #EAEFF8 100%);
-    border: 1.5px solid var(--game-border);
+    background: #FFFFFF;
+    border: 1.5px solid var(--game-border, #1D2440);
     border-radius: 9999px;
-    padding: 0.2rem 0.55rem;
-    font-family: var(--font-game);
-    font-size: 0.68rem;
+    padding: 0.12rem 0.45rem;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.65rem;
     font-weight: 900;
     color: #5C6684;
     cursor: pointer;
-    box-shadow: 0 2px 0 var(--game-border);
+    box-shadow: 0 1.5px 0 var(--game-border, #1D2440);
     transition: transform 0.12s var(--spring-bounce);
 }
 
@@ -892,220 +948,80 @@ const goToDashboard = () => {
     background: linear-gradient(145deg, #FFE46B 0%, #FFB703 100%);
     color: #4A3500;
     border-color: #8A6400;
-    box-shadow: 0 2px 0 #8A6400;
+    box-shadow: 0 1.5px 0 #8A6400;
 }
 
-/* Module Card Banner Preview */
-.module-card-banner-wrap {
-    margin: -0.35rem -0.45rem 0.85rem -0.45rem;
-    height: 115px;
-    border-radius: 16px;
-    border: 2.5px solid var(--game-border);
-    overflow: hidden;
-    box-shadow:
-        0 3px 0 var(--game-border),
-        inset 0 2px 4px rgba(0, 0, 0, 0.15);
-}
-
-.module-card-banner-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-}
-
-/* Biome Theme Picker Grid */
-.theme-picker-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.85rem;
-}
-
-.theme-option-btn {
-    background: linear-gradient(145deg, #FFFFFF 0%, #EFF2FA 100%);
-    border: 3px solid var(--game-border);
-    border-radius: 20px;
-    padding: 0.85rem 1rem;
+/* Target Classroom Badge */
+.target-classroom-badge {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.2rem;
-    cursor: pointer;
-    font-family: var(--font-game);
-    text-align: left;
-    box-shadow:
-        0 4px 0 var(--game-border),
-        inset 2px 2px 5px rgba(255, 255, 255, 0.95),
-        inset -2px -2px 5px rgba(164, 176, 204, 0.35);
-    transition: transform 0.16s var(--spring-bounce), box-shadow 0.16s var(--spring-bounce);
-}
-
-.theme-option-btn:hover {
-    transform: translateY(-2px);
-}
-
-.theme-opt-icon {
-    font-size: 1.55rem;
-    line-height: 1;
-    margin-bottom: 0.15rem;
-}
-
-.theme-opt-title {
-    font-size: 0.95rem;
-    font-weight: 900;
-    color: var(--game-navy);
-}
-
-.theme-opt-sub {
-    font-size: 0.74rem;
-    font-weight: 800;
-    color: #7B85A1;
-}
-
-.theme-opt-forest.active {
-    background: linear-gradient(145deg, #ECFCF7 0%, #D0F5E9 100%);
-    border-color: #038F6A;
-    box-shadow:
-        0 5px 0 #038F6A,
-        inset 2px 2px 5px rgba(255, 255, 255, 0.9),
-        inset -2px -2px 5px rgba(6, 214, 160, 0.3);
-}
-
-.theme-opt-ocean.active {
-    background: linear-gradient(145deg, #ECF6FE 0%, #D2E9FC 100%);
-    border-color: #1467A6;
-    box-shadow:
-        0 5px 0 #1467A6,
-        inset 2px 2px 5px rgba(255, 255, 255, 0.9),
-        inset -2px -2px 5px rgba(35, 149, 235, 0.3);
-}
-
-.theme-opt-cosmic.active {
-    background: linear-gradient(145deg, #F5F0FC 0%, #E3D6F8 100%);
-    border-color: #58398A;
-    box-shadow:
-        0 5px 0 #58398A,
-        inset 2px 2px 5px rgba(255, 255, 255, 0.9),
-        inset -2px -2px 5px rgba(132, 94, 194, 0.3);
-}
-
-.theme-opt-volcano.active {
-    background: linear-gradient(145deg, #FFF2EE 0%, #FCDAD1 100%);
-    border-color: #BF3E22;
-    box-shadow:
-        0 5px 0 #BF3E22,
-        inset 2px 2px 5px rgba(255, 255, 255, 0.9),
-        inset -2px -2px 5px rgba(255, 107, 74, 0.3);
-}
-
-/* Emblem Icon Picker */
-.icon-picker-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.55rem;
-}
-
-.icon-choice-btn {
-    width: 46px;
-    height: 46px;
-    border-radius: 14px;
-    background: linear-gradient(145deg, #FFFFFF 0%, #EAEFF8 100%);
-    border: 2.5px solid var(--game-border);
-    font-size: 1.4rem;
-    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow:
-        0 3px 0 var(--game-border),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.95),
-        inset -2px -2px 4px rgba(164, 176, 204, 0.4);
-    transition: transform 0.15s var(--spring-bounce);
+    gap: 0.55rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 12px;
+    background: rgba(6, 214, 160, 0.12);
+    border: 1.5px dashed rgba(6, 214, 160, 0.65);
+    font-family: var(--font-ui, 'Nunito', sans-serif);
+    font-size: 0.78rem;
+    color: #065F46;
 }
 
-.icon-choice-btn:hover {
-    transform: translateY(-2px);
+.target-classroom-icon {
+    font-size: 1.25rem;
+    line-height: 1;
 }
 
-.icon-choice-btn.active {
-    background: linear-gradient(145deg, #FFE46B 0%, #FFB703 100%);
-    border-color: #8A6400;
-    box-shadow:
-        0 4px 0 #8A6400,
-        inset 2px 2px 4px rgba(255, 255, 255, 0.85);
-    transform: translateY(-2px) scale(1.06);
+.target-classroom-text {
+    display: flex;
+    gap: 0.3rem;
 }
 
-/* Form Footer Buttons */
+/* Docked Form Footer */
 .form-footer-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 0.9rem;
-    padding-top: 0.5rem;
+    gap: 0.65rem;
+    padding-top: 0.4rem;
+    border-top: 1.5px solid rgba(43, 51, 84, 0.1);
 }
 
 .btn-cancel-action {
     background: linear-gradient(145deg, #FFFFFF 0%, #EAEFF8 100%);
     color: #5C6684;
-    padding: 0.85rem 1.4rem;
-    font-size: 0.9rem;
-    box-shadow:
-        0 4px 0 var(--game-border),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.95);
+    padding: 0.5rem 1rem;
+    font-size: 0.78rem;
+    box-shadow: 0 3px 0 var(--game-border, #1D2440);
 }
 
 .btn-submit-module {
     background: linear-gradient(145deg, #06D6A0 0%, #04A87D 100%);
     color: #FFFFFF;
-    padding: 0.85rem 1.75rem;
-    font-size: 0.96rem;
+    padding: 0.5rem 1.25rem;
+    font-size: 0.82rem;
     border-color: #026B4F;
-    box-shadow:
-        0 5px 0 #026B4F,
-        0 10px 20px rgba(6, 214, 160, 0.35),
-        inset 2px 2px 5px rgba(255, 255, 255, 0.6),
-        inset -2px -3px 5px rgba(2, 107, 79, 0.45);
+    box-shadow: 0 3.5px 0 #026B4F, 0 6px 14px rgba(6, 214, 160, 0.3);
 }
 
 .btn-submit-module:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow:
-        0 7px 0 #026B4F,
-        0 14px 24px rgba(6, 214, 160, 0.45),
-        inset 2px 2px 5px rgba(255, 255, 255, 0.7);
+    transform: translateY(-1.5px);
+    box-shadow: 0 5px 0 #026B4F, 0 8px 18px rgba(6, 214, 160, 0.4);
 }
 
-.field-help-sub {
-    font-size: 0.78rem;
-    font-family: var(--font-ui);
-    color: #6C7594;
-    margin: -0.15rem 0 0.2rem 0;
-    font-weight: 700;
-}
-
-.target-classroom-badge {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
-    border-radius: 16px;
-    background: rgba(6, 214, 160, 0.12);
-    border: 2px dashed rgba(6, 214, 160, 0.55);
-    font-family: var(--font-ui);
-    font-weight: 700;
-}
-
-.target-classroom-icon {
-    font-size: 1.4rem;
-}
-
-/* ==========================================================================
-   RESPONSIVE DESIGN
-   ========================================================================== */
-@media (max-width: 980px) {
-    .field-row-2,
-    .field-row-3 {
+/* Responsive */
+@media (max-width: 860px) {
+    .form-studio-columns {
         grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+}
+
+@media (max-width: 540px) {
+    .field-row-split,
+    .field-row-2 {
+        flex-direction: column;
+        grid-template-columns: 1fr;
+    }
+    .status-group {
+        width: 100%;
     }
 }
 </style>

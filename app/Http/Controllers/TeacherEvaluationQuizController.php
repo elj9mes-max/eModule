@@ -60,31 +60,57 @@ class TeacherEvaluationQuizController extends Controller
         }
 
         $validated = $request->validated();
-        $baseSlug = Str::slug($validated['title']) ?: 'evaluation';
-        $slug = $baseSlug;
-        $counter = 1;
+        $quizId = ! empty($validated['quiz_id']) ? (int) $validated['quiz_id'] : null;
+        /** @var Quiz|null $existingQuiz */
+        $existingQuiz = $quizId ? $module->quizzes()->find($quizId) : null;
 
-        while ($module->quizzes()->where('slug', $slug)->exists()) {
-            $slug = $baseSlug.'-'.$counter++;
-        }
-
-        $nextOrder = $module->nextMilestoneSortOrder();
         $isPublished = (bool) ($validated['is_published'] ?? true);
 
-        DB::transaction(function () use ($module, $validated, $slug, $nextOrder, $isPublished): void {
-            /** @var Quiz $quiz */
-            $quiz = $module->quizzes()->create([
-                'type' => QuizType::Evaluation,
-                'title' => $validated['title'],
-                'slug' => $slug,
-                'description' => $validated['description'] ?? null,
-                'xp_reward' => (int) $validated['xp_reward'],
-                'passing_percentage' => (int) $validated['passing_percentage'],
-                'time_limit_seconds' => ! empty($validated['time_limit_seconds']) ? (int) $validated['time_limit_seconds'] : null,
-                'sort_order' => $nextOrder,
-                'is_published' => $isPublished,
-                'published_at' => $isPublished ? now() : null,
-            ]);
+        DB::transaction(function () use ($module, $validated, $existingQuiz, $isPublished): void {
+            if ($existingQuiz) {
+                $quiz = $existingQuiz;
+                $quiz->update([
+                    'title' => $validated['title'],
+                    'description' => $validated['description'] ?? null,
+                    'xp_reward' => (int) $validated['xp_reward'],
+                    'stars_per_correct' => isset($validated['stars_per_correct']) ? (int) $validated['stars_per_correct'] : 1,
+                    'gems_per_correct' => isset($validated['gems_per_correct']) ? (int) $validated['gems_per_correct'] : 10,
+                    'passing_percentage' => (int) $validated['passing_percentage'],
+                    'time_limit_seconds' => ! empty($validated['time_limit_seconds']) ? (int) $validated['time_limit_seconds'] : null,
+                    'is_published' => $isPublished,
+                    'published_at' => $isPublished ? ($quiz->published_at ?? now()) : null,
+                ]);
+
+                $quiz->contexts()->delete();
+                $quiz->evaluationItems()->delete();
+                $quiz->evaluationWordHelpers()->delete();
+            } else {
+                $baseSlug = Str::slug($validated['title']) ?: 'evaluation';
+                $slug = $baseSlug;
+                $counter = 1;
+
+                while ($module->quizzes()->where('slug', $slug)->exists()) {
+                    $slug = $baseSlug.'-'.$counter++;
+                }
+
+                $nextOrder = $module->nextMilestoneSortOrder();
+
+                /** @var Quiz $quiz */
+                $quiz = $module->quizzes()->create([
+                    'type' => QuizType::Evaluation,
+                    'title' => $validated['title'],
+                    'slug' => $slug,
+                    'description' => $validated['description'] ?? null,
+                    'xp_reward' => (int) $validated['xp_reward'],
+                    'stars_per_correct' => isset($validated['stars_per_correct']) ? (int) $validated['stars_per_correct'] : 1,
+                    'gems_per_correct' => isset($validated['gems_per_correct']) ? (int) $validated['gems_per_correct'] : 10,
+                    'passing_percentage' => (int) $validated['passing_percentage'],
+                    'time_limit_seconds' => ! empty($validated['time_limit_seconds']) ? (int) $validated['time_limit_seconds'] : null,
+                    'sort_order' => $nextOrder,
+                    'is_published' => $isPublished,
+                    'published_at' => $isPublished ? now() : null,
+                ]);
+            }
 
             // Save scenario contexts
             if (! empty($validated['contexts'])) {

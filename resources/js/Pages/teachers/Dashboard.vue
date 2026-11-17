@@ -4,6 +4,9 @@ import { computed, ref } from 'vue';
 import ClaySearchBar from '@/Components/ClaySearchBar.vue';
 import TeacherLayout from '@/Components/TeacherLayout.vue';
 import { flushAllClientCache, prefetchRoute } from '@/Composables/usePrefetch';
+import { useSound } from '@/Services/soundManager';
+
+const { playClick, playPop, playBoing, playSparkle } = useSound();
 
 const props = defineProps({
     user: {
@@ -38,6 +41,7 @@ const props = defineProps({
 });
 
 const filterByClassroom = (classId) => {
+    playPop(1.1);
     router.visit(classId ? `/teachers/dashboard?class_id=${classId}` : '/teachers/dashboard', {
         preserveState: false,
         preserveScroll: true,
@@ -61,6 +65,7 @@ const readStoredModuleView = () => {
 const moduleView = ref(typeof window === 'undefined' ? 'list' : readStoredModuleView());
 
 const setModuleView = (view) => {
+    playPop(1.1);
     moduleView.value = view;
 
     try {
@@ -84,8 +89,21 @@ const filteredModules = computed(() => {
     );
 });
 
+const totalLessons = computed(() =>
+    props.modules.reduce((acc, m) => acc + (Number(m.lectures_count) || 0), 0)
+);
+
+const liveCount = computed(() =>
+    props.modules.filter((m) => m.status === 'published').length
+);
+
+const draftCount = computed(() =>
+    props.modules.filter((m) => m.status === 'draft').length
+);
+
 const copyModuleCode = async (mod) => {
     if (!mod?.join_code) return;
+    playSparkle();
     const codeStr = String(mod.join_code);
     try {
         if (navigator?.clipboard?.writeText) {
@@ -117,6 +135,7 @@ const togglingModuleId = ref(null);
 
 const toggleModuleStatus = (mod) => {
     if (!mod?.slug || togglingModuleId.value === mod.id) return;
+    playClick();
     togglingModuleId.value = mod.id;
     const nextStatus = mod.status === 'published' ? 'draft' : 'published';
 
@@ -152,14 +171,17 @@ const classRankingUrl = computed(() =>
 );
 
 const goToClassRanking = () => {
+    playClick();
     router.visit(classRankingUrl.value);
 };
 
 const goToClasses = () => {
+    playClick();
     router.visit('/teachers/classes');
 };
 
 const goToGrading = () => {
+    playClick();
     router.visit('/teachers/grading');
 };
 
@@ -171,6 +193,7 @@ const createModuleUrl = computed(() =>
 );
 
 const goToCreateModule = () => {
+    playBoing(0.95);
     router.visit(createModuleUrl.value);
 };
 
@@ -184,6 +207,7 @@ const moduleUrl = (mod) =>
         : `/teachers/modules/${mod.slug}`;
 
 const openModule = (mod) => {
+    playClick();
     router.visit(moduleUrl(mod));
 };
 </script>
@@ -198,14 +222,36 @@ const openModule = (mod) => {
     >
         <!-- YOUR MODULES -->
         <section class="tab-panel world-tab">
-                <div class="panel-header-row">
-                    <div>
-                        <h1 class="panel-title">
-                            🏰 {{ selected_classroom ? `${selected_classroom.name} • Modules` : 'Your Modules' }}
-                        </h1>
-
+            <!-- Sleek Compact Command Deck -->
+            <div class="modules-command-deck">
+                <div class="deck-main-row">
+                    <!-- Title & Metrics -->
+                    <div class="deck-title-group">
+                        <div class="deck-title-line">
+                            <h1 class="deck-title">
+                                🏰 {{ selected_classroom ? selected_classroom.name : 'Modules HQ' }}
+                            </h1>
+                            <span v-if="modules.length > 0" class="deck-count-badge">
+                                {{ filteredModules.length }} {{ filteredModules.length === 1 ? 'module' : 'modules' }}
+                            </span>
+                        </div>
+                        <div v-if="modules.length > 0" class="deck-summary-strip">
+                            <span class="summary-chip" title="Total Lessons Across Modules">
+                                📖 <strong>{{ totalLessons }}</strong> lessons
+                            </span>
+                            <span class="summary-dot" aria-hidden="true">•</span>
+                            <span class="summary-chip" title="Published Live Modules">
+                                🌟 <strong>{{ liveCount }}</strong> live
+                            </span>
+                            <span class="summary-dot" aria-hidden="true">•</span>
+                            <span class="summary-chip" title="Draft Modules">
+                                📝 <strong>{{ draftCount }}</strong> draft
+                            </span>
+                        </div>
                     </div>
-                    <div class="header-buttons">
+
+                    <!-- Actions & Controls -->
+                    <div class="deck-actions-group">
                         <ClaySearchBar
                             v-if="modules.length > 0"
                             v-model="moduleSearch"
@@ -213,149 +259,124 @@ const openModule = (mod) => {
                             placeholder="Search modules or code…"
                             :result-count="filteredModules.length"
                         />
-                        <div v-if="modules.length > 0" class="view-toggle" role="group" aria-label="Module layout">
+
+                        <!-- Layout View Switcher (Grid vs List) -->
+                        <div v-if="modules.length > 0" class="deck-view-switch" role="group" aria-label="Module layout">
                             <button
                                 type="button"
-                                class="view-toggle__btn"
-                                :class="{ 'is-active': moduleView === 'list' }"
-                                :aria-pressed="moduleView === 'list'"
-                                title="List view"
-                                @click="setModuleView('list')"
-                            >
-                                <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
-                                    <rect x="2" y="3" width="16" height="4" rx="2" fill="currentColor" />
-                                    <rect x="2" y="8" width="16" height="4" rx="2" fill="currentColor" />
-                                    <rect x="2" y="13" width="16" height="4" rx="2" fill="currentColor" />
-                                </svg>
-                                <span class="sr-only">List view</span>
-                            </button>
-                            <button
-                                type="button"
-                                class="view-toggle__btn"
+                                class="view-toggle-btn"
                                 :class="{ 'is-active': moduleView === 'grid' }"
-                                :aria-pressed="moduleView === 'grid'"
-                                title="Grid view"
+                                title="Grid View (Compact 3D Bento Cards)"
+                                aria-label="Grid View"
                                 @click="setModuleView('grid')"
                             >
-                                <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
-                                    <rect x="2" y="2" width="7" height="7" rx="2.2" fill="currentColor" />
-                                    <rect x="11" y="2" width="7" height="7" rx="2.2" fill="currentColor" />
-                                    <rect x="2" y="11" width="7" height="7" rx="2.2" fill="currentColor" />
-                                    <rect x="11" y="11" width="7" height="7" rx="2.2" fill="currentColor" />
+                                <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true">
+                                    <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.5" />
+                                    <rect x="9" y="1.5" width="5.5" height="5.5" rx="1.5" />
+                                    <rect x="1.5" y="9" width="5.5" height="5.5" rx="1.5" />
+                                    <rect x="9" y="9" width="5.5" height="5.5" rx="1.5" />
                                 </svg>
-                                <span class="sr-only">Grid view</span>
+                                <span>Grid</span>
+                            </button>
+                            <button
+                                type="button"
+                                class="view-toggle-btn"
+                                :class="{ 'is-active': moduleView === 'list' }"
+                                title="List View (Compact Horizontal Rows)"
+                                aria-label="List View"
+                                @click="setModuleView('list')"
+                            >
+                                <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true">
+                                    <rect x="1.5" y="2" width="13" height="3" rx="1" />
+                                    <rect x="1.5" y="6.5" width="13" height="3" rx="1" />
+                                    <rect x="1.5" y="11" width="13" height="3" rx="1" />
+                                </svg>
+                                <span>List</span>
                             </button>
                         </div>
+
+                        <!-- Class Ranking Button -->
                         <button
                             type="button"
                             class="btn-3d btn-ranking-action"
-                            :aria-label="selected_classroom ? `View the ${selected_classroom.name} student ranking` : 'View the student ranking'"
+                            :aria-label="selected_classroom ? `View ${selected_classroom.name} student ranking` : 'View student ranking'"
                             @mouseenter="prefetchTeacherRoute(classRankingUrl, ['teacher-students'])"
                             @focus="prefetchTeacherRoute(classRankingUrl, ['teacher-students'])"
                             @click="goToClassRanking"
                         >
-                            <span>🏆 {{ selected_classroom ? 'CLASS RANKING' : 'STUDENT RANKING' }}</span>
+                            <span>🏆 {{ selected_classroom ? 'RANKING' : 'STUDENT RANKING' }}</span>
                         </button>
 
-                        <button type="button" class="btn-3d btn-primary-action" @mouseenter="prefetchTeacherRoute(createModuleUrl, ['teacher-modules'])" @focus="prefetchTeacherRoute(createModuleUrl, ['teacher-modules'])" @click="goToCreateModule">
-                            <span>✨ + ADD NEW MODULE</span>
+                        <!-- Create Module Button -->
+                        <button
+                            type="button"
+                            class="btn-3d btn-primary-action btn-create-compact"
+                            @mouseenter="prefetchTeacherRoute(createModuleUrl, ['teacher-modules'])"
+                            @focus="prefetchTeacherRoute(createModuleUrl, ['teacher-modules'])"
+                            @click="goToCreateModule"
+                        >
+                            <span>✨ + NEW MODULE</span>
                         </button>
                     </div>
                 </div>
+            </div>
 
-                <!-- Classroom / Room Filter Strip (When Teacher has Classrooms) -->
+            <!-- Shared SVG Definitions for fallback scenery -->
+            <svg v-if="modules.length > 0" width="0" height="0" style="position: absolute; pointer-events: none;" aria-hidden="true">
+                <defs>
+                    <linearGradient id="scenerySky" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#AEE2FF" />
+                        <stop offset="45%" stop-color="#D0EDFE" />
+                        <stop offset="100%" stop-color="#FFF2E7" />
+                    </linearGradient>
+                    <linearGradient id="mountPink" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#EAA6BF" />
+                        <stop offset="100%" stop-color="#C782A6" />
+                    </linearGradient>
+                    <linearGradient id="mountPurple" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#CBB5EA" />
+                        <stop offset="100%" stop-color="#9C82CA" />
+                    </linearGradient>
+                    <linearGradient id="hillGreen1" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#B2EDB8" />
+                        <stop offset="100%" stop-color="#72D086" />
+                    </linearGradient>
+                    <linearGradient id="hillGreen2" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#78E3AC" />
+                        <stop offset="100%" stop-color="#40B880" />
+                    </linearGradient>
+                    <linearGradient id="hillYellow" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#FDE89C" />
+                        <stop offset="100%" stop-color="#F6C852" />
+                    </linearGradient>
+                    <linearGradient id="pathGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#FCE1AE" />
+                        <stop offset="100%" stop-color="#F3C377" />
+                    </linearGradient>
+                </defs>
+            </svg>
 
-
-                <!-- Shared SVG Definitions hoisted once to prevent duplicate DOM IDs and per-card filter overhead -->
-                <svg v-if="modules.length > 0" width="0" height="0" style="position: absolute; pointer-events: none;" aria-hidden="true">
-                    <defs>
-                        <filter id="clayStarDropShadow" x="-30%" y="-30%" width="160%" height="160%">
-                            <feDropShadow dx="-2" dy="5" stdDeviation="3.5" flood-color="#8C5320" flood-opacity="0.32" />
-                        </filter>
-                        <radialGradient id="clayStarFill" cx="35%" cy="30%" r="65%">
-                            <stop offset="0%" stop-color="#FFF2B2" />
-                            <stop offset="40%" stop-color="#FCD34D" />
-                            <stop offset="80%" stop-color="#F59E0B" />
-                            <stop offset="100%" stop-color="#D97706" />
-                        </radialGradient>
-                        <linearGradient id="clayStarBevel" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9" />
-                            <stop offset="100%" stop-color="#B45309" stop-opacity="0.35" />
-                        </linearGradient>
-                        <filter id="cloudShadowLeft" x="-30%" y="-30%" width="170%" height="170%">
-                            <feDropShadow dx="-4" dy="7" stdDeviation="5.5" flood-color="#404B6D" flood-opacity="0.22" />
-                        </filter>
-                        <linearGradient id="cloudGradLeft" x1="20%" y1="0%" x2="60%" y2="100%">
-                            <stop offset="0%" stop-color="#FFFFFF" />
-                            <stop offset="60%" stop-color="#F2F5FB" />
-                            <stop offset="100%" stop-color="#D7E0F0" />
-                        </linearGradient>
-                        <radialGradient id="cloudPuffLeft" cx="30%" cy="25%" r="70%">
-                            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95" />
-                            <stop offset="60%" stop-color="#FFFFFF" stop-opacity="0" />
-                        </radialGradient>
-                        <filter id="cloudShadowRight" x="-30%" y="-30%" width="170%" height="170%">
-                            <feDropShadow dx="4" dy="7" stdDeviation="5.5" flood-color="#404B6D" flood-opacity="0.22" />
-                        </filter>
-                        <linearGradient id="cloudGradRight" x1="40%" y1="0%" x2="40%" y2="100%">
-                            <stop offset="0%" stop-color="#FFFFFF" />
-                            <stop offset="60%" stop-color="#F2F5FB" />
-                            <stop offset="100%" stop-color="#D7E0F0" />
-                        </linearGradient>
-                        <radialGradient id="cloudPuffRight" cx="35%" cy="25%" r="70%">
-                            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95" />
-                            <stop offset="60%" stop-color="#FFFFFF" stop-opacity="0" />
-                        </radialGradient>
-                        <linearGradient id="scenerySky" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stop-color="#AEE2FF" />
-                            <stop offset="45%" stop-color="#D0EDFE" />
-                            <stop offset="100%" stop-color="#FFF2E7" />
-                        </linearGradient>
-                        <linearGradient id="mountPink" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stop-color="#EAA6BF" />
-                            <stop offset="100%" stop-color="#C782A6" />
-                        </linearGradient>
-                        <linearGradient id="mountPurple" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stop-color="#CBB5EA" />
-                            <stop offset="100%" stop-color="#9C82CA" />
-                        </linearGradient>
-                        <linearGradient id="hillGreen1" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stop-color="#B2EDB8" />
-                            <stop offset="100%" stop-color="#72D086" />
-                        </linearGradient>
-                        <linearGradient id="hillGreen2" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stop-color="#78E3AC" />
-                            <stop offset="100%" stop-color="#40B880" />
-                        </linearGradient>
-                        <linearGradient id="hillYellow" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stop-color="#FDE89C" />
-                            <stop offset="100%" stop-color="#F6C852" />
-                        </linearGradient>
-                        <linearGradient id="pathGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stop-color="#FCE1AE" />
-                            <stop offset="100%" stop-color="#F3C377" />
-                        </linearGradient>
-                    </defs>
-                </svg>
-
-                <div v-if="modules.length > 0 && filteredModules.length === 0" class="search-empty-card">
-                    <div class="search-empty-orb" aria-hidden="true">🔍</div>
-                    <div class="search-empty-copy">
-                        <h2 class="search-empty-title">No modules match “{{ moduleSearch.trim() }}”</h2>
-                        <p class="search-empty-desc">Try another module title, join code, or “draft” / “published”.</p>
-                    </div>
-                    <button type="button" class="btn-3d btn-primary-action" @click="moduleSearch = ''">
-                        <span>↺ CLEAR SEARCH</span>
-                    </button>
+            <!-- Search Empty State -->
+            <div v-if="modules.length > 0 && filteredModules.length === 0" class="search-empty-card">
+                <div class="search-empty-orb" aria-hidden="true">🔍</div>
+                <div class="search-empty-copy">
+                    <h2 class="search-empty-title">No modules match “{{ moduleSearch.trim() }}”</h2>
+                    <p class="search-empty-desc">Try another module title, join code, or “draft” / “published”.</p>
                 </div>
+                <button type="button" class="btn-3d btn-primary-action btn-sm" @click="moduleSearch = ''">
+                    <span>↺ CLEAR SEARCH</span>
+                </button>
+            </div>
 
-                <div v-else-if="modules.length > 0 && moduleView === 'list'" class="quest-list">
+            <!-- Modules Content Wrap -->
+            <div v-else-if="modules.length > 0" class="modules-content-wrap">
+                <!-- HIGH-DENSITY COMPACT LIST VIEW -->
+                <div v-if="moduleView === 'list'" class="quest-list">
                     <article
                         v-for="(mod, index) in filteredModules"
                         :key="mod.id"
-                        v-memo="[mod.id, mod.title, mod.description, mod.grade_level, mod.icon, mod.theme, mod.status, mod.is_new, mod.cover_image_url, mod.join_code, mod.lectures_count, mod.xp_bonus, copiedCodeId === mod.id, togglingModuleId === mod.id]"
                         class="quest-row"
-                        :class="`theme-${mod.theme}`"
+                        :class="`theme-${mod.theme || 'forest'}`"
                         :style="{ '--i': Math.min(index, 8) }"
                         role="button"
                         tabindex="0"
@@ -366,112 +387,100 @@ const openModule = (mod) => {
                         @keydown.enter.self="openModule(mod)"
                         @keydown.space.self.prevent="openModule(mod)"
                     >
-                        <!-- Banner: cover art in a sculpted clay window -->
-                        <div class="quest-row__banner">
-                            <div class="quest-row__window">
-                                <img
-                                    v-if="mod.cover_image_url"
-                                    :src="mod.cover_image_url"
-                                    :alt="mod.title"
-                                    loading="lazy"
-                                    decoding="async"
-                                    class="quest-row__img"
-                                />
-                                <div v-else class="quest-row__scene" aria-hidden="true">
-                                    <span class="quest-row__sun"></span>
-                                    <span class="quest-row__cloud quest-row__cloud--a"></span>
-                                    <span class="quest-row__cloud quest-row__cloud--b"></span>
-                                    <span class="quest-row__hill quest-row__hill--back"></span>
-                                    <span class="quest-row__hill quest-row__hill--front"></span>
-                                </div>
-                                <span class="quest-row__gloss" aria-hidden="true"></span>
+                        <!-- Left: Compact Cover / Icon Orb -->
+                        <div class="row-thumb-box">
+                            <img
+                                v-if="mod.cover_image_url"
+                                :src="mod.cover_image_url"
+                                :alt="mod.title"
+                                loading="lazy"
+                                decoding="async"
+                                class="row-thumb-img"
+                            />
+                            <div v-else class="row-thumb-fallback" aria-hidden="true">
+                                <span class="row-fallback-sun"></span>
+                                <span class="row-fallback-hill"></span>
                             </div>
-                            <span class="quest-row__icon" aria-hidden="true">{{ mod.icon || '📘' }}</span>
-                            <span v-if="mod.is_new" class="quest-row__sticker">✨ NEW</span>
+                            <span class="row-thumb-icon" aria-hidden="true">{{ mod.icon || '📘' }}</span>
+                            <span v-if="mod.is_new" class="row-new-dot" title="New Module">✨</span>
                         </div>
 
-                        <!-- Content: meta chips, title, description, stats and actions -->
-                        <div class="quest-row__body">
-                            <div class="quest-row__meta">
-                                <span class="quest-chip quest-chip--grade">🎒 {{ mod.grade_level || 'All Grades' }}</span>
+                        <!-- Content: Title, Grade, Status, Stats -->
+                        <div class="row-content">
+                            <div class="row-header-line">
+                                <h2 class="row-title" :title="mod.title">{{ mod.title }}</h2>
+                                <span class="row-grade-chip">🎒 {{ mod.grade_level || 'All Grades' }}</span>
                                 <span
-                                    class="quest-chip"
-                                    :class="mod.status === 'published' ? 'quest-chip--live' : 'quest-chip--draft'"
+                                    class="row-status-chip"
+                                    :class="mod.status === 'published' ? 'is-live' : 'is-draft'"
                                 >
                                     {{ mod.status === 'published' ? '🌟 Live' : '📝 Draft' }}
                                 </span>
                             </div>
 
-                            <h2 class="quest-row__title" :title="mod.title">{{ mod.title }}</h2>
-
-                            <p class="quest-row__desc" :class="{ 'is-placeholder': !mod.description }">
-                                {{ mod.description || 'No description yet. Open the module to tell students what adventure awaits!' }}
-                            </p>
-
-                            <div class="quest-row__footer">
-                                <ul class="quest-row__stats" aria-label="Module stats">
-                                    <li class="quest-stat">
-                                        <span aria-hidden="true">📖</span>
-                                        <strong>{{ mod.lectures_count ?? 0 }}</strong>
-                                        {{ (mod.lectures_count ?? 0) === 1 ? 'lesson' : 'lessons' }}
-                                    </li>
-                                    <li v-if="mod.xp_bonus" class="quest-stat">
-                                        <span aria-hidden="true">⭐</span>
-                                        <strong>+{{ mod.xp_bonus }}</strong> XP
-                                    </li>
-                                </ul>
-
-                                <div class="quest-row__actions">
-                                    <button
-                                        v-if="mod.join_code"
-                                        type="button"
-                                        class="quest-btn quest-btn--code"
-                                        :class="{ 'is-copied': copiedCodeId === mod.id }"
-                                        :title="`Quest code ${mod.join_code}. Click to copy`"
-                                        @click.stop="copyModuleCode(mod)"
-                                    >
-                                        <span class="quest-btn__face">
-                                            <span aria-hidden="true">{{ copiedCodeId === mod.id ? '✅' : '🔑' }}</span>
-                                            <strong class="quest-code">{{ mod.join_code }}</strong>
-                                            <span class="quest-btn__hint">{{ copiedCodeId === mod.id ? 'Copied!' : 'Copy' }}</span>
-                                        </span>
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        class="quest-btn"
-                                        :class="mod.status === 'draft' ? 'quest-btn--publish' : 'quest-btn--unpublish'"
-                                        :disabled="togglingModuleId === mod.id"
-                                        :aria-label="mod.status === 'draft' ? 'Publish module' : 'Unpublish module (set to draft)'"
-                                        @click.stop="toggleModuleStatus(mod)"
-                                    >
-                                        <span class="quest-btn__face">
-                                            <span aria-hidden="true">{{ togglingModuleId === mod.id ? '⏳' : (mod.status === 'draft' ? '🚀' : '🙈') }}</span>
-                                            {{ togglingModuleId === mod.id ? 'Saving…' : (mod.status === 'draft' ? 'Publish' : 'Unpublish') }}
-                                        </span>
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        class="quest-btn quest-btn--open"
-                                        :aria-label="'Open ' + mod.title"
-                                        @click.stop="openModule(mod)"
-                                    >
-                                        <span class="quest-btn__face">Open <span class="quest-btn__arrow" aria-hidden="true">➔</span></span>
-                                    </button>
-                                </div>
+                            <div class="row-meta-line">
+                                <span class="row-stat-item">
+                                    📖 <strong>{{ mod.lectures_count ?? 0 }}</strong> {{ (mod.lectures_count ?? 0) === 1 ? 'lesson' : 'lessons' }}
+                                </span>
+                                <span v-if="mod.xp_bonus" class="row-stat-item">
+                                    ⭐ <strong>+{{ mod.xp_bonus }}</strong> XP
+                                </span>
+                                <span v-if="mod.description" class="row-desc-preview" :title="mod.description">
+                                    {{ mod.description }}
+                                </span>
                             </div>
+                        </div>
+
+                        <!-- Center-Right: Join Code Keycard Pill -->
+                        <div
+                            v-if="mod.join_code"
+                            class="row-code-keycard"
+                            :class="{ 'is-copied': copiedCodeId === mod.id }"
+                            role="button"
+                            tabindex="0"
+                            :title="`Quest code ${mod.join_code}. Click to copy`"
+                            @click.stop="copyModuleCode(mod)"
+                            @keydown.enter.stop="copyModuleCode(mod)"
+                            @keydown.space.stop.prevent="copyModuleCode(mod)"
+                        >
+                            <span class="code-ico">{{ copiedCodeId === mod.id ? '✅' : '🔑' }}</span>
+                            <span class="code-lbl">CODE:</span>
+                            <strong class="code-val">{{ mod.join_code }}</strong>
+                            <span class="code-btn">{{ copiedCodeId === mod.id ? 'COPIED!' : 'COPY' }}</span>
+                        </div>
+
+                        <!-- Right: Action Buttons -->
+                        <div class="row-actions">
+                            <button
+                                type="button"
+                                class="row-action-btn btn-toggle-status"
+                                :class="mod.status === 'draft' ? 'btn-publish' : 'btn-unpublish'"
+                                :disabled="togglingModuleId === mod.id"
+                                :title="mod.status === 'draft' ? 'Publish module' : 'Set to draft'"
+                                @click.stop="toggleModuleStatus(mod)"
+                            >
+                                <span>{{ togglingModuleId === mod.id ? '⏳' : (mod.status === 'draft' ? '🚀 Publish' : '📝 Draft') }}</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                class="row-action-btn btn-open-module"
+                                :title="'Open ' + mod.title"
+                                @click.stop="openModule(mod)"
+                            >
+                                <span>Open ➔</span>
+                            </button>
                         </div>
                     </article>
                 </div>
 
-                <div v-else-if="modules.length > 0" class="kingdoms-grid">
-                    <div
+                <!-- COMPACT BENTO GRID VIEW -->
+                <div v-else class="kingdoms-grid">
+                    <article
                         v-for="mod in filteredModules"
                         :key="mod.id"
-                        v-memo="[mod.id, mod.title, mod.theme, mod.status, mod.is_new, mod.cover_image_url, mod.join_code, copiedCodeId === mod.id, togglingModuleId === mod.id]"
                         class="kingdom-card"
-                        :class="`theme-${mod.theme}`"
+                        :class="`theme-${mod.theme || 'forest'}`"
                         role="button"
                         tabindex="0"
                         :aria-label="'Open learning module: ' + mod.title"
@@ -481,50 +490,8 @@ const openModule = (mod) => {
                         @keydown.enter="openModule(mod)"
                         @keydown.space.prevent="openModule(mod)"
                     >
-                        <!-- 3D Clay Decorative Accent: Star perched on top frame rim -->
-                        <div class="clay-accent clay-star" aria-hidden="true">
-                            <svg viewBox="0 0 54 54" class="clay-star-svg" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <g filter="url(#clayStarDropShadow)">
-                                    <path d="M27 5 C28.5 5 31.2 15 33 17 C34.8 19 45 20 46 21.5 C47 23 39.5 29.5 38.5 31.5 C37.5 33.5 40 43.5 38.5 44.5 C37 45.5 29 40 27 40 C25 40 17 45.5 15.5 44.5 C14 43.5 16.5 33.5 15.5 31.5 C14.5 29.5 7 23 8 21.5 C9 20 19.2 19 21 17 C22.8 15 25.5 5 27 5 Z"
-                                        fill="url(#clayStarFill)" stroke="url(#clayStarBevel)" stroke-width="2.5" stroke-linejoin="round" />
-                                    <ellipse cx="23" cy="16" rx="3.5" ry="2" transform="rotate(-25 23 16)" fill="#FFFFFF" fill-opacity="0.75" />
-                                </g>
-                            </svg>
-                        </div>
-
-                        <!-- 3D Clay Decorative Accent: Left Puffy Cloud -->
-                        <div class="clay-accent clay-cloud clay-cloud-left" aria-hidden="true">
-                            <svg viewBox="0 0 110 70" class="clay-cloud-svg" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <g filter="url(#cloudShadowLeft)">
-                                    <path d="M26 52 C15 52 8 44 8 36 C8 28 14 22 22 21 C24 12 33 5 45 5 C56 5 65 11 68 20 C72 17 78 17 82 20 C88 24 90 31 88 37 C96 39 102 45 102 52 C102 60 95 65 85 65 L26 65 C18 65 14 59 16 54 Z"
-                                        fill="url(#cloudGradLeft)" />
-                                    <ellipse cx="45" cy="20" rx="16" ry="10" fill="url(#cloudPuffLeft)" />
-                                    <ellipse cx="72" cy="30" rx="12" ry="8" fill="url(#cloudPuffLeft)" />
-                                    <ellipse cx="26" cy="36" rx="10" ry="7" fill="url(#cloudPuffLeft)" />
-                                </g>
-                            </svg>
-                        </div>
-
-                        <!-- 3D Clay Decorative Accent: Right Puffy Cloud -->
-                        <div class="clay-accent clay-cloud clay-cloud-right" aria-hidden="true">
-                            <svg viewBox="0 0 110 70" class="clay-cloud-svg" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <g filter="url(#cloudShadowRight)">
-                                    <path d="M24 61 C14 61 8 54 8 46 C8 39 13 33 20 31 C21 21 30 14 41 14 C48 14 55 18 58 24 C62 20 68 19 74 22 C81 26 84 34 82 40 C91 41 98 47 98 55 C98 62 91 67 82 67 L24 67 Z"
-                                        fill="url(#cloudGradRight)" />
-                                    <ellipse cx="42" cy="25" rx="14" ry="9" fill="url(#cloudPuffRight)" />
-                                    <ellipse cx="68" cy="33" rx="11" ry="7" fill="url(#cloudPuffRight)" />
-                                </g>
-                            </svg>
-                        </div>
-
-                        <!-- Floating Discrete Status / New Clay Badges -->
-                        <div class="clay-card-badges">
-                            <span v-if="mod.is_new" class="clay-badge-new">✨ NEW</span>
-
-                        </div>
-
-                        <!-- Stepped Neumorphic Bezel holding Center Picture Window -->
-                        <div class="frame-inner-bezel">
+                        <!-- Compact Diorama Window Aperture -->
+                        <div class="card-diorama-frame">
                             <div class="frame-window">
                                 <img
                                     v-if="mod.cover_image_url"
@@ -534,150 +501,326 @@ const openModule = (mod) => {
                                     decoding="async"
                                     class="frame-center-image"
                                 />
-                                <!-- 3D Cartoon Fallback Fantasy Landscape (when no cover image uploaded) -->
+                                <!-- 3D Fallback Landscape -->
                                 <div v-else class="frame-fallback-scene" aria-hidden="true">
-                                    <svg viewBox="0 0 600 360" preserveAspectRatio="xMidYMid slice" class="fallback-scenery-svg">
-                                        <!-- Pastel Sky -->
-                                        <rect width="600" height="360" fill="url(#scenerySky)" />
-
-                                        <!-- Background Clouds -->
-                                        <path d="M70 120 C70 100 90 85 115 85 C135 85 152 98 158 112 C168 108 180 114 184 124 C192 126 198 134 198 142 C198 152 188 158 175 158 L75 158 C62 158 55 148 58 138 C58 130 63 123 70 120 Z" fill="#FFFFFF" fill-opacity="0.85" />
-                                        <path d="M360 90 C360 72 378 58 402 58 C422 58 438 70 444 84 C454 80 466 86 470 95 C478 97 484 104 484 112 C484 122 474 128 460 128 L365 128 C352 128 346 118 349 108 C349 100 354 93 360 90 Z" fill="#FFFFFF" fill-opacity="0.88" />
-
-                                        <!-- Distant Snow-Capped Mountains -->
-                                        <path d="M120 250 L195 120 L270 250 Z" fill="url(#mountPink)" />
-                                        <path d="M195 120 L175 160 C185 168 205 168 215 160 Z" fill="#FFFFFF" />
-                                        <path d="M220 260 L330 90 L440 260 Z" fill="url(#mountPurple)" />
-                                        <path d="M330 90 L295 150 C315 162 345 162 365 150 Z" fill="#FFFFFF" />
-                                        <path d="M380 260 L450 145 L520 260 Z" fill="url(#mountPink)" />
-                                        <path d="M450 145 L430 180 C440 188 460 188 470 180 Z" fill="#FFFFFF" />
-
-                                        <!-- Rolling Hills -->
-                                        <path d="M-20 260 Q80 190 220 240 T460 230 Q540 240 620 210 L620 360 L-20 360 Z" fill="url(#hillGreen1)" />
-                                        <path d="M-20 280 Q140 220 310 270 T620 250 L620 360 L-20 360 Z" fill="url(#hillGreen2)" />
-                                        <path d="M-20 310 Q160 260 360 300 T620 280 L620 360 L-20 360 Z" fill="url(#hillYellow)" />
-
-                                        <!-- Winding Cartoon Path -->
-                                        <path d="M250 360 Q280 300 290 260 Q300 240 310 235 L330 238 Q320 245 315 265 Q310 305 350 360 Z" fill="url(#pathGrad)" />
-
-                                        <!-- Candy Trees Left Side -->
-                                        <rect x="75" y="225" width="10" height="35" rx="3" fill="#8B5E3C" />
-                                        <circle cx="80" cy="215" r="28" fill="#B388FF" />
-                                        <circle cx="72" cy="205" r="10" fill="#D1C4E9" fill-opacity="0.6" />
-                                        <rect x="135" y="240" width="8" height="28" rx="2" fill="#8B5E3C" />
-                                        <circle cx="139" cy="235" r="20" fill="#FF80AB" />
-                                        <circle cx="134" cy="228" r="7" fill="#FFD1DC" fill-opacity="0.6" />
-                                        <rect x="180" y="250" width="8" height="24" rx="2" fill="#8B5E3C" />
-                                        <circle cx="184" cy="245" r="18" fill="#80D8FF" />
-
-                                        <!-- Candy Trees Right Side -->
-                                        <rect x="495" y="215" width="12" height="42" rx="3" fill="#8B5E3C" />
-                                        <circle cx="501" cy="205" r="32" fill="#FF6E6E" />
-                                        <circle cx="492" cy="192" r="12" fill="#FFA4A4" fill-opacity="0.6" />
-                                        <rect x="445" y="235" width="10" height="32" rx="2.5" fill="#8B5E3C" />
-                                        <circle cx="450" cy="225" r="22" fill="#FFA726" />
-                                        <circle cx="444" cy="218" r="8" fill="#FFCC80" fill-opacity="0.6" />
-                                        <polygon points="415,260 405,230 425,230" fill="#26A69A" />
-                                        <polygon points="415,240 407,215 423,215" fill="#4DB6AC" />
+                                    <svg viewBox="0 0 400 200" preserveAspectRatio="xMidYMid slice" class="fallback-scenery-svg">
+                                        <rect width="400" height="200" fill="url(#scenerySky)" />
+                                        <path d="M60 140 L120 70 L180 140 Z" fill="url(#mountPink)" />
+                                        <path d="M140 150 L220 50 L300 150 Z" fill="url(#mountPurple)" />
+                                        <path d="M-20 150 Q60 110 160 140 T380 130 L420 200 L-20 200 Z" fill="url(#hillGreen1)" />
+                                        <path d="M-20 165 Q110 130 240 165 T420 150 L420 200 L-20 200 Z" fill="url(#hillGreen2)" />
                                     </svg>
                                 </div>
-
-                                <!-- Pixar Lens Gloss Glare -->
                                 <div class="frame-lens-glare" aria-hidden="true"></div>
+                            </div>
 
-                                <!-- Interactive Hover Action Pill -->
-                                <div class="frame-hover-pill" aria-hidden="true">
-                                    <span class="hover-pill-text">OPEN MODULE</span>
-                                    <span class="hover-pill-arrow">➔</span>
-                                </div>
+                            <!-- Mascot Pod -->
+                            <div class="card-mascot-pod" aria-hidden="true">
+                                <span class="mascot-emoji">{{ mod.icon || '📘' }}</span>
+                            </div>
+
+                            <!-- Grade Tag -->
+                            <div class="card-grade-badge">
+                                <span>{{ mod.grade_level || 'All Grades' }}</span>
+                            </div>
+
+                            <span v-if="mod.is_new" class="card-new-badge">✨ NEW</span>
+                        </div>
+
+                        <!-- Card Body -->
+                        <div class="card-body">
+                            <!-- Clay Plaque Title -->
+                            <div class="clay-title-plaque">
+                                <span class="plaque-rivet rivet-left" aria-hidden="true"></span>
+                                <h2 class="plaque-title-text" :title="mod.title">
+                                    {{ mod.title }}
+                                </h2>
+                                <span class="plaque-rivet rivet-right" aria-hidden="true"></span>
+                            </div>
+
+                            <!-- Stats & XP Pill -->
+                            <div class="card-stats-row">
+                                <span class="card-stat-chip">
+                                    📖 <strong>{{ mod.lectures_count ?? 0 }}</strong> {{ (mod.lectures_count ?? 0) === 1 ? 'lesson' : 'lessons' }}
+                                </span>
+                                <span v-if="mod.xp_bonus" class="card-stat-chip xp-chip">
+                                    ⭐ <strong>+{{ mod.xp_bonus }}</strong> XP
+                                </span>
+                            </div>
+
+                            <!-- 3D Quest Code Pill -->
+                            <div
+                                v-if="mod.join_code"
+                                class="card-quest-code-pill"
+                                :class="{ 'is-copied': copiedCodeId === mod.id }"
+                                role="button"
+                                tabindex="0"
+                                :title="`Quest Code: ${mod.join_code} (Click to copy)`"
+                                @click.stop="copyModuleCode(mod)"
+                                @keydown.enter.stop="copyModuleCode(mod)"
+                                @keydown.space.stop.prevent="copyModuleCode(mod)"
+                            >
+                                <span class="code-pill-icon">{{ copiedCodeId === mod.id ? '✅' : '🔑' }}</span>
+                                <span class="code-pill-lbl">CODE:</span>
+                                <strong class="code-pill-val">{{ mod.join_code }}</strong>
+                                <span class="code-pill-action">{{ copiedCodeId === mod.id ? 'COPIED!' : 'COPY' }}</span>
+                            </div>
+
+                            <!-- Card Footer Action Buttons -->
+                            <div class="card-actions-row">
+                                <button
+                                    type="button"
+                                    class="card-action-btn btn-status-toggle"
+                                    :class="mod.status === 'published' ? 'is-published' : 'is-draft'"
+                                    :disabled="togglingModuleId === mod.id"
+                                    :title="mod.status === 'draft' ? 'Click to publish' : 'Click to unpublish'"
+                                    @click.stop="toggleModuleStatus(mod)"
+                                >
+                                    <span v-if="togglingModuleId === mod.id">⏳ Saving…</span>
+                                    <span v-else-if="mod.status === 'published'">🌟 Live</span>
+                                    <span v-else>📝 Draft</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    class="card-action-btn btn-open-card"
+                                    :title="'Open ' + mod.title"
+                                    @click.stop="openModule(mod)"
+                                >
+                                    <span>Open ➔</span>
+                                </button>
                             </div>
                         </div>
-
-                        <!-- 3D Extruded Neumorphic Plaque with Module Title -->
-                        <div class="clay-title-plaque">
-                            <span class="plaque-rivet rivet-left" aria-hidden="true"></span>
-                            <span class="plaque-title-text" :title="mod.title">
-                                {{ mod.title }}
-                            </span>
-                            <span class="plaque-rivet rivet-right" aria-hidden="true"></span>
-                        </div>
-
-                        <!-- 3D Quest Code Badge & 1-Click Copy -->
-                        <div
-                            v-if="mod.join_code"
-                            class="card-quest-code-pill"
-                            :class="{ 'is-copied': copiedCodeId === mod.id }"
-                            role="button"
-                            tabindex="0"
-                            :title="`Quest Code: ${mod.join_code} (Click to copy)`"
-                            @click.stop="copyModuleCode(mod)"
-                            @keydown.enter.stop="copyModuleCode(mod)"
-                            @keydown.space.stop.prevent="copyModuleCode(mod)"
-                        >
-                            <span class="code-pill-icon">{{ copiedCodeId === mod.id ? '✅' : '🔑' }}</span>
-                            <span class="code-pill-lbl">CODE:</span>
-                            <strong class="code-pill-val">{{ mod.join_code }}</strong>
-                            <span class="code-pill-action">{{ copiedCodeId === mod.id ? 'COPIED!' : 'COPY' }}</span>
-                        </div>
-
-                        <!-- 3D Publish Status Toggle -->
-                        <button
-                            type="button"
-                            class="clay-badge-draft"
-                            :class="{
-                                'is-published': mod.status === 'published',
-                                'is-toggling': togglingModuleId === mod.id,
-                            }"
-                            :disabled="togglingModuleId === mod.id"
-                            :title="mod.status === 'draft' ? 'Click to publish this module' : 'Click to unpublish (set to draft)'"
-                            :aria-label="mod.status === 'draft' ? 'Draft module. Click to publish' : 'Published module. Click to set as draft'"
-                            @click.stop="toggleModuleStatus(mod)"
-                            @keydown.stop.enter="toggleModuleStatus(mod)"
-                            @keydown.stop.space.prevent="toggleModuleStatus(mod)"
-                        >
-                            <span v-if="togglingModuleId === mod.id" class="badge-status-icon" aria-hidden="true">⏳</span>
-                            <span v-else-if="mod.status === 'draft'" class="badge-status-icon" aria-hidden="true">📝</span>
-                            <span v-else class="badge-status-icon" aria-hidden="true">🌟</span>
-                            <span class="badge-status-label">{{ togglingModuleId === mod.id ? 'UPDATING...' : (mod.status === 'draft' ? 'DRAFT' : 'PUBLISHED') }}</span>
-                            <span v-if="togglingModuleId !== mod.id" class="badge-status-action">{{ mod.status === 'draft' ? 'PUBLISH' : 'UNPUBLISH' }}</span>
-                        </button>
-                    </div>
+                    </article>
                 </div>
+            </div>
 
-                <div v-else class="empty-modules-card">
-                    <div class="empty-module-badge">🏰</div>
-                    <h3 class="empty-module-title">
-                        {{ selected_classroom ? `No Modules Assigned to ${selected_classroom.name} Yet` : 'No Modules Created Yet' }}
-                    </h3>
-                    <p class="empty-module-desc">
-                        {{ selected_classroom ? `Assign reading adventure worlds to ${selected_classroom.name} from the Classrooms page so students in this room can embark on their journey.` : 'Summon your first learning module to start adding lectures, rich text lessons, images, audio narrations, and videos!' }}
-                    </p>
-                    <div class="empty-actions-row">
-                        <button v-if="selected_classroom" type="button" class="btn-3d btn-grade-action" @click="goToClasses">
-                            <span>🏫 GO TO CLASSROOMS & ASSIGN</span>
-                        </button>
-                        <button type="button" class="btn-3d btn-primary-action" @click="goToCreateModule">
-                            <span>✨ + CREATE NEW MODULE</span>
-                        </button>
-                    </div>
+            <!-- Empty Modules State -->
+            <div v-else class="empty-modules-card">
+                <div class="empty-module-badge">🏰</div>
+                <h3 class="empty-module-title">
+                    {{ selected_classroom ? `No Modules Assigned to ${selected_classroom.name} Yet` : 'No Modules Created Yet' }}
+                </h3>
+                <p class="empty-module-desc">
+                    {{ selected_classroom ? `Assign reading adventure worlds to ${selected_classroom.name} from the Classrooms page so students in this room can embark on their journey.` : 'Summon your first learning module to start adding lectures, rich text lessons, images, audio narrations, and videos!' }}
+                </p>
+                <div class="empty-actions-row">
+                    <button v-if="selected_classroom" type="button" class="btn-3d btn-grade-action" @click="goToClasses">
+                        <span>🏫 GO TO CLASSROOMS & ASSIGN</span>
+                    </button>
+                    <button type="button" class="btn-3d btn-primary-action btn-summon-lg" @click="goToCreateModule">
+                        <span>✨ + CREATE NEW MODULE</span>
+                    </button>
                 </div>
-            </section>
+            </div>
+        </section>
     </TeacherLayout>
 </template>
 
 <style scoped>
+/* ==========================================================================
+   SLEEK COMPACT COMMAND DECK
+   ========================================================================== */
+.modules-command-deck {
+    background: var(--neu-surface, linear-gradient(145deg, #FFFFFF 0%, #F5F0E4 100%));
+    border: 2.5px solid var(--game-border, #1D2440);
+    border-radius: 18px;
+    padding: 0.65rem 1rem;
+    margin-bottom: 1rem;
+    box-shadow:
+        0 4px 0 var(--game-border, #1D2440),
+        -3px -3px 8px var(--neu-light, rgba(255, 255, 255, 0.92)),
+        6px 10px 18px var(--neu-navy-ambient, rgba(29, 36, 64, 0.1)),
+        var(--neu-bevel-light, inset 2px 2px 4px rgba(255, 255, 255, 0.95)),
+        var(--neu-bevel-dark, inset -2px -2px 4px rgba(194, 185, 166, 0.3));
+}
+
+.deck-main-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.deck-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.deck-title-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.deck-title {
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 1.25rem;
+    font-weight: 900;
+    margin: 0;
+    color: var(--game-navy, #1D2440);
+    line-height: 1.1;
+    text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.deck-count-badge {
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.7rem;
+    font-weight: 800;
+    background: #EEF2FF;
+    color: #4F46E5;
+    border: 1.5px solid #818CF8;
+    padding: 0.12rem 0.55rem;
+    border-radius: 9999px;
+    box-shadow: 0 1.5px 0 #818CF8;
+}
+
+.deck-summary-strip {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-family: var(--font-ui, 'Nunito', sans-serif);
+    font-size: 0.76rem;
+    color: #556080;
+    font-weight: 700;
+}
+
+.summary-chip strong {
+    color: var(--game-navy, #1D2440);
+}
+
+.summary-dot {
+    color: #94A3B8;
+}
+
+.deck-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+}
+
+/* Layout Switcher */
+.deck-view-switch {
+    display: inline-flex;
+    background: #E2E8F0;
+    border: 2px solid var(--game-border, #1D2440);
+    border-radius: 12px;
+    padding: 2.5px;
+    gap: 2.5px;
+    box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.view-toggle-btn {
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    padding: 0.32rem 0.65rem;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.74rem;
+    font-weight: 800;
+    color: #64748B;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: all 0.16s ease;
+    user-select: none;
+}
+
+.view-toggle-btn:hover {
+    color: #1D2440;
+}
+
+.view-toggle-btn.is-active {
+    background: #FFFFFF;
+    color: #1D2440;
+    box-shadow: 0 2px 5px rgba(29, 36, 64, 0.18), 0 1px 0 #94A3B8;
+}
+
+/* Room Selector Strip */
+.room-selector-strip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.65rem;
+    padding-top: 0.6rem;
+    border-top: 1.5px solid rgba(29, 36, 64, 0.08);
+}
+
+.room-selector-label {
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    color: #64748B;
+}
+
+.room-filter-pill {
+    padding: 0.28rem 0.65rem;
+    border-radius: 999px;
+    border: 1.5px solid #CBD5E1;
+    background: #FFFFFF;
+    color: #334155;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.74rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 2px 0 #CBD5E1;
+    transition: transform 0.14s ease, background 0.14s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.room-filter-pill:hover {
+    transform: translateY(-1.5px);
+    border-color: #0284C7;
+}
+
+.room-filter-pill.active {
+    background: linear-gradient(180deg, #38BDF8 0%, #0284C7 100%);
+    border-color: #0369A1;
+    color: #FFFFFF;
+    box-shadow: 0 2.5px 0 #0369A1;
+    transform: translateY(-1.5px);
+}
+
+.room-manage-link {
+    margin-left: auto;
+    padding: 0.28rem 0.65rem;
+    border-radius: 999px;
+    background: #F1F5F9;
+    border: 1.5px solid #CBD5E1;
+    color: #475569;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.72rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.room-manage-link:hover {
+    background: #E2E8F0;
+    color: #1E293B;
+}
+
+/* 3D Button Base */
 .btn-3d {
     font-family: var(--font-game, 'Fredoka', sans-serif);
     font-weight: 900;
     letter-spacing: 0.04em;
     border-radius: 9999px;
-    border: 2.5px solid #1D2440;
+    border: 2px solid #1D2440;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.45rem;
-    transition: transform 0.2s var(--spring-bounce, cubic-bezier(0.34, 1.56, 0.64, 1)), box-shadow 0.2s var(--spring-bounce, cubic-bezier(0.34, 1.56, 0.64, 1)), filter 0.14s ease;
+    gap: 0.4rem;
+    transition: transform 0.18s var(--spring-bounce, cubic-bezier(0.34, 1.56, 0.64, 1)), box-shadow 0.18s ease;
     outline: none;
     user-select: none;
     position: relative;
@@ -701,383 +844,413 @@ const openModule = (mod) => {
 }
 
 .btn-3d:active {
-    transform: translate3d(0, 4px, 0) scaleX(1.04) scaleY(0.94) !important;
-    box-shadow:
-        0 1px 0 #1D2440,
-        inset 3px 3px 6px rgba(29, 36, 64, 0.22),
-        inset -2px -2px 5px rgba(255, 255, 255, 0.4) !important;
-}
-
-/* Classroom / Room Filter Strip */
-.room-selector-strip {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    flex-wrap: wrap;
-    margin-bottom: 1.5rem;
-    background: rgba(255, 255, 255, 0.85);
-    padding: 0.65rem 1rem;
-    border-radius: 20px;
-    border: 2px solid #E2E8F0;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
-}
-
-.room-selector-label {
-    font-family: var(--font-game, 'Fredoka', sans-serif);
-    font-size: 0.72rem;
-    font-weight: 900;
-    letter-spacing: 0.08em;
-    color: #64748B;
-}
-
-.room-filter-pill {
-    padding: 0.45rem 0.95rem;
-    border-radius: 999px;
-    border: 2px solid #CBD5E1;
-    background: #FFFFFF;
-    color: #334155;
-    font-family: var(--font-game, 'Fredoka', sans-serif);
-    font-size: 0.82rem;
-    font-weight: 800;
-    cursor: pointer;
-    box-shadow: 0 3px 0 #CBD5E1;
-    transition: transform 0.15s ease, background 0.15s ease;
-}
-
-.room-filter-pill:hover {
-    transform: translateY(-2px);
-    border-color: #0284C7;
-}
-
-.room-filter-pill.active {
-    background: linear-gradient(180deg, #38BDF8 0%, #0284C7 100%);
-    border-color: #0369A1;
-    color: #FFFFFF;
-    box-shadow: 0 3px 0 #0369A1, 0 6px 14px rgba(2, 132, 199, 0.3);
-    transform: translateY(-2px);
-}
-
-.room-manage-link {
-    margin-left: auto;
-    padding: 0.4rem 0.85rem;
-    border-radius: 999px;
-    background: #F1F5F9;
-    border: 1.5px solid #CBD5E1;
-    color: #475569;
-    font-family: var(--font-game, 'Fredoka', sans-serif);
-    font-size: 0.75rem;
-    font-weight: 800;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.room-manage-link:hover {
-    background: #E2E8F0;
-    color: #1E293B;
-}
-
-.empty-actions-row {
-    display: flex;
-    gap: 0.75rem;
-    justify-content: center;
-    flex-wrap: wrap;
-    margin-top: 1rem;
-}
-
-.panel-header-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.15rem;
-    flex-wrap: wrap;
-    gap: 0.85rem;
-    background: var(--neu-surface, linear-gradient(145deg, #FFFFFF 0%, #F3EFE4 100%));
-    border: 3px solid var(--game-border, #2B3354);
-    border-radius: 22px;
-    padding: 0.95rem 1.4rem;
-    box-shadow:
-        0 5px 0 var(--game-border, #2B3354),
-        -5px -5px 12px var(--neu-light, rgba(255, 255, 255, 0.92)),
-        8px 12px 22px var(--neu-navy-ambient, rgba(29, 36, 64, 0.12)),
-        var(--neu-bevel-light, inset 3px 3px 6px rgba(255, 255, 255, 0.95)),
-        var(--neu-bevel-dark, inset -4px -4px 8px rgba(194, 185, 166, 0.38));
-}
-
-.panel-title {
-    font-size: 1.45rem;
-    font-weight: 900;
-    margin: 0;
-    color: var(--game-navy);
-    text-shadow: 1px 2px 0 rgba(255, 255, 255, 0.85);
-}
-
-.panel-sub {
-    font-size: 0.84rem;
-    font-family: var(--font-ui);
-    color: #6C7594;
-    margin: 0.15rem 0 0 0;
-    font-weight: 700;
-}
-
-.header-buttons {
-    display: flex;
-    gap: 0.65rem;
-    flex-wrap: wrap;
-}
-
-.btn-ranking-action {
-    background: linear-gradient(145deg, #FFE46B 0%, #FFB703 100%);
-    color: #573F00;
-    padding: 0.6rem 1.1rem;
-    font-size: 0.82rem;
-    border-color: #8A6400;
-    box-shadow:
-        0 4px 0 #8A6400,
-        0 6px 14px rgba(255, 183, 3, 0.3),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.75),
-        inset -2px -2px 4px rgba(184, 133, 0, 0.35);
-}
-
-.btn-ranking-action:hover {
-    transform: translateY(-2px);
-    box-shadow:
-        0 6px 0 #8A6400,
-        0 10px 18px rgba(255, 183, 3, 0.4),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.85),
-        inset -2px -2px 4px rgba(184, 133, 0, 0.35);
+    transform: translate3d(0, 3px, 0) scale(0.98) !important;
+    box-shadow: 0 1px 0 #1D2440 !important;
 }
 
 .btn-primary-action {
     background: linear-gradient(145deg, #38A3F5 0%, #1677C2 100%);
     color: #FFFFFF;
-    padding: 0.6rem 1.15rem;
-    font-size: 0.82rem;
+    padding: 0.48rem 0.95rem;
+    font-size: 0.78rem;
     border-color: #0E5287;
     box-shadow:
-        0 4px 0 #0E5287,
-        0 6px 14px rgba(35, 149, 235, 0.3),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.55),
-        inset -2px -2px 5px rgba(14, 82, 135, 0.45);
+        0 3.5px 0 #0E5287,
+        0 5px 12px rgba(35, 149, 235, 0.32),
+        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.8),
+        inset -1.5px -1.5px 3px rgba(14, 82, 135, 0.35);
 }
 
 .btn-primary-action:hover {
     transform: translateY(-2px);
+    box-shadow: 0 5px 0 #0E5287, 0 8px 16px rgba(35, 149, 235, 0.4);
+}
+
+.btn-ranking-action {
+    background: linear-gradient(145deg, #FFE46B 0%, #FFB703 100%);
+    color: #573F00;
+    padding: 0.48rem 0.85rem;
+    font-size: 0.76rem;
+    border-color: #8A6400;
     box-shadow:
-        0 6px 0 #0E5287,
-        0 10px 18px rgba(35, 149, 235, 0.4),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.65),
-        inset -2px -2px 5px rgba(14, 82, 135, 0.45);
+        0 3.5px 0 #8A6400,
+        0 5px 12px rgba(255, 183, 3, 0.3),
+        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.85);
+}
+
+.btn-ranking-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 0 #8A6400, 0 8px 16px rgba(255, 183, 3, 0.4);
 }
 
 .btn-grade-action {
     background: linear-gradient(145deg, #F59E0B 0%, #D97706 100%);
     color: #FFFFFF;
-    padding: 0.6rem 1.15rem;
+    padding: 0.55rem 1.15rem;
     font-size: 0.82rem;
     border-color: #B45309;
-    box-shadow:
-        0 4px 0 #92400E,
-        0 6px 14px rgba(245, 158, 11, 0.35),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.65),
-        inset -2px -2px 5px rgba(146, 64, 14, 0.4);
+    box-shadow: 0 3.5px 0 #92400E;
 }
 
-.btn-grade-action:hover {
-    transform: translateY(-2px);
-    box-shadow:
-        0 6px 0 #92400E,
-        0 10px 18px rgba(245, 158, 11, 0.45),
-        inset 2px 2px 4px rgba(255, 255, 255, 0.75),
-        inset -2px -2px 5px rgba(146, 64, 14, 0.4);
+.btn-sm {
+    padding: 0.4rem 0.85rem;
+    font-size: 0.74rem;
 }
 
-.btn-pending-tag {
-    background: #DC2626;
-    color: #FFF;
-    border-radius: 9999px;
-    padding: 0.1rem 0.45rem;
-    font-size: 0.75rem;
-    margin-left: 0.25rem;
-}
-
-.grading-pill.has-pending {
-    border-color: #F59E0B;
-    background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
-    box-shadow: 0 4px 0 #D97706, 0 6px 12px rgba(245, 158, 11, 0.3);
-}
-
-/* Kingdoms Grid: Responsive Multi-Column Layout (Auto-Fill) Utilizing Full Desktop Canvas */
-.kingdoms-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
-    gap: 2.5rem clamp(1.5rem, 2vw, 2.25rem);
-    padding-top: 0.75rem;
-    padding-bottom: 2.5rem;
+.btn-summon-lg {
+    padding: 0.65rem 1.45rem;
+    font-size: 0.88rem;
 }
 
 /* ==========================================================================
-   PIXAR-INSPIRED VOLUMETRIC 3D KINGDOM CARDS
+   HIGH-DENSITY COMPACT LIST VIEW
    ========================================================================== */
-.kingdom-card {
-    --frame-grad-1: #E4ECFF;
-    --frame-grad-2: #E8E0FB;
-    --frame-grad-3: #FDE6EE;
-    --frame-grad-4: #FEECE5;
-    --frame-bezel-1: #CAD8FB;
-    --frame-bezel-2: #E9DEFA;
-    --frame-pedestal: #B4BFE6;
-    --frame-glow: rgba(132, 94, 194, 0.30);
-    --frame-ambient: rgba(45, 32, 85, 0.16);
-    --frame-belly-shadow: rgba(145, 130, 190, 0.36);
-    --plaque-pedestal: rgba(132, 94, 194, 0.25);
-
-    position: relative;
+.quest-list {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    border-radius: 32px;
-    padding: 14px 14px 16px 14px;
-    border: 3.5px solid rgba(255, 255, 255, 0.92);
-    background: linear-gradient(145deg, var(--frame-grad-1) 0%, var(--frame-grad-2) 35%, var(--frame-grad-3) 70%, var(--frame-grad-4) 100%);
+    gap: 0.55rem;
+}
+
+.quest-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.85rem;
+    padding: 0.5rem 0.85rem;
+    background: var(--neu-surface, linear-gradient(145deg, #FFFFFF 0%, #F5F0E4 100%));
+    border: 2px solid var(--game-border, #1D2440);
+    border-radius: 16px;
     box-shadow:
-        0 8px 0 var(--frame-pedestal),
-        0 16px 28px -4px var(--frame-glow),
-        0 26px 46px -8px var(--frame-ambient),
-        inset 0 3px 2px rgba(255, 255, 255, 0.98),
-        inset 0 -8px 16px -4px var(--frame-belly-shadow);
+        0 3.5px 0 var(--game-border, #1D2440),
+        -2px -2px 6px rgba(255, 255, 255, 0.9),
+        4px 8px 16px rgba(29, 36, 64, 0.08);
+    transition: transform 0.16s var(--spring-bounce, cubic-bezier(0.34, 1.56, 0.64, 1)), box-shadow 0.16s ease;
     cursor: pointer;
     user-select: none;
-    outline: none;
-    content-visibility: auto;
-    contain-intrinsic-size: 360px;
-    transform: translate3d(0, 0, 0);
-    transition:
-        transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
-        box-shadow 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+    box-sizing: border-box;
 }
 
-/* Volumetric Specular Glaze Crescent on Upper Card Face */
-.kingdom-card::before {
-    content: "";
-    position: absolute;
-    inset: 4px 14px auto 14px;
-    height: 38%;
-    border-radius: 30px 30px 90px 90px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.02) 100%);
-    pointer-events: none;
-    z-index: 2;
-}
-
-/* Tactile 3D Lift on Hover with Dynamic Shadow Expansion */
-.kingdom-card:hover {
-    transform: translate3d(0, -10px, 0) rotate(-0.8deg) scale(1.028);
+.quest-row:hover {
+    transform: translateY(-2px);
     box-shadow:
-        0 15px 0 var(--frame-pedestal),
-        0 26px 40px -4px var(--frame-glow),
-        0 38px 62px -10px var(--frame-ambient),
-        inset 0 3px 2px rgba(255, 255, 255, 1),
-        inset 0 -8px 16px -4px var(--frame-belly-shadow);
+        0 5px 0 var(--game-border, #1D2440),
+        -3px -3px 8px rgba(255, 255, 255, 0.95),
+        6px 12px 20px rgba(29, 36, 64, 0.12);
 }
 
-/* Playful Pixar Squash & Stretch on Active Click */
-.kingdom-card:active {
-    transform: translate3d(0, 4px, 0) scaleX(1.02) scaleY(0.96);
-    box-shadow:
-        0 3px 0 var(--frame-pedestal),
-        0 8px 16px -2px var(--frame-glow),
-        0 14px 24px -4px var(--frame-ambient),
-        inset 0 2px 2px rgba(255, 255, 255, 0.9),
-        inset 0 -4px 8px -2px var(--frame-belly-shadow);
-}
-
-.kingdom-card:focus-visible {
-    box-shadow:
-        0 0 0 3px #FFFFFF,
-        0 0 0 6px #2395EB,
-        0 14px 0 var(--frame-pedestal),
-        0 22px 34px -4px var(--frame-glow);
-}
-
-/* Biome Color Variations with Pixar Subsurface Scattering (SSS) */
-.theme-forest {
-    --frame-grad-1: #D6F9EB;
-    --frame-grad-2: #B8F2D7;
-    --frame-grad-3: #FEEBCB;
-    --frame-grad-4: #FFE3D1;
-    --frame-bezel-1: #9DE7C4;
-    --frame-bezel-2: #BCEFD7;
-    --frame-pedestal: #70C59B;
-    --frame-glow: rgba(14, 175, 120, 0.30);
-    --frame-ambient: rgba(18, 65, 48, 0.16);
-    --frame-belly-shadow: rgba(70, 160, 120, 0.36);
-    --plaque-pedestal: rgba(14, 175, 120, 0.28);
-}
-
-.theme-ocean {
-    --frame-grad-1: #D8EDFF;
-    --frame-grad-2: #BFE3FF;
-    --frame-grad-3: #FFE0F0;
-    --frame-grad-4: #FFEAE4;
-    --frame-bezel-1: #A3D4FD;
-    --frame-bezel-2: #C6E4FD;
-    --frame-pedestal: #78B5E8;
-    --frame-glow: rgba(24, 130, 235, 0.30);
-    --frame-ambient: rgba(15, 48, 90, 0.16);
-    --frame-belly-shadow: rgba(65, 130, 195, 0.36);
-    --plaque-pedestal: rgba(24, 130, 235, 0.28);
-}
-
-.theme-cosmic {
-    --frame-grad-1: #E2DCFD;
-    --frame-grad-2: #CFBEFA;
-    --frame-grad-3: #FCE1F2;
-    --frame-grad-4: #FFE0E6;
-    --frame-bezel-1: #BCACF8;
-    --frame-bezel-2: #D8CBFA;
-    --frame-pedestal: #9883E6;
-    --frame-glow: rgba(135, 85, 230, 0.32);
-    --frame-ambient: rgba(45, 25, 95, 0.18);
-    --frame-belly-shadow: rgba(115, 80, 185, 0.36);
-    --plaque-pedestal: rgba(135, 85, 230, 0.28);
-}
-
-.theme-volcano {
-    --frame-grad-1: #FFE7DC;
-    --frame-grad-2: #FED3C4;
-    --frame-grad-3: #FFF0CC;
-    --frame-grad-4: #FFE3BA;
-    --frame-bezel-1: #FDBCA6;
-    --frame-bezel-2: #FED0BE;
-    --frame-pedestal: #E09176;
-    --frame-glow: rgba(235, 95, 45, 0.32);
-    --frame-ambient: rgba(85, 30, 15, 0.16);
-    --frame-belly-shadow: rgba(195, 90, 60, 0.36);
-    --plaque-pedestal: rgba(235, 95, 45, 0.28);
-}
-
-/* Stepped Inner Frame Bezel (Sculpted Toy Tray) */
-.frame-inner-bezel {
+/* Row Thumbnail Box (Cover art + Icon) */
+.row-thumb-box {
     position: relative;
-    z-index: 1;
-    border-radius: 26px;
-    padding: 8px;
-    background: linear-gradient(135deg, var(--frame-bezel-1) 0%, var(--frame-bezel-2) 100%);
-    box-shadow:
-        inset 0 3px 6px rgba(20, 25, 55, 0.22),
-        inset 0 -2px 4px rgba(255, 255, 255, 0.9),
-        0 1.5px 2px rgba(255, 255, 255, 0.9);
-}
-
-/* Recessed Center Picture Window (Diorama Lens) */
-.frame-window {
-    position: relative;
-    border-radius: 18px;
+    width: 60px;
+    height: 44px;
+    border-radius: 10px;
     overflow: hidden;
-    aspect-ratio: 16 / 9.5;
+    border: 1.5px solid var(--game-border, #1D2440);
     background: #AEE2FF;
+    flex-shrink: 0;
+    box-shadow: 0 1.5px 0 var(--game-border, #1D2440);
+}
+
+.row-thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.row-thumb-fallback {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(180deg, #AEE2FF 0%, #D0EDFE 60%, #FFF2E7 100%);
+    position: relative;
+}
+
+.row-fallback-sun {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #FBBF24;
+}
+
+.row-fallback-hill {
+    position: absolute;
+    bottom: -6px;
+    left: -10px;
+    right: -10px;
+    height: 24px;
+    border-radius: 50% 50% 0 0;
+    background: #34D399;
+}
+
+.row-thumb-icon {
+    position: absolute;
+    bottom: 2px;
+    right: 3px;
+    font-size: 1rem;
+    line-height: 1;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+}
+
+.row-new-dot {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    font-size: 0.7rem;
+    line-height: 1;
+}
+
+/* Row Content */
+.row-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.18rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.row-header-line {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+
+.row-title {
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.95rem;
+    font-weight: 900;
+    color: var(--game-navy, #1D2440);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+}
+
+.row-grade-chip {
+    font-family: var(--font-ui, 'Nunito', sans-serif);
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: #475569;
+    background: #E2E8F0;
+    border: 1px solid #CBD5E1;
+    border-radius: 9999px;
+    padding: 0.08rem 0.45rem;
+}
+
+.row-status-chip {
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.65rem;
+    font-weight: 800;
+    border-radius: 9999px;
+    padding: 0.08rem 0.45rem;
+}
+
+.row-status-chip.is-live {
+    background: #DCFCE7;
+    color: #15803D;
+    border: 1px solid #86EFAC;
+}
+
+.row-status-chip.is-draft {
+    background: #FFE4E6;
+    color: #BE123C;
+    border: 1px solid #FDA4AF;
+}
+
+.row-meta-line {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-family: var(--font-ui, 'Nunito', sans-serif);
+    font-size: 0.74rem;
+    color: #556080;
+}
+
+.row-stat-item strong {
+    color: var(--game-navy, #1D2440);
+}
+
+.row-desc-preview {
+    color: #64748B;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 28ch;
+}
+
+/* Row Code Keycard */
+.row-code-keycard {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: linear-gradient(145deg, #FEF9C3 0%, #FEF08A 100%);
+    border: 1.5px solid #B45309;
+    border-radius: 9999px;
+    padding: 0.22rem 0.55rem;
+    cursor: pointer;
+    box-shadow: 0 2px 0 #92400E;
+    user-select: none;
+    transition: transform 0.14s ease;
+    flex-shrink: 0;
+}
+
+.row-code-keycard:hover {
+    transform: translateY(-1px);
+}
+
+.row-code-keycard.is-copied {
+    background: linear-gradient(145deg, #DCFCE7 0%, #86EFAC 100%);
+    border-color: #166534;
+    box-shadow: 0 2px 0 #14532D;
+}
+
+.code-ico {
+    font-size: 0.85rem;
+}
+
+.code-lbl {
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.55rem;
+    font-weight: 900;
+    color: #92400E;
+}
+
+.code-val {
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.85rem;
+    font-weight: 900;
+    letter-spacing: 0.07em;
+    color: #451A03;
+}
+
+.code-btn {
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.58rem;
+    font-weight: 900;
+    color: #92400E;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid #B45309;
+    border-radius: 9999px;
+    padding: 0.08rem 0.4rem;
+}
+
+/* Row Actions */
+.row-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+.row-action-btn {
+    border-radius: 9999px;
+    border: 1.5px solid #1D2440;
+    padding: 0.3rem 0.65rem;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-weight: 900;
+    font-size: 0.72rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    transition: transform 0.14s var(--spring-bounce), box-shadow 0.14s ease;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.row-action-btn:hover {
+    transform: translateY(-1.5px);
+}
+
+.row-action-btn:active {
+    transform: translateY(1.5px);
+}
+
+.btn-publish {
+    background: linear-gradient(145deg, #34D399 0%, #059669 100%);
+    color: #FFFFFF;
+    border-color: #064E3B;
+    box-shadow: 0 2px 0 #064E3B;
+}
+
+.btn-unpublish {
+    background: linear-gradient(145deg, #FFE4E6 0%, #FDA4AF 100%);
+    color: #9F1239;
+    border-color: #BE123C;
+    box-shadow: 0 2px 0 #BE123C;
+}
+
+.btn-open-module {
+    background: linear-gradient(145deg, #60A5FA 0%, #2563EB 100%);
+    color: #FFFFFF;
+    border-color: #1E40AF;
+    box-shadow: 0 2px 0 #1E40AF;
+}
+
+/* ==========================================================================
+   COMPACT BENTO GRID VIEW
+   ========================================================================== */
+.kingdoms-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    gap: 1rem;
+}
+
+.kingdom-card {
+    position: relative;
+    background: var(--neu-surface, linear-gradient(145deg, #FFFFFF 0%, #F5F0E4 100%));
+    border-radius: 20px;
+    border: 2.5px solid var(--game-border, #1D2440);
+    padding: 0.75rem;
     box-shadow:
-        inset 0 4px 10px rgba(10, 18, 45, 0.34),
-        inset 0 0 0 1.5px rgba(0, 0, 0, 0.08);
+        0 6px 0 var(--game-border, #1D2440),
+        -4px -4px 10px rgba(255, 255, 255, 0.95),
+        6px 14px 24px rgba(29, 36, 64, 0.14),
+        var(--neu-bevel-light, inset 2px 2px 4px rgba(255, 255, 255, 0.95)),
+        var(--neu-bevel-dark, inset -3px -3px 6px rgba(194, 185, 166, 0.3));
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    transform: translate3d(0, 0, 0);
+    transition: transform 0.24s var(--spring-bounce), box-shadow 0.24s ease;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.kingdom-card:hover {
+    transform: translate3d(0, -5px, 0) scale(1.012);
+    box-shadow:
+        0 10px 0 var(--game-border, #1D2440),
+        -5px -5px 14px rgba(255, 255, 255, 0.95),
+        10px 20px 32px rgba(29, 36, 64, 0.18);
+}
+
+.kingdom-card:hover .card-mascot-pod {
+    transform: scale(1.1) rotate(-6deg) translateY(-2px);
+}
+
+/* Compact Diorama Frame */
+.card-diorama-frame {
+    position: relative;
+    width: 100%;
+    height: 84px;
+    border-radius: 14px;
+    border: 2px solid var(--game-border, #1D2440);
+    overflow: hidden;
+    background: #000000;
+    box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.35), 0 1.5px 0 rgba(255, 255, 255, 0.85);
+}
+
+.frame-window {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
 }
 
 .frame-center-image {
@@ -1085,25 +1258,16 @@ const openModule = (mod) => {
     height: 100%;
     object-fit: cover;
     display: block;
-    transform: translateZ(0);
-    transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), filter 0.45s ease;
+    transition: transform 0.35s ease;
 }
 
 .kingdom-card:hover .frame-center-image {
-    transform: scale(1.05) translateZ(0);
-    filter: brightness(1.03) saturate(1.08);
+    transform: scale(1.05);
 }
 
 .frame-fallback-scene {
     width: 100%;
     height: 100%;
-    display: flex;
-    transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), filter 0.45s ease;
-}
-
-.kingdom-card:hover .frame-fallback-scene {
-    transform: scale(1.04);
-    filter: brightness(1.03) saturate(1.06);
 }
 
 .fallback-scenery-svg {
@@ -1112,461 +1276,167 @@ const openModule = (mod) => {
     display: block;
 }
 
-/* Pixar Crystal Toy Lens Glare */
 .frame-lens-glare {
     position: absolute;
     inset: 0;
-    pointer-events: none;
-    z-index: 4;
     overflow: hidden;
-    background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.42) 0%,
-        rgba(255, 255, 255, 0.12) 26%,
-        transparent 52%
-    );
-    transition: opacity 0.3s ease;
-}
-
-.frame-lens-glare::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 45%;
-    height: 100%;
-    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.65) 50%, rgba(255, 255, 255, 0) 100%);
-    transform: translate3d(-150%, 0, 0) skewX(-24deg);
     pointer-events: none;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.1) 35%, transparent 60%);
 }
 
-.kingdom-card:hover .frame-lens-glare::after {
-    animation: pixarShineSweep 0.75s ease-out forwards;
-}
-
-/* Interactive Hover Action Pill */
-.frame-hover-pill {
+.card-mascot-pod {
     position: absolute;
-    bottom: 12px;
-    right: 12px;
-    z-index: 6;
-    display: inline-flex;
+    top: 6px;
+    left: 8px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #FFEA85 0%, #FFB703 55%, #D97706 100%);
+    border: 2px solid var(--game-border, #1D2440);
+    display: flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.35rem 0.85rem;
+    justify-content: center;
+    box-shadow: 0 2px 0 #1D2440, inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.9);
+    z-index: 2;
+    transition: transform 0.24s var(--spring-bounce);
+}
+
+.mascot-emoji {
+    font-size: 1.15rem;
+    line-height: 1;
+}
+
+.card-grade-badge {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(6px);
+    border: 1.5px solid var(--game-border, #1D2440);
     border-radius: 9999px;
-    background: linear-gradient(180deg, #FFFFFF 0%, #F5F7FC 100%);
-    border: 2px solid #1D2440;
-    box-shadow:
-        0 3px 0 #1D2440,
-        0 6px 14px rgba(0, 0, 0, 0.22),
-        inset 0 1.5px 1px rgba(255, 255, 255, 1);
-    opacity: 0;
-    transform: translate3d(0, 10px, 0) scale(0.92);
-    transition:
-        opacity 0.22s ease,
-        transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
-    pointer-events: none;
+    padding: 0.12rem 0.5rem;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.62rem;
+    font-weight: 800;
+    color: var(--game-navy, #1D2440);
+    box-shadow: 0 1.5px 0 var(--game-border, #1D2440);
+    z-index: 2;
 }
 
-.kingdom-card:hover .frame-hover-pill {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
-}
-
-.hover-pill-text {
+.card-new-badge {
+    position: absolute;
+    bottom: 6px;
+    left: 8px;
+    background: #FBBF24;
+    color: #451A03;
+    border: 1px solid #B45309;
+    border-radius: 9999px;
+    padding: 0.08rem 0.45rem;
     font-family: var(--font-game);
-    font-size: 0.72rem;
+    font-size: 0.6rem;
     font-weight: 900;
-    letter-spacing: 0.05em;
-    color: #1D2440;
+    z-index: 2;
 }
 
-.hover-pill-arrow {
-    font-size: 0.75rem;
-    color: var(--game-blue);
-    transition: transform 0.2s ease;
-}
-
-.kingdom-card:hover .hover-pill-arrow {
-    transform: translateX(2px);
-}
-
-/* 3D Decorative Overlapping Clay Accents */
-.clay-accent {
-    position: absolute;
-    pointer-events: none;
-    z-index: 10;
-}
-
-/* Clay Star: Peeking on top rim */
-.clay-star {
-    top: -16px;
-    right: 22%;
-    width: 48px;
-    height: 48px;
-    transform: rotate(10deg);
-    filter: drop-shadow(0 4px 6px rgba(180, 100, 20, 0.32));
-    animation: px-star-bob 4s ease-in-out infinite alternate;
-    transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.32s ease;
-}
-
-@keyframes px-star-bob {
-    0% { transform: translateY(0) rotate(8deg); }
-    100% { transform: translateY(-4px) rotate(14deg); }
-}
-
-.kingdom-card:hover .clay-star {
-    animation-play-state: paused;
-    transform: rotate(24deg) scale(1.18) translateY(-6px);
-    filter: drop-shadow(0 8px 14px rgba(245, 158, 11, 0.5));
-}
-
-.clay-star-svg {
-    width: 100%;
-    height: 100%;
-    display: block;
-    overflow: visible;
-}
-
-/* Clay Clouds on Left and Right Frame Edges */
-.clay-cloud-left {
-    top: 34%;
-    left: -18px;
-    width: 82px;
-    height: 54px;
-    animation: px-cloud-bob-left 5.5s ease-in-out infinite alternate;
-    transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-@keyframes px-cloud-bob-left {
-    0% { transform: translateY(0) rotate(0deg); }
-    100% { transform: translateY(-3px) rotate(-1.5deg); }
-}
-
-.kingdom-card:hover .clay-cloud-left {
-    animation-play-state: paused;
-    transform: translateX(-6px) scale(1.1) translateY(-2px);
-}
-
-.clay-cloud-right {
-    top: 26%;
-    right: -18px;
-    width: 82px;
-    height: 54px;
-    animation: px-cloud-bob-right 6s ease-in-out infinite alternate;
-    transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-@keyframes px-cloud-bob-right {
-    0% { transform: translateY(0) rotate(0deg); }
-    100% { transform: translateY(3px) rotate(1.5deg); }
-}
-
-.kingdom-card:hover .clay-cloud-right {
-    animation-play-state: paused;
-    transform: translateX(6px) scale(1.1) translateY(-2px);
-}
-
-.clay-cloud-svg {
-    width: 100%;
-    height: 100%;
-    display: block;
-    overflow: visible;
-}
-
-/* Discrete Floating Clay Status Badges (Pixar Scout Pins) */
-.clay-card-badges {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    z-index: 11;
+/* Card Body */
+.card-body {
     display: flex;
-    gap: 0.4rem;
-    pointer-events: none;
+    flex-direction: column;
+    gap: 0.5rem;
 }
 
-.clay-badge-new {
-    position: relative;
-    font-size: 0.68rem;
-    font-weight: 900;
-    letter-spacing: 0.06em;
-    background: linear-gradient(180deg, #FFE169 0%, #FFB703 50%, #FB8500 100%);
-    color: #381A00;
-    padding: 0.25rem 0.65rem;
-    border-radius: 9999px;
-    border: 1.5px solid rgba(255, 255, 255, 0.9);
-    box-shadow:
-        0 3px 0 #9E4F00,
-        0 6px 12px rgba(251, 133, 0, 0.38),
-        inset 0 1.5px 1.5px rgba(255, 255, 255, 0.95),
-        inset 0 -2px 3px rgba(158, 79, 0, 0.3);
-    animation: newBadgePulse 2s infinite ease-in-out;
-}
-
-.clay-badge-new::before {
-    content: "";
-    position: absolute;
-    inset: 1.5px 4px auto 4px;
-    height: 38%;
-    border-radius: 9999px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 100%);
-    pointer-events: none;
-}
-
-@keyframes newBadgePulse {
-    0%, 100% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.08) rotate(-1deg);
-    }
-}
-
-/* Full-width publish toggle that sits under the quest code pill and mirrors its shape */
-.clay-badge-draft {
-    position: relative;
-    width: 100%;
-    min-height: 2.35rem;
-    margin: 0;
-    padding: 0.4rem 0.65rem;
-    border-radius: 14px;
-    border: 2px solid #FB7185;
-    background: linear-gradient(180deg, #FFF1F2 0%, #FFE4E6 45%, #FDA4AF 100%);
-    color: #9F1239;
-    font-family: var(--font-game, -apple-system, sans-serif);
-    font-size: 0.72rem;
-    font-weight: 900;
-    letter-spacing: 0.06em;
-    line-height: 1;
-    box-shadow:
-        0 3px 0 #BE123C,
-        0 4px 10px rgba(190, 18, 60, 0.18),
-        inset 0 1.5px 1px rgba(255, 255, 255, 0.9);
-    pointer-events: auto;
-    cursor: pointer;
-    user-select: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.4rem;
-    appearance: none;
-    outline: none;
-    z-index: 6;
-    transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease, filter 0.15s ease;
-}
-
-.badge-status-action {
-    font-size: 0.58rem;
-    font-weight: 900;
-    letter-spacing: 0.04em;
-    padding: 0.14rem 0.45rem;
-    border-radius: 9999px;
-    background: rgba(0, 0, 0, 0.1);
-}
-
-.clay-badge-draft:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow:
-        0 5px 0 #BE123C,
-        0 8px 14px rgba(190, 18, 60, 0.26),
-        inset 0 1.5px 1px #FFFFFF;
-}
-
-.clay-badge-draft:active:not(:disabled) {
-    transform: translateY(2px);
-    box-shadow:
-        0 1px 0 #BE123C,
-        0 2px 4px rgba(190, 18, 60, 0.2),
-        inset 0 1px 1px rgba(255, 255, 255, 0.8),
-        inset 0 -1.5px 2px rgba(190, 18, 60, 0.25);
-}
-
-.clay-badge-draft:focus-visible {
-    outline: 2px solid #38BDF8;
-    outline-offset: 2px;
-}
-
-.clay-badge-draft.is-published {
-    border-color: #22C55E;
-    background: linear-gradient(180deg, #F0FDF4 0%, #DCFCE7 45%, #86EFAC 100%);
-    color: #14532D;
-    box-shadow:
-        0 3px 0 #15803D,
-        0 4px 10px rgba(21, 128, 61, 0.18),
-        inset 0 1.5px 1px rgba(255, 255, 255, 0.9);
-}
-
-.clay-badge-draft.is-published:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow:
-        0 5px 0 #15803D,
-        0 8px 14px rgba(21, 128, 61, 0.26),
-        inset 0 1.5px 1px #FFFFFF;
-}
-
-.clay-badge-draft.is-published:active:not(:disabled) {
-    transform: translateY(2px);
-    box-shadow:
-        0 1px 0 #15803D,
-        0 2px 4px rgba(21, 128, 61, 0.2),
-        inset 0 1px 1px rgba(255, 255, 255, 0.8),
-        inset 0 -1.5px 2px rgba(21, 128, 61, 0.25);
-}
-
-.clay-badge-draft.is-toggling {
-    opacity: 0.85;
-    cursor: wait;
-    filter: saturate(0.8);
-}
-
-.badge-status-icon {
-    font-size: 0.85rem;
-    line-height: 1;
-}
-
-.clay-badge-draft::before {
-    content: "";
-    position: absolute;
-    inset: 2px 8px auto 8px;
-    height: 36%;
-    border-radius: 10px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0) 100%);
-    pointer-events: none;
-}
-
-/* 3D Sculpted Collector Nameplate Plaque (Integrated Inside Card Deck) */
 .clay-title-plaque {
-    position: relative;
-    width: 100%;
-    min-height: 48px;
-    padding: 0.55rem 0.85rem;
-    border-radius: 18px;
-    background: #FFFFFF;
-    border: 2px solid rgba(29, 36, 64, 0.12);
-    box-shadow:
-        0 3.5px 0 var(--plaque-pedestal, rgba(29, 36, 64, 0.14)),
-        0 6px 14px rgba(29, 36, 64, 0.05),
-        inset 0 1.5px 1px #FFFFFF,
-        inset 0 -2px 4px rgba(29, 36, 64, 0.04);
     display: flex;
     align-items: center;
-    justify-content: center;
-    text-align: center;
-    z-index: 5;
-    box-sizing: border-box;
-    transition:
-        transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1),
-        box-shadow 0.24s cubic-bezier(0.22, 1, 0.36, 1),
-        border-color 0.2s ease;
-}
-
-.clay-title-plaque::before {
-    content: "";
-    position: absolute;
-    inset: 2px 6px auto 6px;
-    height: 40%;
-    border-radius: 14px 14px 40px 40px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 100%);
-    pointer-events: none;
-}
-
-.kingdom-card:hover .clay-title-plaque {
-    transform: translateY(-2px);
-    border-color: rgba(35, 149, 235, 0.45);
+    justify-content: space-between;
+    gap: 0.4rem;
+    background: linear-gradient(145deg, #FFFFFF 0%, #EFF2FA 100%);
+    border: 2px solid var(--game-border, #1D2440);
+    border-radius: 12px;
+    padding: 0.32rem 0.65rem;
     box-shadow:
-        0 5px 0 var(--plaque-pedestal, rgba(35, 149, 235, 0.35)),
-        0 10px 20px rgba(35, 149, 235, 0.14),
-        inset 0 1.5px 1px #FFFFFF;
+        0 2.5px 0 var(--game-border, #1D2440),
+        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.95),
+        inset -1.5px -1.5px 3px rgba(164, 176, 204, 0.35);
+}
+
+.plaque-title-text {
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 0.92rem;
+    font-weight: 900;
+    color: var(--game-navy, #1D2440);
+    margin: 0;
+    text-align: center;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .plaque-rivet {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #FFFFFF 0%, #E5B83B 50%, #996515 100%);
-    box-shadow:
-        0 1px 1px rgba(0, 0, 0, 0.2),
-        inset 0 0.5px 0.5px rgba(255, 255, 255, 0.9);
+    background: linear-gradient(135deg, #D4AF37 0%, #AA771C 100%);
+    border: 1px solid #553300;
     flex-shrink: 0;
 }
 
-.rivet-left {
-    margin-right: 0.55rem;
-}
-
-.rivet-right {
-    margin-left: 0.55rem;
-}
-
-.plaque-title-text {
-    font-family: var(--font-game);
-    font-weight: 800;
-    font-size: clamp(0.92rem, 1.05vw, 1.08rem);
-    line-height: 1.25;
-    letter-spacing: 0.015em;
-    color: var(--game-navy);
-    margin: 0;
-    text-align: center;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    word-break: break-word;
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.95);
-    transition: color 0.2s ease;
-}
-
-.kingdom-card:hover .plaque-title-text {
-    color: #1467A6;
-}
-
-/* 3D Quest Code Pill on Module Cards */
-.card-quest-code-pill {
-    position: relative;
-    width: 100%;
-    margin-top: 0.45rem;
-    padding: 0.35rem 0.65rem;
-    border-radius: 14px;
-    background: linear-gradient(180deg, #FEF9C3 0%, #FEF08A 45%, #FDE047 100%);
-    border: 2px solid #D97706;
-    box-shadow:
-        0 3px 0 #92400E,
-        0 4px 10px rgba(180, 83, 9, 0.18),
-        inset 0 1.5px 1px rgba(255, 255, 255, 0.9);
+/* Card Stats */
+.card-stats-row {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.4rem;
-    color: #78350F;
-    font-family: var(--font-game, -apple-system, sans-serif);
+    gap: 0.5rem;
+}
+
+.card-stat-chip {
+    font-family: var(--font-ui, 'Nunito', sans-serif);
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: #475569;
+    background: #FFFFFF;
+    border: 1px solid #CBD5E1;
+    border-radius: 9999px;
+    padding: 0.15rem 0.55rem;
+}
+
+.card-stat-chip strong {
+    color: var(--game-navy, #1D2440);
+}
+
+.xp-chip {
+    color: #B45309;
+    background: #FEF3C7;
+    border-color: #FCD34D;
+}
+
+/* Card Quest Code Pill */
+.card-quest-code-pill {
+    background: linear-gradient(145deg, #FEF9C3 0%, #FEF08A 45%, #FDE047 100%);
+    border: 2px solid #B45309;
+    border-radius: 12px;
+    padding: 0.32rem 0.65rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.45rem;
     cursor: pointer;
-    transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease;
-    z-index: 6;
+    box-shadow:
+        0 2.5px 0 #92400E,
+        inset 1.5px 1.5px 2px rgba(255, 255, 255, 0.95);
+    user-select: none;
+    transition: transform 0.14s var(--spring-bounce);
 }
 
 .card-quest-code-pill:hover {
-    transform: translateY(-2px);
-    box-shadow:
-        0 5px 0 #92400E,
-        0 8px 14px rgba(180, 83, 9, 0.28),
-        inset 0 1.5px 1px #FFFFFF;
-}
-
-.card-quest-code-pill:active {
-    transform: translateY(2px);
-    box-shadow:
-        0 1px 0 #92400E,
-        inset 0 1.5px 3px rgba(120, 53, 15, 0.3);
+    transform: translateY(-1.5px);
 }
 
 .card-quest-code-pill.is-copied {
-    background: linear-gradient(180deg, #D1FAE5 0%, #A7F3D0 45%, #6EE7B7 100%);
-    border-color: #059669;
-    box-shadow:
-        0 3px 0 #065F46,
-        0 4px 10px rgba(5, 150, 105, 0.2);
-    color: #064E3B;
+    background: linear-gradient(145deg, #DCFCE7 0%, #86EFAC 100%);
+    border-color: #166534;
+    box-shadow: 0 2.5px 0 #14532D;
 }
 
 .code-pill-icon {
@@ -1574,58 +1444,97 @@ const openModule = (mod) => {
 }
 
 .code-pill-lbl {
-    font-size: 0.62rem;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    opacity: 0.85;
+    font-family: var(--font-game);
+    font-size: 0.55rem;
+    font-weight: 900;
+    color: #92400E;
 }
 
 .code-pill-val {
-    font-size: 0.88rem;
+    font-family: var(--font-game);
+    font-size: 0.92rem;
     font-weight: 900;
-    letter-spacing: 0.14em;
-    color: #1E1B4B;
-}
-
-.card-quest-code-pill.is-copied .code-pill-val {
-    color: #064E3B;
+    letter-spacing: 0.08em;
+    color: #451A03;
 }
 
 .code-pill-action {
+    font-family: var(--font-game);
     font-size: 0.58rem;
     font-weight: 900;
-    background: rgba(0, 0, 0, 0.1);
-    padding: 0.12rem 0.4rem;
+    color: #92400E;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid #B45309;
     border-radius: 9999px;
-    letter-spacing: 0.04em;
+    padding: 0.12rem 0.45rem;
 }
 
-/* Empty Modules State */
-.header-buttons {
+/* Card Actions Row */
+.card-actions-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+}
+
+.card-action-btn {
+    border-radius: 9999px;
+    border: 1.5px solid #1D2440;
+    padding: 0.38rem 0.5rem;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-weight: 900;
+    font-size: 0.72rem;
+    cursor: pointer;
+    display: inline-flex;
     align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    transition: transform 0.14s var(--spring-bounce);
+    user-select: none;
+    white-space: nowrap;
 }
 
-@media (min-width: 641px) {
-    .header-buttons {
-        flex-wrap: nowrap;
-    }
-
-    .header-buttons > .btn-3d {
-        flex: none;
-        white-space: nowrap;
-    }
+.card-action-btn:hover {
+    transform: translateY(-1.5px);
 }
 
+.card-action-btn:active {
+    transform: translateY(1.5px);
+}
+
+.btn-status-toggle.is-published {
+    background: linear-gradient(145deg, #DCFCE7 0%, #86EFAC 100%);
+    color: #14532D;
+    border-color: #166534;
+    box-shadow: 0 2.5px 0 #14532D;
+}
+
+.btn-status-toggle.is-draft {
+    background: linear-gradient(145deg, #FFE4E6 0%, #FDA4AF 100%);
+    color: #9F1239;
+    border-color: #BE123C;
+    box-shadow: 0 2.5px 0 #BE123C;
+}
+
+.btn-open-card {
+    background: linear-gradient(145deg, #60A5FA 0%, #2563EB 100%);
+    color: #FFFFFF;
+    border-color: #1E40AF;
+    box-shadow: 0 2.5px 0 #1E40AF;
+}
+
+/* ==========================================================================
+   EMPTY STATES
+   ========================================================================== */
 .search-empty-card {
     display: flex;
     align-items: center;
     gap: 1rem;
     flex-wrap: wrap;
-    padding: 1rem 1.25rem;
-    border: 3px dashed #94A3C4;
-    border-radius: 22px;
-    background: linear-gradient(180deg, #FFFFFF 0%, #F3EFE4 100%);
-    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.9), 0 8px 18px -8px rgba(29, 36, 64, 0.2);
+    padding: 0.85rem 1.15rem;
+    border: 2.5px dashed #94A3C4;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #FFFFFF 0%, #F5F0E4 100%);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.9), 0 6px 14px -6px rgba(29, 36, 64, 0.15);
 }
 
 .search-empty-copy {
@@ -1636,726 +1545,116 @@ const openModule = (mod) => {
 .search-empty-orb {
     display: grid;
     place-items: center;
-    width: 52px;
-    height: 52px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
-    font-size: 1.4rem;
+    font-size: 1.25rem;
     background: radial-gradient(circle at 32% 26%, #FFF7D1 0%, #FBBF24 55%, #B45309 100%);
-    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.6), 0 3px 0 #92400E;
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.6), 0 2.5px 0 #92400E;
     animation: search-empty-bob 3.5s ease-in-out infinite;
 }
 
 .search-empty-title {
     margin: 0;
     font-family: var(--font-game, 'Fredoka', sans-serif);
-    font-size: 1.05rem;
+    font-size: 1rem;
     font-weight: 900;
     color: var(--game-navy, #1D2440);
-    word-break: break-word;
 }
 
 .search-empty-desc {
-    margin: 0.15rem 0 0;
+    margin: 0.1rem 0 0;
     font-family: var(--font-ui, 'Nunito', sans-serif);
-    font-size: 0.82rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #6C7594;
 }
 
 @keyframes search-empty-bob {
-    50% { transform: translateY(-5px) rotate(-6deg); }
+    50% { transform: translateY(-4px) rotate(-5deg); }
 }
 
 .empty-modules-card {
-    background: var(--neu-surface);
-    border: 3.5px solid var(--game-border);
-    border-radius: 28px;
-    padding: 3.5rem 2rem;
+    background: var(--neu-surface, linear-gradient(145deg, #FFFFFF 0%, #F8F5EE 100%));
+    border: 2.5px solid var(--game-border, #1D2440);
+    border-radius: 24px;
+    padding: 2.2rem 1.5rem;
     text-align: center;
     display: flex;
     flex-direction: column;
     align-items: center;
     box-shadow:
-        0 8px 0 var(--game-border),
-        -6px -6px 14px var(--neu-light),
-        10px 16px 28px var(--neu-navy-ambient),
-        var(--neu-bevel-light),
-        var(--neu-bevel-dark);
+        0 6px 0 var(--game-border, #1D2440),
+        -4px -4px 12px rgba(255, 255, 255, 0.9),
+        6px 14px 28px rgba(29, 36, 64, 0.12);
+    margin-top: 0.5rem;
 }
 
 .empty-module-badge {
-    width: 76px;
-    height: 76px;
-    border-radius: 24px;
+    width: 64px;
+    height: 64px;
+    border-radius: 20px;
     background: linear-gradient(145deg, #FFFFFF 0%, #E8EEF9 100%);
-    border: 3px solid var(--game-border);
+    border: 2px solid var(--game-border, #1D2440);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2.5rem;
-    margin-bottom: 1rem;
-    box-shadow:
-        0 4px 0 var(--game-border),
-        inset 3px 3px 6px rgba(255, 255, 255, 0.95),
-        inset -3px -3px 6px rgba(164, 176, 204, 0.4);
+    font-size: 2.2rem;
+    margin-bottom: 0.85rem;
+    box-shadow: 0 3px 0 var(--game-border, #1D2440);
 }
 
 .empty-module-title {
-    font-size: 1.5rem;
+    font-family: var(--font-game, 'Fredoka', sans-serif);
+    font-size: 1.4rem;
     font-weight: 900;
-    color: var(--game-navy);
-    margin: 0 0 0.4rem 0;
+    color: var(--game-navy, #1D2440);
+    margin: 0 0 0.35rem 0;
 }
 
 .empty-module-desc {
-    font-family: var(--font-ui);
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #6C7594;
-    max-width: 520px;
-    margin: 0 0 1.5rem 0;
-}
-
-@media (max-width: 720px) {
-    .kingdoms-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* ==========================================================================
-   VIEW TOGGLE (LIST / GRID)
-   ========================================================================== */
-.view-toggle {
-    flex: none;
-    display: inline-flex;
-    gap: 4px;
-    padding: 4px;
-    border: 2.5px solid #1D2440;
-    border-radius: 9999px;
-    background: linear-gradient(180deg, #F3EFE4 0%, #FFFFFF 100%);
-    box-shadow: inset 0 3px 6px rgba(29, 36, 64, 0.18), 0 3px 0 #1D2440;
-}
-
-.view-toggle__btn {
-    display: grid;
-    place-items: center;
-    width: 36px;
-    height: 32px;
-    padding: 0;
-    border: 0;
-    border-radius: 9999px;
-    background: transparent;
-    color: #8A92AD;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease;
-}
-
-.view-toggle__btn.is-active {
-    color: #FFFFFF;
-    background: radial-gradient(circle at 32% 26%, #8FD0FF 0%, #2395EB 55%, #0E5287 100%);
-    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.5), 0 2px 0 #0E5287;
-    transform: translateY(-1px);
-}
-
-@media (hover: hover) {
-    .view-toggle__btn:not(.is-active):hover {
-        color: #2395EB;
-        transform: translateY(-2px);
-    }
-}
-
-.view-toggle__btn:active {
-    transform: translateY(1px) scale(0.94);
-    transition-duration: 0.06s;
-}
-
-.view-toggle__btn:focus-visible {
-    outline: 3px solid #FBBF24;
-    outline-offset: 2px;
-}
-
-.sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-}
-
-/* ==========================================================================
-   LIST VIEW: FULL-WIDTH CLAY QUEST ROWS (30VH)
-   ========================================================================== */
-.quest-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1.6rem;
-    padding: 0.75rem 0 2.5rem;
-}
-
-.quest-row {
-    --quest-hue: 255;
-    --quest-ink: #1D2440;
-    --quest-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-
-    position: relative;
-    display: grid;
-    grid-template-columns: clamp(12rem, 36%, 30rem) minmax(0, 1fr);
-    gap: clamp(1rem, 2.2vw, 2rem);
-    width: 100%;
-    height: 30vh;
-    min-height: 15rem;
-    padding: 12px clamp(16px, 2.2vw, 28px) 12px 12px;
-    border-radius: 32px;
-    border: 3.5px solid rgba(255, 255, 255, 0.95);
-    background:
-        radial-gradient(120% 140% at 100% 0%, rgba(255, 255, 255, 0.75) 0%, transparent 45%),
-        linear-gradient(135deg, var(--frame-grad-1) 0%, var(--frame-grad-2) 40%, var(--frame-grad-3) 80%, var(--frame-grad-4) 100%);
-    box-shadow:
-        0 7px 0 var(--frame-pedestal),
-        0 16px 26px -10px var(--frame-glow),
-        inset 0 3px 2px rgba(255, 255, 255, 0.98),
-        inset 0 -8px 16px -6px var(--frame-belly-shadow);
-    isolation: isolate;
-    cursor: pointer;
-    outline: none;
-    user-select: none;
-    animation: quest-pop 0.6s var(--quest-spring) both;
-    animation-delay: calc(var(--i, 0) * 70ms);
-    transition: transform 0.35s var(--quest-spring);
-}
-
-.quest-row.theme-forest { --quest-hue: 158; }
-.quest-row.theme-ocean { --quest-hue: 240; }
-.quest-row.theme-cosmic { --quest-hue: 295; }
-.quest-row.theme-volcano { --quest-hue: 40; }
-
-/* Bigger lift shadow cross-faded on a pseudo-element (no animated box-shadow) */
-.quest-row::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    box-shadow: 0 30px 44px -14px var(--frame-ambient), 0 14px 0 -4px var(--frame-pedestal);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    pointer-events: none;
-    z-index: -1;
-}
-
-@media (hover: hover) {
-    .quest-row:hover {
-        transform: translateY(-5px) rotate(-0.35deg);
-    }
-
-    .quest-row:hover::after {
-        opacity: 1;
-    }
-
-    .quest-row:hover .quest-row__img,
-    .quest-row:hover .quest-row__scene {
-        transform: scale(1.06);
-    }
-
-    .quest-row:hover .quest-row__icon {
-        transform: translateY(-4px) rotate(-8deg) scale(1.08);
-    }
-}
-
-.quest-row:active {
-    transform: translateY(2px) scale(0.995);
-    transition-duration: 0.08s;
-}
-
-.quest-row:focus-visible {
-    outline: 4px solid #FBBF24;
-    outline-offset: 5px;
-}
-
-/* ---------- Banner ---------- */
-.quest-row__banner {
-    position: relative;
-    min-height: 0;
-    height: 100%;
-}
-
-.quest-row__window {
-    position: relative;
-    height: 100%;
-    overflow: hidden;
-    border-radius: 24px;
-    border: 6px solid var(--frame-bezel-1);
-    background: oklch(86% 0.08 var(--quest-hue));
-    box-shadow:
-        0 0 0 2px rgba(255, 255, 255, 0.9),
-        inset 0 5px 12px rgba(10, 18, 45, 0.3);
-}
-
-.quest-row__img,
-.quest-row__scene {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.quest-row__img {
-    display: block;
-    object-fit: cover;
-}
-
-/* Lightweight CSS cartoon landscape used when no cover image exists */
-.quest-row__scene {
-    background: linear-gradient(180deg, oklch(84% 0.09 var(--quest-hue)) 0%, oklch(94% 0.05 calc(var(--quest-hue) + 30)) 70%);
-}
-
-.quest-row__sun {
-    position: absolute;
-    top: 14%;
-    right: 14%;
-    width: 22%;
-    aspect-ratio: 1;
-    border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #FFF9D6 0%, #FDE047 45%, #F59E0B 100%);
-    box-shadow: 0 0 0 10px rgba(253, 224, 71, 0.25), 0 0 0 22px rgba(253, 224, 71, 0.12);
-}
-
-.quest-row__cloud {
-    position: absolute;
-    height: 14%;
-    border-radius: 999px;
-    background: #FFFFFF;
-    box-shadow: inset 0 -4px 0 rgba(29, 36, 64, 0.06);
-    animation: quest-drift 7s ease-in-out infinite alternate;
-}
-
-.quest-row__cloud::before {
-    content: "";
-    position: absolute;
-    left: 22%;
-    bottom: 45%;
-    width: 46%;
-    aspect-ratio: 1;
-    border-radius: 50%;
-    background: inherit;
-}
-
-.quest-row__cloud--a {
-    top: 20%;
-    left: 10%;
-    width: 30%;
-}
-
-.quest-row__cloud--b {
-    top: 36%;
-    left: 48%;
-    width: 20%;
-    opacity: 0.85;
-    animation-duration: 9s;
-}
-
-.quest-row__hill {
-    position: absolute;
-    border-radius: 50% 50% 0 0;
-}
-
-.quest-row__hill--back {
-    left: -15%;
-    bottom: -38%;
-    width: 85%;
-    height: 85%;
-    background: radial-gradient(circle at 40% 20%, oklch(80% 0.13 calc(var(--quest-hue) - 40)) 0%, oklch(62% 0.15 calc(var(--quest-hue) - 40)) 100%);
-}
-
-.quest-row__hill--front {
-    right: -20%;
-    bottom: -48%;
-    width: 95%;
-    height: 90%;
-    background: radial-gradient(circle at 35% 18%, oklch(84% 0.15 135) 0%, oklch(64% 0.17 145) 100%);
-}
-
-.quest-row__gloss {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 38%);
-    pointer-events: none;
-}
-
-.quest-row__gloss::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 45%;
-    height: 100%;
-    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.62) 50%, rgba(255, 255, 255, 0) 100%);
-    transform: translate3d(-150%, 0, 0) skewX(-24deg);
-    pointer-events: none;
-}
-
-.quest-row:hover .quest-row__gloss::after {
-    animation: pixarShineSweep 0.75s ease-out forwards;
-}
-
-/* 3D icon orb perched on the banner corner */
-.quest-row__icon {
-    position: absolute;
-    left: -6px;
-    bottom: -6px;
-    z-index: 2;
-    display: grid;
-    place-items: center;
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    font-size: 1.85rem;
-    line-height: 1;
-    background: radial-gradient(circle at 32% 26%, #FFFFFF 0%, var(--frame-bezel-2) 50%, var(--frame-bezel-1) 100%);
-    border: 3px solid #FFFFFF;
-    box-shadow: 0 4px 0 var(--frame-pedestal), 0 10px 16px -4px var(--frame-glow), inset 0 -4px 6px rgba(29, 36, 64, 0.1);
-    transition: transform 0.4s var(--quest-spring);
-}
-
-.quest-row__sticker {
-    position: absolute;
-    top: -8px;
-    left: -6px;
-    z-index: 2;
-    padding: 0.3rem 0.7rem;
-    border-radius: 999px;
-    font-family: var(--font-game, 'Fredoka', sans-serif);
-    font-size: 0.72rem;
-    font-weight: 900;
-    letter-spacing: 0.05em;
-    color: #5B3A00;
-    background: linear-gradient(180deg, #FEF3A8 0%, #FBBF24 100%);
-    border: 2.5px solid #FFFFFF;
-    box-shadow: 0 3px 0 #B45309, 0 6px 10px -2px rgba(180, 83, 9, 0.4);
-    transform: rotate(-8deg);
-}
-
-/* ---------- Body ---------- */
-.quest-row__body {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 0.5rem;
-    min-width: 0;
-    min-height: 0;
-    padding-block: 0.35rem;
-}
-
-.quest-row__meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-}
-
-.quest-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.22rem 0.65rem;
-    border-radius: 999px;
-    font-family: var(--font-game, 'Fredoka', sans-serif);
-    font-size: 0.72rem;
-    font-weight: 800;
-    letter-spacing: 0.02em;
-    border: 2px solid rgba(255, 255, 255, 0.95);
-    box-shadow: 0 2px 0 rgba(29, 36, 64, 0.12), inset 0 1.5px 0 rgba(255, 255, 255, 0.7);
-    white-space: nowrap;
-}
-
-.quest-chip--grade {
-    color: oklch(38% 0.12 var(--quest-hue));
-    background: oklch(95% 0.04 var(--quest-hue));
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.quest-chip--live {
-    color: #065F46;
-    background: linear-gradient(180deg, #D1FAE5 0%, #A7F3D0 100%);
-}
-
-.quest-chip--draft {
-    color: #9F1239;
-    background: linear-gradient(180deg, #FFE4E6 0%, #FECDD3 100%);
-}
-
-.quest-row__title {
-    margin: 0;
-    font-family: var(--font-game, 'Fredoka', sans-serif);
-    font-size: clamp(1.15rem, 0.9rem + 1vw, 1.75rem);
-    font-weight: 800;
-    line-height: 1.12;
-    letter-spacing: -0.005em;
-    color: var(--quest-ink);
-    text-shadow: 0 2px 0 rgba(255, 255, 255, 0.9);
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    word-break: break-word;
-}
-
-.quest-row__desc {
-    margin: 0;
-    max-width: 68ch;
     font-family: var(--font-ui, 'Nunito', sans-serif);
-    font-size: 0.92rem;
+    font-size: 0.88rem;
     font-weight: 600;
-    line-height: 1.5;
-    color: #4A5373;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    color: #556080;
+    max-width: 480px;
+    margin: 0 0 1.25rem 0;
+    line-height: 1.45;
 }
 
-.quest-row__desc.is-placeholder {
-    font-style: italic;
-    color: #7D86A3;
-}
-
-.quest-row__footer {
+.empty-actions-row {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
     gap: 0.75rem;
-    margin-top: 0.35rem;
-}
-
-.quest-row__stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.quest-stat {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    padding: 0.3rem 0.7rem;
-    border-radius: 14px;
-    font-family: var(--font-ui, 'Nunito', sans-serif);
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: #4A5373;
-    background: rgba(255, 255, 255, 0.7);
-    box-shadow: inset 0 2px 4px rgba(29, 36, 64, 0.1);
-}
-
-.quest-stat strong {
-    font-family: var(--font-game, 'Fredoka', sans-serif);
-    font-weight: 800;
-    color: var(--quest-ink);
-}
-
-.quest-row__actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.55rem;
-    padding-top: 6px;
-}
-
-/* ---------- Transform-only 3D press buttons ---------- */
-.quest-btn {
-    --btn-edge: #0E5287;
-    --btn-hi: #8FD0FF;
-    --btn-base: #2395EB;
-    --btn-ink: #FFFFFF;
-
-    padding: 0;
-    border: 0;
-    border-radius: 999px;
-    background: var(--btn-edge);
-    cursor: pointer;
-    filter: drop-shadow(0 5px 6px rgba(29, 36, 64, 0.18));
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
-}
-
-.quest-btn__face {
-    display: inline-flex;
-    align-items: center;
     justify-content: center;
-    gap: 0.4rem;
-    min-height: 40px;
-    padding: 0.5rem 1rem;
-    border-radius: inherit;
-    font-family: var(--font-game, 'Fredoka', sans-serif);
-    font-size: 0.85rem;
-    font-weight: 800;
-    letter-spacing: 0.02em;
-    white-space: nowrap;
-    color: var(--btn-ink);
-    background: linear-gradient(180deg, var(--btn-hi) 0%, var(--btn-base) 60%);
-    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.5), inset 0 -3px 0 rgba(0, 0, 0, 0.1);
-    transform: translateY(-5px);
-    transition: transform 0.25s var(--quest-spring);
+    flex-wrap: wrap;
 }
 
-@media (hover: hover) {
-    .quest-btn:not(:disabled):hover .quest-btn__face {
-        transform: translateY(-7px);
-    }
-
-    .quest-btn--open:hover .quest-btn__arrow {
-        transform: translateX(3px);
-    }
+@keyframes pixarShineSweep {
+    0% { transform: translate3d(-145%, 0, 0) skewX(-24deg); }
+    100% { transform: translate3d(280%, 0, 0) skewX(-24deg); }
 }
 
-.quest-btn:not(:disabled):active .quest-btn__face {
-    transform: translateY(-1px) scaleX(1.04) scaleY(0.93);
-    transition-duration: 0.06s;
-}
-
-.quest-btn:focus-visible {
-    outline: 3px solid #FBBF24;
-    outline-offset: 4px;
-}
-
-.quest-btn:disabled {
-    cursor: progress;
-    opacity: 0.75;
-}
-
-.quest-btn__arrow {
-    display: inline-block;
-    transition: transform 0.25s var(--quest-spring);
-}
-
-.quest-btn__hint {
-    font-size: 0.7rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    opacity: 0.75;
-}
-
-.quest-code {
-    font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
-    font-size: 0.9rem;
-    letter-spacing: 0.12em;
-}
-
-.quest-btn--code {
-    --btn-edge: #B45309;
-    --btn-hi: #FEF9C3;
-    --btn-base: #FDE047;
-    --btn-ink: #5B3A00;
-}
-
-.quest-btn--code.is-copied {
-    --btn-edge: #047857;
-    --btn-hi: #D1FAE5;
-    --btn-base: #6EE7B7;
-    --btn-ink: #064E3B;
-}
-
-.quest-btn--publish {
-    --btn-edge: #047857;
-    --btn-hi: #86EFAC;
-    --btn-base: #22C55E;
-    --btn-ink: #FFFFFF;
-}
-
-.quest-btn--unpublish {
-    --btn-edge: #9F1239;
-    --btn-hi: #FFE4E6;
-    --btn-base: #FDA4AF;
-    --btn-ink: #881337;
-}
-
-/* ---------- Motion ---------- */
-@keyframes quest-pop {
-    0% { transform: translateY(18px) scale(0.96); opacity: 0; }
-    60% { transform: translateY(-4px) scale(1.01, 0.99); opacity: 1; }
-    100% { transform: none; opacity: 1; }
-}
-
-@keyframes quest-drift {
-    to { transform: translateX(14px); }
-}
-
-/* ---------- Responsive ---------- */
-@media (max-width: 900px) {
-    .quest-row {
-        height: auto;
-        min-height: 30vh;
-    }
-
-    .quest-row__banner {
-        min-height: 12rem;
-    }
-
-    .quest-row__footer {
+@media (max-width: 768px) {
+    .deck-main-row {
         flex-direction: column;
-        align-items: flex-start;
+        align-items: stretch;
+    }
+    .deck-actions-group {
+        justify-content: space-between;
+    }
+    .quest-row {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .row-actions {
+        width: 100%;
+        justify-content: flex-end;
     }
 }
 
 @media (max-width: 640px) {
-    .quest-row {
+    .kingdoms-grid {
         grid-template-columns: 1fr;
-        height: auto;
-        min-height: 30vh;
-        padding: 10px 10px 16px;
-        gap: 0.85rem;
-    }
-
-    .quest-row__banner {
-        height: auto;
-        aspect-ratio: 16 / 8;
-    }
-
-    .quest-row__body {
-        padding-inline: 0.4rem;
-    }
-
-    .quest-row__title {
-        -webkit-line-clamp: 2;
-    }
-
-    .quest-row__footer {
-        align-items: stretch;
-    }
-
-    .quest-row__actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-    }
-
-    .quest-btn--open {
-        grid-column: 1 / -1;
-    }
-
-    .quest-btn__face {
-        width: 100%;
-        min-height: 44px;
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-        scroll-behavior: auto !important;
     }
 }
 </style>

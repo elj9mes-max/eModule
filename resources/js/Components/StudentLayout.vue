@@ -47,6 +47,14 @@ const props = defineProps({
         type: String,
         default: 'modules',
     },
+    hideDock: {
+        type: Boolean,
+        default: false,
+    },
+    fullWidth: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const avatarProfiles = [
@@ -147,6 +155,7 @@ const effectiveLevel = computed(() => props.user?.gamification?.level ?? props.l
 const effectiveXp = computed(() => props.user?.gamification?.xp_in_level ?? props.xp ?? 0);
 const effectiveMaxXp = computed(() => props.user?.gamification?.xp_for_next_level ?? props.maxXp ?? 200);
 const effectiveStars = computed(() => props.user?.gamification?.total_stars ?? props.stars ?? 0);
+const effectiveGems = computed(() => props.user?.gamification?.total_gems ?? props.gems ?? props.points ?? 0);
 const effectivePoints = computed(() => props.user?.gamification?.total_xp ?? props.points ?? 0);
 const effectiveTitle = computed(() => props.user?.gamification?.level_title ?? `Level ${effectiveLevel.value} Explorer`);
 
@@ -163,6 +172,7 @@ const ringDashOffset = computed(() => {
     return ringCircumference - (xpPercentage.value / 100) * ringCircumference;
 });
 
+const formattedGems = computed(() => Number(effectiveGems.value || 0).toLocaleString());
 const formattedPoints = computed(() => Number(effectivePoints.value || 0).toLocaleString());
 const formattedStars = computed(() => Number(effectiveStars.value || 0).toLocaleString());
 const formattedXp = computed(() => Number(effectiveXp.value || 0).toLocaleString());
@@ -171,6 +181,11 @@ const formattedMaxXp = computed(() => Number(effectiveMaxXp.value || 200).toLoca
 const goToClassrooms = () => {
     playClick();
     router.visit('/students/classes');
+};
+
+const goToShop = () => {
+    playClick();
+    router.visit('/students/shop');
 };
 
 const goToSettings = () => {
@@ -365,14 +380,6 @@ const goToWelcome = () => {
                                     <span class="companion-dot" :style="{ backgroundColor: currentAvatar.border }"></span>
                                     {{ currentAvatar.label }}
                                 </span>
-
-                                <span class="clay-streak-pill" title="Daily Reading Streak">
-                                    <svg viewBox="0 0 16 16" class="streak-flame-svg" aria-hidden="true">
-                                        <path d="M8.5 1.5C8.5 1.5 13 5 13 9.2C13 12 10.8 14.5 8 14.5C5.2 14.5 3 12 3 9.2C3 7.2 4.3 5.3 5.5 4.2C5.5 4.2 5.2 6.3 6.8 6.8C6.2 4.6 8.5 1.5 8.5 1.5Z" fill="#F97316" />
-                                        <path d="M8 8.2C8 8.2 10.2 10 10.2 11.8C10.2 13.1 9.2 14.2 8 14.2C6.8 14.2 5.8 13.1 5.8 11.8C5.8 10.5 8 8.2 8 8.2Z" fill="#FDE047" />
-                                    </svg>
-                                    {{ streak }}d
-                                </span>
                             </div>
 
                             <h2 class="player-display-name" :title="user?.name || 'Student'">
@@ -383,10 +390,10 @@ const goToWelcome = () => {
 
                     <!-- Right: 3D Candy Clay Currency Capsules (Points & Stars) + Audio Controller -->
                     <div class="hud-currency-group" role="group" aria-label="Student Points, Stars and Sound Settings">
-                        <!-- Emerald Gem Points Capsule -->
+                        <!-- Emerald Gem Currency Capsule -->
                         <div
                             class="clay-currency-pill clay-points-pill"
-                            title="Total Points Earned"
+                            title="Total Gems Earned"
                             @mouseenter="playBonus"
                             @click="playBonus"
                         >
@@ -404,7 +411,7 @@ const goToWelcome = () => {
                                 </svg>
                             </span>
                             <div class="currency-text-col">
-                                <span class="currency-val points-color">{{ formattedPoints }}</span>
+                                <span class="currency-val points-color">{{ formattedGems }}</span>
                                 <span class="currency-lbl">GEMS</span>
                             </div>
                         </div>
@@ -471,12 +478,12 @@ const goToWelcome = () => {
         </header>
 
         <!-- MAIN 3D CLAY GAME STAGE -->
-        <main class="clay-game-stage">
+        <main class="clay-game-stage" :class="{ 'is-full-width': fullWidth }">
             <slot />
         </main>
 
         <!-- FLOATING 3D CLAYMORPHISM BOTTOM NAVIGATION DOCK -->
-        <nav class="clay-bottom-dock" aria-label="Student Navigation">
+        <nav v-if="!hideDock" class="clay-bottom-dock" aria-label="Student Navigation">
             <button
                 type="button"
                 class="clay-dock-btn"
@@ -495,6 +502,28 @@ const goToWelcome = () => {
                     </svg>
                 </span>
                 <span class="clay-dock-label">Classes</span>
+            </button>
+
+            <!-- GEM BAZAAR SHOP -->
+            <button
+                type="button"
+                class="clay-dock-btn"
+                :class="{ 'is-active': activeNav === 'shop' }"
+                :aria-current="activeNav === 'shop' ? 'page' : undefined"
+                aria-label="Visit Gem Bazaar Shop"
+                @mouseenter="playPop(1.1); prefetchRoute('/students/shop', ['student-nav', 'student-shop'])"
+                @focus="prefetchRoute('/students/shop', ['student-nav', 'student-shop'])"
+                @click="goToShop"
+            >
+                <span class="clay-dock-pill pill-shop" aria-hidden="true">
+                    <svg viewBox="0 0 28 28" class="dock-svg-icon">
+                        <path d="M5 10 C5 7.5 7 5.5 9.5 5.5 L18.5 5.5 C21 5.5 23 7.5 23 10 L24 21 C24 23.5 22 25.5 19.5 25.5 L8.5 25.5 C6 25.5 4 23.5 4 21 Z" fill="currentColor" opacity="0.18" />
+                        <path d="M6 10.5 L22 10.5 L21 21 C21 22.8 19.5 24 17.8 24 L10.2 24 C8.5 24 7 22.8 7 21 Z" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linejoin="round" />
+                        <path d="M10 11 V8.5 C10 6.3 11.8 4.5 14 4.5 C16.2 4.5 18 6.3 18 8.5 V11" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" />
+                        <circle cx="14" cy="16" r="2" fill="currentColor" />
+                    </svg>
+                </span>
+                <span class="clay-dock-label">Shop</span>
             </button>
 
             <button
@@ -546,7 +575,7 @@ const goToWelcome = () => {
     position: relative;
     isolation: isolate;
     padding-bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
-    overflow-x: hidden;
+    overflow-x: clip;
     box-sizing: border-box;
     -webkit-tap-highlight-color: transparent;
     transition: background 380ms var(--px-ease-settle), color 220ms ease;
@@ -1055,6 +1084,11 @@ const goToWelcome = () => {
     padding: 0 0.72rem;
 }
 
+.clay-game-stage.is-full-width {
+    max-width: 1060px;
+    padding: 0 0.5rem;
+}
+
 /* ==========================================================================
    FLOATING 3D CLAYMORPHISM BOTTOM NAVIGATION DOCK
    ========================================================================== */
@@ -1125,11 +1159,19 @@ const goToWelcome = () => {
     color: var(--px-link-ink);
 }
 
+.pill-shop {
+    color: #F59E0B;
+}
+
 .pill-settings {
     color: var(--px-tint-magic-ink);
 }
 
 @media (hover: hover) {
+    .clay-dock-btn:hover .pill-shop {
+        color: #D97706;
+    }
+
     .clay-dock-btn:hover .pill-settings {
         color: var(--px-secondary-lit);
     }

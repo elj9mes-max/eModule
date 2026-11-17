@@ -406,3 +406,50 @@ test('a teacher can create a multiple choice quiz with multiple context scenario
             ->where('quiz.contexts.1.scenario', 'Scenario 2: The young volunteers gathered bamboo poles and vines to reinforce the community bridge.')
         );
 });
+
+test('a teacher can update an existing multiple choice quiz via quiz_id', function () {
+    $teacher = User::factory()->teacher()->create();
+
+    $module = Module::factory()->for($teacher, 'teacher')->create([
+        'title' => 'Philippine Folklore Legends',
+        'slug' => 'philippine-folklore-legends',
+    ]);
+
+    $quiz = Quiz::factory()->for($module)->create([
+        'type' => QuizType::MultipleChoice,
+        'title' => 'Original Quiz Title',
+        'slug' => 'original-quiz-title',
+        'xp_reward' => 100,
+    ]);
+
+    $updatePayload = [
+        'quiz_id' => $quiz->id,
+        'title' => 'Updated Quiz Title',
+        'description' => 'Updated description for this quiz.',
+        'xp_reward' => 300,
+        'passing_percentage' => 80,
+        'is_published' => true,
+        'questions' => [
+            [
+                'question_text' => 'Updated Question 1?',
+                'selection_type' => 'single',
+                'points' => 20,
+                'options' => [
+                    ['option_text' => 'Correct Answer', 'is_correct' => true, 'feedback' => 'Nice!'],
+                    ['option_text' => 'Wrong Answer', 'is_correct' => false, 'feedback' => null],
+                ],
+            ],
+        ],
+    ];
+
+    $this->actingAs($teacher)
+        ->post(route('teachers.quizzes.multiple-choice.store', $module->slug), $updatePayload)
+        ->assertRedirect(route('teachers.modules.show', $module->slug));
+
+    $quiz->refresh();
+
+    expect($quiz->title)->toBe('Updated Quiz Title')
+        ->and($quiz->xp_reward)->toBe(300)
+        ->and($quiz->questions)->toHaveCount(1)
+        ->and($quiz->questions->first()->question_text)->toBe('Updated Question 1?');
+});

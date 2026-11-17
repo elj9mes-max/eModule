@@ -16,9 +16,12 @@ const props = defineProps({
     itemTitle: { type: String, default: '' },
     playerName: { type: String, default: '' },
     passed: { type: Boolean, default: true },
-    /** Stars on this attempt (0–3). Null hides the star row (lectures award no stars). */
+    /** Stars on this attempt. Null hides the star row (lectures award no stars). */
     stars: { type: Number, default: null },
     starsGained: { type: Number, default: 0 },
+    /** Gems on this attempt. Null hides the gems capsule. */
+    gems: { type: Number, default: null },
+    gemsGained: { type: Number, default: 0 },
     xpAmount: { type: Number, default: 0 },
     level: { type: Number, default: null },
     totalXp: { type: Number, default: null },
@@ -35,11 +38,40 @@ const emit = defineEmits(['close', 'primary', 'secondary']);
 const primaryRef = ref(null);
 const cardRef = ref(null);
 const displayedXp = ref(0);
+const displayedStars = ref(0);
+const displayedGems = ref(0);
 let countFrame = 0;
+let starsFrame = 0;
+let gemsFrame = 0;
 
 const showStars = computed(() => props.kind === 'quiz' && props.stars !== null && !['pending', 'error', 'saving'].includes(props.state));
 const showMedal = computed(() => !['pending', 'error'].includes(props.state));
+const showLootBadges = computed(() => props.kind === 'quiz' && !['pending', 'error'].includes(props.state) && (props.stars !== null || props.gems !== null));
 const isCelebrating = computed(() => props.state === 'earned');
+
+const displayStarSocketsCount = computed(() => {
+    if (props.stars === null || props.stars <= 0) {
+        return 3;
+    }
+    if (props.stars <= 5) {
+        return Math.max(3, props.stars);
+    }
+    return 5;
+});
+
+const starLootLabel = computed(() => {
+    if (props.state === 'review') {
+        return 'STARS EARNED';
+    }
+    return props.state === 'repeat' ? 'SAVED STARS' : 'STARS WON';
+});
+
+const gemLootLabel = computed(() => {
+    if (props.state === 'review') {
+        return 'GEMS EARNED';
+    }
+    return props.state === 'repeat' ? 'SAVED GEMS' : 'GEMS WON';
+});
 
 const heroArt = computed(() => {
     if (props.state === 'pending') {
@@ -142,22 +174,78 @@ const countUpXp = (target) => {
     countFrame = requestAnimationFrame(tick);
 };
 
+const countUpStars = (target) => {
+    cancelAnimationFrame(starsFrame);
+
+    if (shouldReduceEffects() || target <= 0) {
+        displayedStars.value = target;
+
+        return;
+    }
+
+    const duration = 900;
+    const startedAt = performance.now();
+    displayedStars.value = 0;
+
+    const tick = (now) => {
+        const t = Math.min(1, (now - startedAt) / duration);
+        displayedStars.value = Math.round(target * (1 - (1 - t) ** 3));
+        if (t < 1) {
+            starsFrame = requestAnimationFrame(tick);
+        }
+    };
+
+    starsFrame = requestAnimationFrame(tick);
+};
+
+const countUpGems = (target) => {
+    cancelAnimationFrame(gemsFrame);
+
+    if (shouldReduceEffects() || target <= 0) {
+        displayedGems.value = target;
+
+        return;
+    }
+
+    const duration = 1000;
+    const startedAt = performance.now();
+    displayedGems.value = 0;
+
+    const tick = (now) => {
+        const t = Math.min(1, (now - startedAt) / duration);
+        displayedGems.value = Math.round(target * (1 - (1 - t) ** 3));
+        if (t < 1) {
+            gemsFrame = requestAnimationFrame(tick);
+        }
+    };
+
+    gemsFrame = requestAnimationFrame(tick);
+};
+
 /** Re-run the reward reveal whenever the modal opens or the server result lands. */
 watch(
-    () => [props.open, props.state, props.xpAmount],
+    () => [props.open, props.state, props.xpAmount, props.stars, props.gems],
     async ([isOpen, state], previous) => {
         if (!isOpen) {
             cancelAnimationFrame(countFrame);
+            cancelAnimationFrame(starsFrame);
+            cancelAnimationFrame(gemsFrame);
 
             return;
         }
 
         if (state === 'saving') {
             displayedXp.value = 0;
+            displayedStars.value = 0;
+            displayedGems.value = 0;
         } else if (state === 'earned') {
             countUpXp(props.xpAmount);
+            countUpStars(props.stars || 0);
+            countUpGems(props.gems || 0);
         } else {
             displayedXp.value = props.xpAmount;
+            displayedStars.value = props.stars || 0;
+            displayedGems.value = props.gems || 0;
         }
 
         await nextTick();
@@ -280,9 +368,9 @@ watch(
                     <p v-if="itemTitle && state !== 'review'" class="reward-item-title">{{ itemTitle }}</p>
 
                     <!-- Clay star sockets: earned stars pop in one by one -->
-                    <div v-if="showStars" class="reward-stars" :aria-label="`${stars} of 3 stars`">
+                    <div v-if="showStars" class="reward-stars" :aria-label="`${stars} stars`">
                         <svg
-                            v-for="starIdx in 3"
+                            v-for="starIdx in displayStarSocketsCount"
                             :key="starIdx"
                             viewBox="0 0 40 40"
                             class="reward-star"
@@ -298,7 +386,7 @@ watch(
                         </svg>
                     </div>
 
-                    <!-- Gold XP medal (+ new stars chip) -->
+                    <!-- Gold XP medal -->
                     <div v-if="showMedal" class="reward-medal-row">
                         <div
                             class="reward-xp-medal"
@@ -312,10 +400,49 @@ watch(
                                 <template v-else>+{{ displayedXp }}<small>XP</small></template>
                             </span>
                         </div>
+                    </div>
 
-                        <span v-if="starsGained > 0 && state === 'earned'" class="reward-star-chip">
-                            +{{ starsGained }} ⭐ new
-                        </span>
+                    <!-- Stars & Gems Loot Showcase (shows exact count obtained) -->
+                    <div v-if="showLootBadges" class="reward-loot-row">
+                        <!-- ⭐ Stars Obtained Capsule -->
+                        <div
+                            v-if="stars !== null"
+                            class="reward-loot-pill is-stars"
+                            :class="{ 'is-muted': state === 'repeat', 'is-zero': stars === 0 }"
+                        >
+                            <span class="loot-pill-gloss" aria-hidden="true"></span>
+                            <span class="loot-pill-emoji" aria-hidden="true">⭐</span>
+                            <div class="loot-pill-body">
+                                <span class="loot-pill-label">{{ starLootLabel }}</span>
+                                <strong class="loot-pill-value">
+                                    <template v-if="state === 'saving'">…</template>
+                                    <template v-else>+{{ displayedStars }}</template>
+                                </strong>
+                            </div>
+                            <span v-if="starsGained > 0 && state === 'earned' && starsGained !== stars" class="loot-pill-tag">
+                                +{{ starsGained }} new
+                            </span>
+                        </div>
+
+                        <!-- 💎 Gems Obtained Capsule -->
+                        <div
+                            v-if="gems !== null"
+                            class="reward-loot-pill is-gems"
+                            :class="{ 'is-muted': state === 'repeat', 'is-zero': gems === 0 }"
+                        >
+                            <span class="loot-pill-gloss" aria-hidden="true"></span>
+                            <span class="loot-pill-emoji" aria-hidden="true">💎</span>
+                            <div class="loot-pill-body">
+                                <span class="loot-pill-label">{{ gemLootLabel }}</span>
+                                <strong class="loot-pill-value">
+                                    <template v-if="state === 'saving'">…</template>
+                                    <template v-else>+{{ displayedGems }}</template>
+                                </strong>
+                            </div>
+                            <span v-if="gemsGained > 0 && state === 'earned' && gemsGained !== gems" class="loot-pill-tag">
+                                +{{ gemsGained }} new
+                            </span>
+                        </div>
                     </div>
 
                     <!-- Metrics (score, points…) -->
@@ -356,7 +483,7 @@ watch(
                     </div>
 
                     <span class="sr-only" aria-live="polite">
-                        {{ state === 'saving' ? '' : `${kicker}. ${xpAmount > 0 ? `${xpAmount} XP gained.` : ''} ${leveledUp ? `Level up to level ${level}.` : ''}` }}
+                        {{ state === 'saving' ? '' : `${kicker}. ${xpAmount > 0 ? `${xpAmount} XP gained.` : ''} ${stars !== null ? `${stars} stars.` : ''} ${gems !== null ? `${gems} gems.` : ''} ${leveledUp ? `Level up to level ${level}.` : ''}` }}
                     </span>
                 </div>
             </div>
@@ -771,6 +898,119 @@ watch(
     font-weight: 700;
     color: #78350F;
     animation: rewardMedalPop 0.5s var(--spring-bounce) 0.9s backwards;
+}
+
+/* Loot row for Stars and Gems */
+.reward-loot-row {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: 0.6rem;
+    width: 100%;
+    margin-top: 0.15rem;
+}
+
+.reward-loot-pill {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.5rem 0.75rem 0.6rem;
+    border-radius: 20px;
+    overflow: hidden;
+    text-align: left;
+    font-family: var(--font-display);
+    transition: transform 0.18s ease;
+    animation: rewardMedalPop 0.55s var(--spring-bounce) 0.35s backwards;
+}
+
+.reward-loot-pill.is-stars {
+    background: linear-gradient(180deg, #FFF9D2 0%, #FDE047 50%, #F59E0B 100%);
+    border: 2px solid #FEF08A;
+    box-shadow:
+        0 4px 0 #B45309,
+        0 8px 16px -4px rgba(245, 158, 11, 0.4),
+        inset 0 1.5px 0 rgba(255, 255, 255, 0.85);
+    color: #78350F;
+}
+
+.reward-loot-pill.is-gems {
+    background: linear-gradient(180deg, #E0F2FE 0%, #38BDF8 50%, #0284C7 100%);
+    border: 2px solid #BAE6FD;
+    box-shadow:
+        0 4px 0 #0369A1,
+        0 8px 16px -4px rgba(2, 132, 199, 0.4),
+        inset 0 1.5px 0 rgba(255, 255, 255, 0.85);
+    color: #082F49;
+}
+
+.reward-loot-pill.is-muted {
+    background: linear-gradient(180deg, #F1F5F9 0%, #E2E8F0 100%);
+    border: 2px solid #CBD5E1;
+    box-shadow:
+        0 3px 0 #94A3B8,
+        inset 0 1.5px 0 rgba(255, 255, 255, 0.8);
+    color: #475569;
+}
+
+.reward-loot-pill.is-zero {
+    opacity: 0.78;
+}
+
+.loot-pill-gloss {
+    position: absolute;
+    top: 2px;
+    left: 8%;
+    right: 8%;
+    height: 35%;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+}
+
+.loot-pill-emoji {
+    font-size: 1.55rem;
+    line-height: 1;
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.15));
+    flex-shrink: 0;
+}
+
+.loot-pill-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.loot-pill-label {
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    font-weight: 800;
+    opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.loot-pill-value {
+    font-size: 1.4rem;
+    font-weight: 800;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+
+.loot-pill-tag {
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 0.15rem 0.35rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.85);
+    color: inherit;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 /* Metrics */

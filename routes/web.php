@@ -99,6 +99,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/students/Progress', fn () => redirect()->route('students.progress'));
     Route::get('/students/ranking', [StudentDashboardController::class, 'ranking'])->name('students.ranking');
     Route::get('/students/Ranking', fn () => redirect()->route('students.ranking'));
+    Route::get('/students/shop', [StudentDashboardController::class, 'shop'])->name('students.shop');
+    Route::get('/students/Shop', fn () => redirect()->route('students.shop'));
     Route::get('/students/settings', [StudentDashboardController::class, 'settings'])->name('students.settings');
     Route::get('/students/Settings', fn () => redirect()->route('students.settings'));
     Route::patch('/students/settings/theme', [StudentDashboardController::class, 'updateTheme'])->name('students.settings.theme');
