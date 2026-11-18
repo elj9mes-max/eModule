@@ -79,6 +79,47 @@ test('teacher uploads an event card picture into the module folder', function ()
     Storage::disk('public')->assertExists($path);
 });
 
+test('teacher can upload multiple event card pictures in one request', function (): void {
+    $response = $this->actingAs($this->teacher)
+        ->post(route('teachers.quizzes.the-conflict-map.images.store', $this->module->slug), [
+            'images' => [
+                fakeCardPicture('fire.png'),
+                fakeCardPicture('flood.png'),
+                fakeCardPicture('argument.png'),
+            ],
+        ]);
+
+    $response->assertCreated()->assertJsonStructure([
+        'images' => [
+            '*' => ['path', 'url', 'name'],
+        ],
+    ]);
+
+    $images = $response->json('images');
+    expect($images)->toHaveCount(3);
+
+    foreach ($images as $img) {
+        expect($img['path'])->toStartWith("quizzes/conflict-map/{$this->module->id}/");
+        Storage::disk('public')->assertExists($img['path']);
+    }
+
+    expect($images[0]['name'])->toBe('fire')
+        ->and($images[1]['name'])->toBe('flood')
+        ->and($images[2]['name'])->toBe('argument');
+});
+
+test('multiple image uploads validate file types and batch size', function (): void {
+    $this->actingAs($this->teacher)
+        ->postJson(route('teachers.quizzes.the-conflict-map.images.store', $this->module->slug), [
+            'images' => [
+                fakeCardPicture('valid.png'),
+                UploadedFile::fake()->create('invalid.txt', 10, 'text/plain'),
+            ],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('images.1');
+});
+
 test('event card uploads only accept pictures', function (): void {
     $this->actingAs($this->teacher)
         ->postJson(route('teachers.quizzes.the-conflict-map.images.store', $this->module->slug), [
@@ -114,6 +155,25 @@ test('an event card can be a picture without text', function (): void {
         ->and($pictureCard->image_disk)->toBe('public')
         ->and($pictureCard->event_text)->toBeNull()
         ->and($pictureCard->imageUrl())->toBe("/storage/{$path}");
+});
+
+test('a conflict map quiz can have exclusively image-only cards', function (): void {
+    $path1 = uploadCardImage($this->teacher, $this->module, 'scene1.png');
+    $path2 = uploadCardImage($this->teacher, $this->module, 'scene2.png');
+    $path3 = uploadCardImage($this->teacher, $this->module, 'scene3.png');
+
+    $this->actingAs($this->teacher)
+        ->post(route('teachers.quizzes.the-conflict-map.store', $this->module->slug), conflictMapPayload([
+            ['image_path' => $path1, 'target_conflict_type' => 'character_vs_character', 'card_letter' => 'Card A'],
+            ['image_path' => $path2, 'target_conflict_type' => 'character_vs_nature', 'card_letter' => 'Card B'],
+            ['image_path' => $path3, 'target_conflict_type' => 'character_vs_nature', 'card_letter' => 'Card C'],
+        ]))
+        ->assertSessionHasNoErrors();
+
+    $events = ConflictMapEvent::query()->orderBy('sort_order')->get();
+    expect($events)->toHaveCount(3);
+    expect($events->every(fn (ConflictMapEvent $e): bool => $e->event_text === null))->toBeTrue();
+    expect($events->every(fn (ConflictMapEvent $e): bool => ! empty($e->image_path)))->toBeTrue();
 });
 
 test('an event card needs text or a picture', function (): void {

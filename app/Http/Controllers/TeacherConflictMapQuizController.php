@@ -22,11 +22,31 @@ class TeacherConflictMapQuizController extends Controller
     public function __construct(private readonly ConflictMapImageService $images) {}
 
     /**
-     * Upload a picture for a Conflict Map event card; the studio keeps the returned path until the quiz is saved.
+     * Upload one or multiple pictures for Conflict Map event cards; the studio keeps returned paths until the quiz is saved.
      */
     public function uploadEventImage(UploadConflictMapImageRequest $request, Module $module): JsonResponse
     {
-        $path = $this->images->store($request->file('image'), $module);
+        if ($request->hasFile('images')) {
+            $uploaded = [];
+
+            foreach ($request->file('images') as $file) {
+                $path = $this->images->store($file, $module);
+                $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+
+                $uploaded[] = [
+                    'path' => $path,
+                    'url' => $this->images->url($path),
+                    'name' => $originalName,
+                ];
+            }
+
+            return response()->json([
+                'images' => $uploaded,
+            ], 201);
+        }
+
+        $file = $request->file('image');
+        $path = $this->images->store($file, $module);
 
         return response()->json([
             'path' => $path,

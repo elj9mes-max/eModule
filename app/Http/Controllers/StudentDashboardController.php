@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\ModuleStatus;
 use App\Enums\PixarWorldTheme;
+use App\Enums\UserRole;
 use App\Http\Requests\EquipShopItemRequest;
 use App\Http\Requests\JoinModuleRequest;
 use App\Http\Requests\PurchaseShopItemRequest;
@@ -24,6 +25,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -337,26 +339,32 @@ class StudentDashboardController extends Controller
             ? collect($studentClassrooms)->firstWhere('id', $selectedClassroomId)
             : null;
 
+        // Only students who have earned stars this week make the board, so it starts empty every Monday.
+        $weeklyLeaders = collect($fullRanking)
+            ->filter(static fn (array $student): bool => $student['weekly_stars'] > 0)
+            ->take(self::RANKING_VISIBLE_COUNT)
+            ->values();
+
         return Inertia::render('students/Ranking', [
             'user' => $this->formatUserPayload($user),
-            'classmates' => collect($fullRanking)
-                ->take(self::RANKING_VISIBLE_COUNT)
+            'classmates' => $weeklyLeaders
                 ->map(static fn (array $student): array => Arr::except($student, ['email']))
-                ->values()
                 ->all(),
             'classmatesCount' => count($fullRanking),
-            'me' => $this->formatOwnRankingStanding($fullRanking),
+            'me' => $this->formatOwnRankingStanding($fullRanking, $weeklyLeaders->all()),
             'active_classroom' => $selectedClass,
+            'week_resets_at' => now()->startOfWeek()->addWeek()->toIso8601String(),
         ]);
     }
 
     /**
-     * The student's own standing, without exposing an exact rank outside the visible top list.
+     * The student's own weekly standing, without exposing an exact rank outside the visible top list.
      *
-     * @param  list<array{rank: int, xp: int, stars: int, level: int, is_current_user: bool}>  $fullRanking
-     * @return array{rank: int|null, in_top: bool, xp: int, stars: int, level: int, xp_to_top: int}|null
+     * @param  list<array{rank: int, xp: int, stars: int, weekly_stars: int, level: int, is_current_user: bool}>  $fullRanking
+     * @param  list<array{rank: int, weekly_stars: int}>  $weeklyLeaders
+     * @return array{rank: int|null, in_top: bool, xp: int, stars: int, weekly_stars: int, level: int, stars_to_top: int}|null
      */
-    private function formatOwnRankingStanding(array $fullRanking): ?array
+    private function formatOwnRankingStanding(array $fullRanking, array $weeklyLeaders): ?array
     {
         $own = collect($fullRanking)->firstWhere('is_current_user', true);
 
@@ -364,17 +372,202 @@ class StudentDashboardController extends Controller
             return null;
         }
 
-        $inTop = $own['rank'] <= self::RANKING_VISIBLE_COUNT;
-        $lastVisible = $fullRanking[self::RANKING_VISIBLE_COUNT - 1] ?? null;
+        $inTop = $own['weekly_stars'] > 0 && $own['rank'] <= self::RANKING_VISIBLE_COUNT;
+        $boardIsFull = count($weeklyLeaders) >= self::RANKING_VISIBLE_COUNT;
+        $lastVisible = $weeklyLeaders[count($weeklyLeaders) - 1] ?? null;
+
+        $starsToTop = match (true) {
+            $inTop => 0,
+            ! $boardIsFull || $lastVisible === null => 1,
+            default => max(1, $lastVisible['weekly_stars'] - $own['weekly_stars'] + 1),
+        };
 
         return [
             'rank' => $inTop ? $own['rank'] : null,
             'in_top' => $inTop,
             'xp' => $own['xp'],
             'stars' => $own['stars'],
+            'weekly_stars' => $own['weekly_stars'],
             'level' => $own['level'],
-            'xp_to_top' => $inTop || $lastVisible === null ? 0 : max(1, $lastVisible['xp'] - $own['xp'] + 1),
+            'stars_to_top' => $starsToTop,
         ];
+    }
+
+    /**
+     * Display the student classmates directory (strictly scoped to shared enrolled classrooms).
+     */
+    public function classmates(Request $request): Response|RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $user->isStudent()) {
+            return redirect()->route('teachers.dashboard');
+        }
+
+        $studentClassrooms = $this->cache->getStudentClassrooms($user->id);
+        $memberClassroomIds = array_column($studentClassrooms, 'id');
+
+        if (empty($memberClassroomIds)) {
+            return Inertia::render('students/Classmates', [
+                'user' => $this->formatUserPayload($user),
+                'classrooms' => [],
+                'classmates' => [],
+                'active_classroom_id' => null,
+            ]);
+        }
+
+        $requestedClassroomId = (int) $request->query('class_id');
+        $activeClassroomId = in_array($requestedClassroomId, $memberClassroomIds, true)
+            ? $requestedClassroomId
+            : null;
+
+        $targetClassroomIds = $activeClassroomId ? [$activeClassroomId] : $memberClassroomIds;
+
+        $avatars = ['fox', 'astro', 'knight', 'owl', 'bear', 'dragon'];
+        $avatarBgs = [
+            'linear-gradient(145deg, #FFF7ED 0%, #FDBA74 100%)',
+            'linear-gradient(145deg, #EFF6FF 0%, #93C5FD 100%)',
+            'linear-gradient(145deg, #ECFDF5 0%, #6EE7B7 100%)',
+            'linear-gradient(145deg, #F5F3FF 0%, #C4B5FD 100%)',
+        ];
+
+        $classmatesQuery = User::query()
+            ->where('users.role', UserRole::Student)
+            ->whereHas('classrooms', static function ($q) use ($targetClassroomIds): void {
+                $q->whereIn('classrooms.id', $targetClassroomIds);
+            })
+            ->with([
+                'studentProfile.equippedAvatarItem',
+                'classrooms' => static function ($q) use ($memberClassroomIds): void {
+                    $q->whereIn('classrooms.id', $memberClassroomIds)
+                        ->select('classrooms.id', 'classrooms.name', 'classrooms.theme', 'classrooms.icon', 'classrooms.grade_level');
+                },
+            ])
+            ->leftJoin('student_profiles', 'student_profiles.user_id', '=', 'users.id')
+            ->orderByDesc(DB::raw('COALESCE(student_profiles.total_xp, 0)'))
+            ->orderBy('users.name')
+            ->select('users.*');
+
+        $classmates = $classmatesQuery->get()->map(function (User $student) use ($user, $avatars, $avatarBgs): array {
+            $profile = $student->studentProfile;
+            $xp = (int) ($profile?->total_xp ?? 0);
+            $stars = (int) ($profile?->total_stars ?? 0);
+            $level = (int) ($profile?->level ?? 1);
+            $gems = $profile ? $profile->gemBalance() : 0;
+            $quizzesPassed = (int) ($profile?->quizzes_passed_count ?? 0);
+            $lecturesCompleted = (int) ($profile?->lectures_completed_count ?? 0);
+
+            $avatarIdx = abs($student->id) % count($avatars);
+            $bgIdx = abs($student->id) % count($avatarBgs);
+
+            return [
+                'id' => (int) $student->id,
+                'name' => (string) $student->name,
+                'is_current_user' => (bool) ($student->id === $user->id),
+                'avatar' => $avatars[$avatarIdx],
+                'avatarBg' => $avatarBgs[$bgIdx],
+                'equipped_avatar' => $profile?->equippedAvatarItem?->metadata ?? null,
+                'level' => $level,
+                'level_title' => $this->progressionService->getLevelDetails($xp)['title'] ?? "Level {$level} Explorer",
+                'xp' => $xp,
+                'stars' => $stars,
+                'gems' => $gems,
+                'quizzes_passed' => $quizzesPassed,
+                'lectures_completed' => $lecturesCompleted,
+                'shared_classrooms' => $student->classrooms->map(static fn (Classroom $c): array => [
+                    'id' => (int) $c->id,
+                    'name' => (string) $c->name,
+                    'theme' => (string) $c->theme,
+                    'icon' => (string) $c->icon,
+                    'grade_level' => (string) ($c->grade_level ?? ''),
+                ])->values()->all(),
+            ];
+        })->values()->all();
+
+        return Inertia::render('students/Classmates', [
+            'user' => $this->formatUserPayload($user),
+            'classrooms' => $studentClassrooms,
+            'classmates' => $classmates,
+            'active_classroom_id' => $activeClassroomId,
+        ]);
+    }
+
+    /**
+     * Display a single classmate's public gamer profile, strictly checking shared classroom membership.
+     */
+    public function showClassmateProfile(Request $request, User $classmate): Response|RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $user->isStudent()) {
+            return redirect()->route('teachers.dashboard');
+        }
+
+        if (! $classmate->isStudent()) {
+            abort(404, 'Classmate not found.');
+        }
+
+        $studentClassrooms = $this->cache->getStudentClassrooms($user->id);
+        $memberClassroomIds = array_column($studentClassrooms, 'id');
+
+        $sharesClassroom = $user->id === $classmate->id || $classmate->classrooms()
+            ->whereIn('classrooms.id', $memberClassroomIds)
+            ->exists();
+
+        if (! $sharesClassroom) {
+            abort(403, 'You can only view profiles of classmates who share a classroom with you.');
+        }
+
+        $profile = $classmate->getOrCreateStudentProfile();
+        $xp = (int) $profile->total_xp;
+        $levelDetails = $this->progressionService->getLevelDetails($xp);
+
+        $avatars = ['fox', 'astro', 'knight', 'owl', 'bear', 'dragon'];
+        $avatarBgs = [
+            'linear-gradient(145deg, #FFF7ED 0%, #FDBA74 100%)',
+            'linear-gradient(145deg, #EFF6FF 0%, #93C5FD 100%)',
+            'linear-gradient(145deg, #ECFDF5 0%, #6EE7B7 100%)',
+            'linear-gradient(145deg, #F5F3FF 0%, #C4B5FD 100%)',
+        ];
+
+        $avatarIdx = abs($classmate->id) % count($avatars);
+        $bgIdx = abs($classmate->id) % count($avatarBgs);
+
+        $sharedRooms = $classmate->classrooms()
+            ->whereIn('classrooms.id', $memberClassroomIds)
+            ->select('classrooms.id', 'classrooms.name', 'classrooms.theme', 'classrooms.icon', 'classrooms.grade_level')
+            ->get()
+            ->map(static fn (Classroom $c): array => [
+                'id' => (int) $c->id,
+                'name' => (string) $c->name,
+                'theme' => (string) $c->theme,
+                'icon' => (string) $c->icon,
+                'grade_level' => (string) ($c->grade_level ?? ''),
+            ])
+            ->values()
+            ->all();
+
+        return Inertia::render('students/ClassmatesProfile', [
+            'user' => $this->formatUserPayload($user),
+            'classmate' => [
+                'id' => (int) $classmate->id,
+                'name' => (string) $classmate->name,
+                'is_current_user' => (bool) ($classmate->id === $user->id),
+                'avatar' => $avatars[$avatarIdx],
+                'avatarBg' => $avatarBgs[$bgIdx],
+                'equipped_avatar' => $profile->equippedAvatarItem?->metadata ?? null,
+                'level' => (int) $levelDetails['level'],
+                'level_title' => (string) $levelDetails['title'],
+                'level_badge' => (string) $levelDetails['badge'],
+                'xp' => $xp,
+                'stars' => (int) $profile->total_stars,
+                'gems' => $profile->gemBalance(),
+                'quizzes_passed' => (int) $profile->quizzes_passed_count,
+                'lectures_completed' => (int) $profile->lectures_completed_count,
+                'progress_pct' => (int) $levelDetails['progress_pct'],
+                'shared_classrooms' => $sharedRooms,
+            ],
+        ]);
     }
 
     /**

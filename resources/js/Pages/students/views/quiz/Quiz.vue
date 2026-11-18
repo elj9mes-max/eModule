@@ -1856,6 +1856,8 @@ onBeforeUnmount(() => {
                                 :key="ev.id"
                                 class="clay-map-event-card"
                                 :class="{
+                                    'is-image-card': Boolean(ev.image_url),
+                                    'is-image-only': Boolean(ev.image_url) && !ev.event_text,
                                     'is-selected-for-tap': selectedMapEventId === ev.id,
                                     'is-assigned': Boolean(mapAssignments[ev.id]),
                                     'is-touch-dragging': touchDraggingEventId === ev.id,
@@ -3255,9 +3257,9 @@ onBeforeUnmount(() => {
 .conflict-drop-zone-top-section {
     background: var(--px-surface-soft);
     border: 2px solid var(--px-line);
-    border-radius: 20px;
-    padding: 0.85rem 1rem;
-    margin-bottom: 1.25rem;
+    border-radius: 18px;
+    padding: 0.75rem 0.85rem;
+    margin-bottom: 0.75rem;
 }
 
 .drop-zones-section-header,
@@ -3470,12 +3472,15 @@ onBeforeUnmount(() => {
 
 /* Picture event cards (teacher-uploaded image to drag into a zone) */
 .event-card-picture {
-    margin: 0.45rem 0 0.35rem;
-    border-radius: 12px;
+    margin: 0.35rem 0 0.25rem;
+    border-radius: 10px;
     overflow: hidden;
-    border: 2px solid var(--px-line);
+    border: 1.5px solid var(--px-line);
     background: var(--px-surface-card);
-    aspect-ratio: 4 / 3;
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .event-card-picture img {
@@ -4875,77 +4880,209 @@ onBeforeUnmount(() => {
         height: 18px;
     }
 
-    /* 5. CONFLICT MAP & MATCHING ARENA */
+    /* 5. CONFLICT MAP ARENA (COMPACT & REDUCED MARGINS) */
+    .conflict-map-stage-card {
+        padding: 0.65rem 0.55rem 0.75rem;
+        border-radius: 18px;
+        border-bottom-width: 4px;
+    }
+
+    .conflict-map-stage-card .card-top-meta {
+        margin-bottom: 0.35rem;
+        gap: 0.35rem;
+    }
+
     .conflict-drop-zone-top-section {
-        padding: 0.65rem 0.75rem;
-        border-radius: 16px;
-        margin-bottom: 0.9rem;
+        padding: 0.45rem 0.5rem;
+        border-radius: 12px;
+        margin-bottom: 0.45rem;
+    }
+
+    .drop-zones-section-header,
+    .events-section-header {
+        margin-bottom: 0.25rem;
+        gap: 0.25rem;
+    }
+
+    .map-col-title-compact {
+        font-size: 0.82rem;
+        gap: 0.25rem;
+    }
+
+    .drop-zones-sub-lbl,
+    .events-status-lbl {
+        font-size: 0.62rem;
     }
 
     .map-zones-horizontal-row {
-        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-        gap: 0.45rem;
+        grid-template-columns: repeat(auto-fit, minmax(85px, 1fr));
+        gap: 0.35rem;
     }
 
     .clay-map-zone-bucket {
-        padding: 0.55rem 0.6rem;
-        min-height: 90px;
-        border-radius: 14px;
-        border-width: 2px;
+        padding: 0.4rem 0.45rem;
+        min-height: 64px;
+        border-radius: 10px;
+        border-width: 1.5px;
+    }
+
+    .zone-bucket-header {
+        gap: 0.15rem;
+        margin-bottom: 0.2rem;
     }
 
     .zone-type-emoji-pill {
-        font-size: 0.85rem;
+        font-size: 0.82rem;
     }
 
     .zone-bucket-title {
-        font-size: 0.76rem;
-        line-height: 1.2;
+        font-size: 0.7rem;
+        line-height: 1.15;
         white-space: normal;
         word-break: normal;
         overflow-wrap: break-word;
     }
 
     .zone-count-badge {
-        font-size: 0.62rem;
-        padding: 0.1rem 0.35rem;
+        font-size: 0.58rem;
+        padding: 0.08rem 0.3rem;
+    }
+
+    .zone-placed-list {
+        max-height: 75px;
+        gap: 0.2rem;
     }
 
     .placed-event-chip {
-        padding: 0.22rem 0.35rem;
-        font-size: 0.68rem;
-        gap: 0.3rem;
+        padding: 0.18rem 0.3rem;
+        font-size: 0.64rem;
+        gap: 0.25rem;
+        border-radius: 6px;
     }
 
     .placed-letter {
+        width: 15px;
+        height: 15px;
+        font-size: 0.58rem;
+        border-radius: 4px;
+    }
+
+    .placed-thumb {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+    }
+
+    .placed-excerpt {
+        max-width: 65px;
+        font-size: 0.64rem;
+    }
+
+    .placed-remove-btn {
         width: 16px;
         height: 16px;
         font-size: 0.62rem;
     }
 
-    .placed-excerpt {
-        max-width: 70px;
-        font-size: 0.68rem;
+    .zone-empty-placeholder {
+        font-size: 0.64rem;
+        padding: 0.3rem 0.2rem;
+        border-radius: 6px;
     }
 
-    .zone-empty-placeholder {
-        font-size: 0.68rem;
-        padding: 0.45rem 0.2rem;
+    .conflict-events-bottom-section {
+        margin-top: 0;
     }
 
     .map-events-cards-grid {
-        grid-template-columns: 1fr;
-        gap: 0.75rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.45rem;
     }
 
     .clay-map-event-card {
-        padding: 0.75rem 0.85rem;
-        border-radius: 16px;
+        padding: 0.4rem 0.45rem;
+        border-radius: 12px;
+        border-width: 2px;
+        border-bottom-width: 3.5px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .event-card-top {
+        margin-bottom: 0.15rem;
+    }
+
+    .event-card-badge-row {
+        gap: 0.25rem;
+    }
+
+    .event-letter-pill {
+        font-size: 0.62rem;
+        padding: 0.12rem 0.35rem;
+        border-radius: 6px;
+    }
+
+    .event-drag-handle-hint {
+        font-size: 0.56rem;
+        padding: 0.08rem 0.25rem;
+        border-radius: 4px;
+    }
+
+    .event-pts-lbl {
+        font-size: 0.6rem;
+    }
+
+    .event-card-picture {
+        margin: 0.2rem 0;
+        border-radius: 8px;
+        border-width: 1.5px;
+        aspect-ratio: unset;
+        height: clamp(65px, 18vw, 88px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .event-card-picture img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
     }
 
     .event-card-body {
-        font-size: 0.88rem;
-        line-height: 1.45;
+        font-size: 0.72rem;
+        line-height: 1.25;
+        margin: 0.15rem 0 0.25rem;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .event-card-status-bar {
+        padding-top: 0.25rem;
+        margin-top: auto;
+    }
+
+    .event-assigned-indicator {
+        padding: 0.18rem 0.35rem;
+        font-size: 0.62rem;
+        border-radius: 6px;
+        gap: 0.25rem;
+    }
+
+    .event-unassigned-hint {
+        font-size: 0.62rem;
+        gap: 0.2rem;
+    }
+
+    .drag-icon-hand {
+        font-size: 0.7rem;
+    }
+
+    .event-card-unassign-btn {
+        padding: 0.08rem 0.28rem;
+        font-size: 0.58rem;
     }
 
     /* Matching Table on Mobile */

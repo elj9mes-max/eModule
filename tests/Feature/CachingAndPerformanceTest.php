@@ -372,16 +372,13 @@ test('cached modules recompute is_new dynamically as time advances and ranking i
     // Warm ranking cache, then register a new student and verify ranking updates immediately
     $this->actingAs($student)->get(route('students.ranking'))
         ->assertOk()
-        ->assertInertia(fn (Assert $page) => $page->has('classmates', 1));
+        ->assertInertia(fn (Assert $page) => $page->where('classmatesCount', 1));
 
     User::factory()->student()->create(['name' => 'Zed Voyager']);
 
     $this->actingAs($student)->get(route('students.ranking'))
         ->assertOk()
-        ->assertInertia(fn (Assert $page) => $page
-            ->has('classmates', 2)
-            ->where('classmates.1.name', 'Zed Voyager')
-        );
+        ->assertInertia(fn (Assert $page) => $page->where('classmatesCount', 2));
 });
 
 test('teacher grading dashboard paginates submissions cleanly and supports search filtering', function () {

@@ -27,6 +27,7 @@ use App\Models\StudentLectureCompletion;
 use App\Models\User;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -266,7 +267,7 @@ class EModuleCacheService
     }
 
     /**
-     * Retrieve the real student ranking leaderboard ordered by XP and Stars.
+     * Retrieve the student leaderboard ordered by stars earned this week (resets every Monday), then all-time XP.
      *
      * @return list<array{
      *     id: int,
@@ -278,6 +279,7 @@ class EModuleCacheService
      *     level: int,
      *     xp: int,
      *     stars: int,
+     *     weekly_stars: int,
      *     points: int,
      *     badge: string,
      *     quizzes_passed: int,
@@ -288,20 +290,22 @@ class EModuleCacheService
     public function getStudentRanking(int $currentUserId): array
     {
         $epoch = $this->getEpoch($this->rankingEpochKey());
-        $key = self::KEY_PREFIX.":students:e{$epoch}:ranking";
+        $key = self::KEY_PREFIX.":students:w{$this->rankingWeekTag()}:e{$epoch}:ranking";
 
-        /** @var list<array{id: int, rank: int, name: string, email: string, avatar: string, avatarBg: string, level: int, xp: int, stars: int, points: int, badge: string, quizzes_passed: int, lectures_completed: int}> $students */
+        /** @var list<array{id: int, rank: int, name: string, email: string, avatar: string, avatarBg: string, level: int, xp: int, stars: int, weekly_stars: int, points: int, badge: string, quizzes_passed: int, lectures_completed: int}> $students */
         $students = $this->rememberFlexible($key, 180, 600, function (): array {
             $records = User::query()
                 ->where('role', UserRole::Student)
                 ->leftJoin('student_profiles', 'student_profiles.user_id', '=', 'users.id')
+                ->leftJoinSub($this->weeklyStarsQuery(), 'weekly', 'weekly.user_id', '=', 'users.id')
+                ->orderByDesc(DB::raw('COALESCE(weekly.weekly_stars, 0)'))
                 ->orderByDesc(DB::raw('COALESCE(student_profiles.total_xp, 0)'))
-                ->orderByDesc(DB::raw('COALESCE(student_profiles.total_stars, 0)'))
                 ->orderBy('users.name')
                 ->select([
                     'users.id',
                     'users.name',
                     'users.email',
+                    'weekly.weekly_stars',
                     'student_profiles.total_xp',
                     'student_profiles.total_stars',
                     'student_profiles.level',
@@ -341,6 +345,7 @@ class EModuleCacheService
                     'level' => $level,
                     'xp' => $xp,
                     'stars' => $stars,
+                    'weekly_stars' => (int) ($student->weekly_stars ?? 0),
                     'points' => $xp,
                     'badge' => $badge,
                     'quizzes_passed' => (int) ($student->quizzes_passed_count ?? 0),
@@ -405,7 +410,8 @@ class EModuleCacheService
     }
 
     /**
-     * Retrieve students belonging to a teacher's classrooms (strictly tenant-isolated).
+     * Retrieve students belonging to a teacher's classrooms (strictly tenant-isolated),
+     * ranked by stars earned this week (resets every Monday), then all-time XP.
      *
      * @return list<array{
      *     id: int,
@@ -419,6 +425,7 @@ class EModuleCacheService
      *     level: int,
      *     xp: int,
      *     stars: int,
+     *     weekly_stars: int,
      *     points: int,
      *     badge: string,
      *     quizzes_passed: int,
@@ -429,10 +436,11 @@ class EModuleCacheService
     public function getTeacherStudents(int $teacherId, ?int $classroomId = null): array
     {
         $teacherEpoch = $this->getEpoch($this->teacherClassroomsEpochKey($teacherId));
-        $key = self::KEY_PREFIX.":teacher:{$teacherId}:c".($classroomId ?? 0).":e{$teacherEpoch}:students";
+        $rankingEpoch = $this->getEpoch($this->rankingEpochKey());
+        $key = self::KEY_PREFIX.":teacher:{$teacherId}:c".($classroomId ?? 0).":w{$this->rankingWeekTag()}:e{$teacherEpoch}.{$rankingEpoch}:students";
 
-        /** @var list<array{id: int, rank: int, name: string, email: string, classroom_name: string, classroom_grade: string, avatar: string, avatarBg: string, level: int, xp: int, stars: int, points: int, badge: string, quizzes_passed: int, lectures_completed: int, joined_at: ?string}> */
-        return $this->rememberFlexible($key, 120, 600, static function () use ($teacherId, $classroomId): array {
+        /** @var list<array{id: int, rank: int, name: string, email: string, classroom_name: string, classroom_grade: string, avatar: string, avatarBg: string, level: int, xp: int, stars: int, weekly_stars: int, points: int, badge: string, quizzes_passed: int, lectures_completed: int, joined_at: ?string}> */
+        return $this->rememberFlexible($key, 120, 600, function () use ($teacherId, $classroomId): array {
             $query = User::query()
                 ->where('users.role', UserRole::Student)
                 ->join('classroom_students', 'classroom_students.user_id', '=', 'users.id')
@@ -445,13 +453,15 @@ class EModuleCacheService
 
             $records = $query
                 ->leftJoin('student_profiles', 'student_profiles.user_id', '=', 'users.id')
+                ->leftJoinSub($this->weeklyStarsQuery(), 'weekly', 'weekly.user_id', '=', 'users.id')
+                ->orderByDesc(DB::raw('COALESCE(weekly.weekly_stars, 0)'))
                 ->orderByDesc(DB::raw('COALESCE(student_profiles.total_xp, 0)'))
-                ->orderByDesc(DB::raw('COALESCE(student_profiles.total_stars, 0)'))
                 ->orderBy('users.name')
                 ->select([
                     'users.id',
                     'users.name',
                     'users.email',
+                    'weekly.weekly_stars',
                     'classrooms.name as classroom_name',
                     'classrooms.grade_level as classroom_grade',
                     'student_profiles.total_xp',
@@ -506,6 +516,7 @@ class EModuleCacheService
                     'level' => $level,
                     'xp' => $xp,
                     'stars' => $stars,
+                    'weekly_stars' => (int) ($student->weekly_stars ?? 0),
                     'points' => $xp,
                     'badge' => $badge,
                     'quizzes_passed' => (int) ($student->quizzes_passed_count ?? 0),
@@ -517,7 +528,7 @@ class EModuleCacheService
     }
 
     /**
-     * Retrieve the real student ranking strictly within a single classroom.
+     * Retrieve the weekly star leaderboard strictly within a single classroom.
      *
      * @return list<array{
      *     id: int,
@@ -529,6 +540,7 @@ class EModuleCacheService
      *     level: int,
      *     xp: int,
      *     stars: int,
+     *     weekly_stars: int,
      *     points: int,
      *     badge: string,
      *     quizzes_passed: int,
@@ -538,23 +550,26 @@ class EModuleCacheService
      */
     public function getClassroomRanking(int $classroomId, int $currentUserId = 0): array
     {
-        $epoch = $this->getEpoch($this->classroomEpochKey($classroomId));
-        $key = self::KEY_PREFIX.":classroom:{$classroomId}:e{$epoch}:ranking";
+        $classEpoch = $this->getEpoch($this->classroomEpochKey($classroomId));
+        $rankingEpoch = $this->getEpoch($this->rankingEpochKey());
+        $key = self::KEY_PREFIX.":classroom:{$classroomId}:w{$this->rankingWeekTag()}:e{$classEpoch}.{$rankingEpoch}:ranking";
 
-        /** @var list<array{id: int, rank: int, name: string, email: string, avatar: string, avatarBg: string, level: int, xp: int, stars: int, points: int, badge: string, quizzes_passed: int, lectures_completed: int}> $students */
-        $students = $this->rememberFlexible($key, 180, 600, static function () use ($classroomId): array {
+        /** @var list<array{id: int, rank: int, name: string, email: string, avatar: string, avatarBg: string, level: int, xp: int, stars: int, weekly_stars: int, points: int, badge: string, quizzes_passed: int, lectures_completed: int}> $students */
+        $students = $this->rememberFlexible($key, 180, 600, function () use ($classroomId): array {
             $records = User::query()
                 ->where('users.role', UserRole::Student)
                 ->join('classroom_students', 'classroom_students.user_id', '=', 'users.id')
                 ->where('classroom_students.classroom_id', $classroomId)
                 ->leftJoin('student_profiles', 'student_profiles.user_id', '=', 'users.id')
+                ->leftJoinSub($this->weeklyStarsQuery(), 'weekly', 'weekly.user_id', '=', 'users.id')
+                ->orderByDesc(DB::raw('COALESCE(weekly.weekly_stars, 0)'))
                 ->orderByDesc(DB::raw('COALESCE(student_profiles.total_xp, 0)'))
-                ->orderByDesc(DB::raw('COALESCE(student_profiles.total_stars, 0)'))
                 ->orderBy('users.name')
                 ->select([
                     'users.id',
                     'users.name',
                     'users.email',
+                    'weekly.weekly_stars',
                     'student_profiles.total_xp',
                     'student_profiles.total_stars',
                     'student_profiles.level',
@@ -594,6 +609,7 @@ class EModuleCacheService
                     'level' => $level,
                     'xp' => $xp,
                     'stars' => $stars,
+                    'weekly_stars' => (int) ($student->weekly_stars ?? 0),
                     'points' => $xp,
                     'badge' => $badge,
                     'quizzes_passed' => (int) ($student->quizzes_passed_count ?? 0),
@@ -1804,5 +1820,25 @@ class EModuleCacheService
     private function rankingEpochKey(): string
     {
         return self::KEY_PREFIX.':epoch:users:ranking';
+    }
+
+    /**
+     * Identifies the current leaderboard week so cached rankings roll over every Monday.
+     */
+    private function rankingWeekTag(): string
+    {
+        return now()->startOfWeek()->format('Ymd');
+    }
+
+    /**
+     * Stars each student earned from quizzes completed during the current week.
+     */
+    private function weeklyStarsQuery(): QueryBuilder
+    {
+        return DB::table('quiz_attempts')
+            ->where('status', 'completed')
+            ->whereBetween('completed_at', [now()->startOfWeek(), now()->endOfWeek()])
+            ->groupBy('user_id')
+            ->select(['user_id', DB::raw('SUM(stars) as weekly_stars')]);
     }
 }

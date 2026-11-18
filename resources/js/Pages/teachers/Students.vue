@@ -29,6 +29,11 @@ const props = defineProps({
         type: Number,
         default: 0,
     },
+    /** ISO timestamp of next Monday, when the weekly star race resets. */
+    week_resets_at: {
+        type: String,
+        default: null,
+    },
 });
 
 const handleLogout = () => {
@@ -72,6 +77,7 @@ const allStudents = computed(() => {
                 kingdom: s.classroom_name || 'Classroom Adventurer',
                 kingdomIcon: '🏫',
                 stars: Number(s.stars) || 0,
+                weeklyStars: Number(s.weekly_stars) || 0,
                 xp: Number(s.xp) || 0,
                 streak: 1,
                 booksRead: Number(s.lectures_completed) || 0,
@@ -85,14 +91,25 @@ const allStudents = computed(() => {
     return [];
 });
 
-// Top 3 Podium
+// Top 3 Podium: only students who have earned stars this week (the race resets every Monday)
 const topThree = computed(() => {
-    return allStudents.value.slice(0, 3);
+    return allStudents.value.filter((s) => s.weeklyStars > 0).slice(0, 3);
+});
+
+/** Friendly countdown to the Monday reset, e.g. "Resets in 3 days". */
+const resetCountdown = computed(() => {
+    if (!props.week_resets_at) {
+        return 'Resets every Monday';
+    }
+
+    const daysLeft = Math.ceil((new Date(props.week_resets_at).getTime() - Date.now()) / 86400000);
+
+    return daysLeft <= 1 ? 'Resets tomorrow' : `Resets in ${daysLeft} days`;
 });
 
 // Filtered & Sorted Adventurers
 const filteredStudents = computed(() => {
-    let list = allStudents.value.slice(3); // Ranks 4+ for table view
+    let list = allStudents.value.slice(topThree.value.length); // Everyone below the podium for table view
 
     if (selectedKingdom.value !== 'all') {
         list = list.filter((s) => s.kingdom === selectedKingdom.value);
@@ -109,7 +126,7 @@ const filteredStudents = computed(() => {
     }
 
     return list.sort((a, b) => {
-        if (sortBy.value === 'stars') return b.stars - a.stars;
+        if (sortBy.value === 'stars') return b.weeklyStars - a.weeklyStars || a.rank - b.rank;
         if (sortBy.value === 'level') return b.level - a.level;
         if (sortBy.value === 'streak') return b.streak - a.streak;
         return a.rank - b.rank;
@@ -159,6 +176,11 @@ const sendKudos = (studentName) => {
                 </button>
             </div>
 
+            <p v-if="allStudents.length > 0" class="weekly-race-note">
+                ⭐ Ranked by stars earned this week · ⏳ {{ resetCountdown }}
+                <span v-if="topThree.length === 0"> · No stars earned yet this week</span>
+            </p>
+
             <!-- Empty State if No Students Yet in Selected Room -->
             <div v-if="allStudents.length === 0" class="empty-classroom-students-card">
                 <div class="empty-badge">👥</div>
@@ -184,7 +206,7 @@ const sendKudos = (studentName) => {
                             <span class="podium-name">{{ topThree[1].name }}</span>
                             <span class="podium-badge-label">{{ topThree[1].badge }}</span>
                             <div class="podium-stats-pill">
-                                <span>⭐ {{ topThree[1].stars }} Stars</span>
+                                <span>⭐ {{ topThree[1].weeklyStars }} this week</span>
                                 <span>🔥 {{ topThree[1].streak }}d</span>
                             </div>
                             <p class="podium-quote">"{{ topThree[1].quote }}"</p>
@@ -206,7 +228,7 @@ const sendKudos = (studentName) => {
                             <span class="podium-name gold-name">{{ topThree[0].name }}</span>
                             <span class="podium-badge-label gold-badge-label">{{ topThree[0].badge }}</span>
                             <div class="podium-stats-pill gold-stats">
-                                <span>⭐ {{ topThree[0].stars }} Stars</span>
+                                <span>⭐ {{ topThree[0].weeklyStars }} this week</span>
                                 <span>🔥 {{ topThree[0].streak }}d Streak</span>
                             </div>
                             <p class="podium-quote">"{{ topThree[0].quote }}"</p>
@@ -227,7 +249,7 @@ const sendKudos = (studentName) => {
                             <span class="podium-name">{{ topThree[2].name }}</span>
                             <span class="podium-badge-label">{{ topThree[2].badge }}</span>
                             <div class="podium-stats-pill">
-                                <span>⭐ {{ topThree[2].stars }} Stars</span>
+                                <span>⭐ {{ topThree[2].weeklyStars }} this week</span>
                                 <span>🔥 {{ topThree[2].streak }}d</span>
                             </div>
                             <p class="podium-quote">"{{ topThree[2].quote }}"</p>
@@ -251,7 +273,7 @@ const sendKudos = (studentName) => {
                     <span class="col-level">LEVEL</span>
                     <span class="col-realm">ASSIGNED REALM</span>
                     <span class="col-streak">STREAK</span>
-                    <span class="col-stars">STARS</span>
+                    <span class="col-stars">THIS WEEK</span>
                     <span class="col-actions">ACTION</span>
                 </div>
 
@@ -296,7 +318,7 @@ const sendKudos = (studentName) => {
 
                         <!-- Stars -->
                         <div class="col-stars">
-                            <span class="star-rating-val">⭐ {{ student.stars }}</span>
+                            <span class="star-rating-val" :title="`${student.stars} stars all-time`">⭐ {{ student.weeklyStars }}</span>
                         </div>
 
                         <!-- Actions -->
@@ -1297,6 +1319,14 @@ const sendKudos = (studentName) => {
 
 .guild-adventurer-row:hover {
     background-color: rgba(255, 255, 255, 0.75);
+}
+
+.weekly-race-note {
+    margin: 0 0 1rem;
+    font-family: var(--font-game);
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #64748B;
 }
 
 .col-rank { width: 65px; }

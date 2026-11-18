@@ -32,6 +32,11 @@ const props = defineProps({
         type: Object,
         default: null,
     },
+    /** ISO timestamp of next Monday, when the weekly star race resets. */
+    week_resets_at: {
+        type: String,
+        default: null,
+    },
 });
 
 const { playPop, playBonus, playClick } = useSound();
@@ -55,6 +60,7 @@ const leaders = computed(() =>
         level: Number(c.level) || 1,
         xp: Number(c.xp) || 0,
         stars: Number(c.stars) || 0,
+        weeklyStars: Number(c.weekly_stars) || 0,
         isCurrentUser: Boolean(c.is_current_user),
     })),
 );
@@ -72,8 +78,25 @@ const myStats = computed(() => {
         xp: Number(props.me?.xp ?? g.total_xp ?? 0),
         stars: Number(props.me?.stars ?? g.total_stars ?? 0),
         level: Number(props.me?.level ?? g.level ?? 1),
-        xpToTop: Number(props.me?.xp_to_top ?? 0),
+        weeklyStars: Number(props.me?.weekly_stars ?? 0),
+        starsToTop: Number(props.me?.stars_to_top ?? 0),
     };
+});
+
+/** Friendly countdown to the Monday reset, e.g. "Resets in 3 days". */
+const resetCountdown = computed(() => {
+    if (!props.week_resets_at) {
+        return 'Resets every Monday';
+    }
+
+    const msLeft = new Date(props.week_resets_at).getTime() - Date.now();
+    const daysLeft = Math.ceil(msLeft / 86400000);
+
+    if (daysLeft <= 1) {
+        return 'Resets tomorrow';
+    }
+
+    return `Resets in ${daysLeft} days`;
 });
 
 const podiumClass = (player) => ({ 1: 'is-gold', 2: 'is-silver', 3: 'is-bronze' })[player.rank] || '';
@@ -155,7 +178,7 @@ const goBackToClassroom = () => {
 
                 <div class="hero-copy">
                     <span class="hero-kicker">{{ active_classroom ? 'CLASS LEADERBOARD' : 'EXPLORER LEADERBOARD' }}</span>
-                    <h1 id="ranking-heading" class="hero-title">Top {{ Math.max(leaders.length, 1) }} Explorers</h1>
+                    <h1 id="ranking-heading" class="hero-title">This Week's Star Readers</h1>
                     <p class="hero-room">
                         <span aria-hidden="true">{{ active_classroom?.icon || '🌍' }}</span>
                         {{ active_classroom?.name || 'All Explorers' }}
@@ -163,6 +186,7 @@ const goBackToClassroom = () => {
                     <div class="hero-chips">
                         <span v-if="active_classroom?.grade_level" class="hero-chip">🎓 {{ active_classroom.grade_level }}</span>
                         <span v-if="active_classroom?.teacher_name" class="hero-chip">👩‍🏫 {{ active_classroom.teacher_name }}</span>
+                        <span class="hero-chip">⏳ {{ resetCountdown }}</span>
                         <span class="hero-chip">👥 {{ classmatesCount }} {{ classmatesCount === 1 ? 'explorer' : 'explorers' }}</span>
                     </div>
                 </div>
@@ -202,7 +226,7 @@ const goBackToClassroom = () => {
                         {{ firstName(player.name) }}
                         <span v-if="player.isCurrentUser" class="you-tag">YOU</span>
                     </span>
-                    <span class="podium-xp">⚡ {{ player.xp.toLocaleString() }}</span>
+                    <span class="podium-xp">⭐ {{ player.weeklyStars.toLocaleString() }}</span>
 
                     <span class="podium-block" aria-hidden="true">
                         <span class="podium-block-shine"></span>
@@ -228,17 +252,17 @@ const goBackToClassroom = () => {
                             {{ player.name }}
                             <span v-if="player.isCurrentUser" class="you-tag">YOU</span>
                         </span>
-                        <span class="runner-meta">LV {{ player.level }} • ⭐ {{ player.stars }}</span>
+                        <span class="runner-meta">LV {{ player.level }} • ⚡ {{ player.xp.toLocaleString() }} XP</span>
                     </span>
                     <span class="runner-xp">
-                        <strong>{{ player.xp.toLocaleString() }}</strong>
-                        <small>XP</small>
+                        <strong>⭐ {{ player.weeklyStars.toLocaleString() }}</strong>
+                        <small>THIS WEEK</small>
                     </span>
                 </li>
             </ol>
 
             <p v-if="!leaders.length" class="ranking-note">
-                🌱 No explorers have earned XP here yet. Finish a story or quiz to be the first on the board!
+                🌱 A fresh week has started! Answer quiz questions correctly to earn stars and be the first on the board!
             </p>
 
             <!-- 4. YOUR ADVENTURE: encouraging, never shows a low rank -->
@@ -260,12 +284,12 @@ const goBackToClassroom = () => {
                         <template v-else>Keep climbing, {{ firstName(user?.name) || 'Explorer' }}! 🚀</template>
                     </h2>
                     <p class="standing-desc">
-                        <template v-if="myStats.inTop && myStats.rank === 1">Everyone's chasing you. Keep reading to stay on top!</template>
-                        <template v-else-if="myStats.inTop">Every story and quiz pushes you higher up the podium.</template>
-                        <template v-else-if="myStats.xpToTop > 0">
-                            Earn <strong>+{{ myStats.xpToTop.toLocaleString() }} XP</strong> to join the Top 5. Every story and quiz counts!
+                        <template v-if="myStats.inTop && myStats.rank === 1">Everyone's chasing you this week. Keep answering correctly to stay on top!</template>
+                        <template v-else-if="myStats.inTop">Every correct answer pushes you higher up the podium.</template>
+                        <template v-else-if="myStats.starsToTop > 0">
+                            Earn <strong>+{{ myStats.starsToTop.toLocaleString() }} ⭐</strong> this week to join the Top 5. Every correct answer counts!
                         </template>
-                        <template v-else>Finish stories and quizzes to earn XP and join the board!</template>
+                        <template v-else>Answer quiz questions correctly to earn stars and join the board!</template>
                     </p>
                 </div>
 
@@ -279,8 +303,8 @@ const goBackToClassroom = () => {
                         <strong>{{ myStats.xp.toLocaleString() }}</strong>
                     </span>
                     <span class="standing-stat">
-                        <small>STARS</small>
-                        <strong>⭐ {{ myStats.stars }}</strong>
+                        <small>THIS WEEK</small>
+                        <strong>⭐ {{ myStats.weeklyStars }}</strong>
                     </span>
                 </div>
             </section>

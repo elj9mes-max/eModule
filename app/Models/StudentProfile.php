@@ -86,6 +86,16 @@ class StudentProfile extends Model
     }
 
     /**
+     * The purchased custom avatar the student has equipped.
+     *
+     * @return BelongsTo<ShopItem, $this>
+     */
+    public function equippedAvatarItem(): BelongsTo
+    {
+        return $this->belongsTo(ShopItem::class, 'equipped_avatar_item_id');
+    }
+
+    /**
      * The purchased header background (console skin) the student has equipped.
      *
      * @return BelongsTo<ShopItem, $this>

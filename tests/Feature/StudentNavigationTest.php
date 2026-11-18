@@ -117,7 +117,7 @@ test('teacher and guest cannot update student color theme', function () {
         ->assertForbidden();
 });
 
-test('teacher visiting student settings or ranking is redirected to teacher dashboard', function () {
+test('teacher visiting student settings or ranking or classmates is redirected to teacher dashboard', function () {
     $teacher = User::factory()->teacher()->create();
 
     $this->actingAs($teacher)
@@ -126,5 +126,9 @@ test('teacher visiting student settings or ranking is redirected to teacher dash
 
     $this->actingAs($teacher)
         ->get(route('students.ranking'))
+        ->assertRedirect(route('teachers.dashboard'));
+
+    $this->actingAs($teacher)
+        ->get(route('students.classmates'))
         ->assertRedirect(route('teachers.dashboard'));
 });

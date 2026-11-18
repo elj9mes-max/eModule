@@ -100,6 +100,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/students/Progress', fn () => redirect()->route('students.progress'));
     Route::get('/students/ranking', [StudentDashboardController::class, 'ranking'])->name('students.ranking');
     Route::get('/students/Ranking', fn () => redirect()->route('students.ranking'));
+    Route::get('/students/classmates', [StudentDashboardController::class, 'classmates'])->name('students.classmates');
+    Route::get('/students/Classmates', fn () => redirect()->route('students.classmates'));
+    Route::get('/students/classmates/{classmate}', [StudentDashboardController::class, 'showClassmateProfile'])->whereNumber('classmate')->name('students.classmates.profile');
     Route::get('/students/shop', [StudentDashboardController::class, 'shop'])->name('students.shop');
     Route::get('/students/Shop', fn () => redirect()->route('students.shop'));
     Route::post('/students/shop/items/{shopItem}/purchase', [StudentDashboardController::class, 'purchaseShopItem'])->name('students.shop.purchase');

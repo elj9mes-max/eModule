@@ -187,7 +187,7 @@ const navigateTo = (routeUrl) => {
 
                 <!-- Game Resource Indicators (Compact Pills) -->
                 <div class="hud-inventory-meters">
-                    <div class="inventory-pill gems-pill" title="Classroom Reading Gems: 1,450">
+                    <!-- <div class="inventory-pill gems-pill" title="Classroom Reading Gems: 1,450">
                         <span class="pill-icon gem-icon">💎</span>
                         <div class="pill-data">
                             <span class="pill-num">1,450</span>
@@ -209,7 +209,7 @@ const navigateTo = (routeUrl) => {
                             <span class="pill-num">95%</span>
                             <span class="pill-lbl">ENERGY</span>
                         </div>
-                    </div>
+                    </div> -->
 
                     <button
                         type="button"
@@ -226,7 +226,7 @@ const navigateTo = (routeUrl) => {
                         </div>
                     </button>
 
-                    <button
+                    <!-- <button
                         type="button"
                         class="inventory-pill grading-pill interactive-pill"
                         :class="{ 'has-pending': pendingGradingCount > 0, 'is-active': activeNav === 'grading' }"
@@ -240,7 +240,7 @@ const navigateTo = (routeUrl) => {
                             <span class="pill-lbl">GRADING</span>
                         </div>
                         <span v-if="pendingGradingCount > 0" class="pill-alert-dot" aria-hidden="true"></span>
-                    </button>
+                    </button> -->
                 </div>
             </header>
 

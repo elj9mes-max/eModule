@@ -88,6 +88,7 @@ class TeacherDashboardController extends Controller
             'classrooms' => $classrooms,
             'selected_classroom_id' => $classroomId,
             'students' => $students,
+            'week_resets_at' => now()->startOfWeek()->addWeek()->toIso8601String(),
             'pending_grading_count' => $this->cache->getTeacherPendingGradingCount($user->id),
         ]);
     }

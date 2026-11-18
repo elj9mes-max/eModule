@@ -174,6 +174,11 @@ const goToClassrooms = () => {
     router.visit('/students/classes');
 };
 
+const goToClassmates = () => {
+    playClick();
+    router.visit('/students/classmates');
+};
+
 const goToShop = () => {
     playClick();
     router.visit('/students/shop');
@@ -494,6 +499,28 @@ const goToWelcome = () => {
                     </svg>
                 </span>
                 <span class="clay-dock-label">Classes</span>
+            </button>
+
+            <!-- CLASSMATES -->
+            <button
+                type="button"
+                class="clay-dock-btn"
+                :class="{ 'is-active': activeNav === 'classmates' }"
+                :aria-current="activeNav === 'classmates' ? 'page' : undefined"
+                aria-label="View Classmates"
+                @mouseenter="playPop(1.1); prefetchRoute('/students/classmates', ['student-nav', 'student-classmates'])"
+                @focus="prefetchRoute('/students/classmates', ['student-nav', 'student-classmates'])"
+                @click="goToClassmates"
+            >
+                <span class="clay-dock-pill pill-classmates" aria-hidden="true">
+                    <svg viewBox="0 0 28 28" class="dock-svg-icon">
+                        <circle cx="10" cy="10" r="4" fill="none" stroke="currentColor" stroke-width="2.2" />
+                        <path d="M4 22c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+                        <circle cx="19" cy="11" r="3.2" fill="none" stroke="currentColor" stroke-width="2" />
+                        <path d="M16 20.8c.6-.8 1.8-1.3 3-1.3 2.5 0 4.5 1.5 4.5 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    </svg>
+                </span>
+                <span class="clay-dock-label">Classmates</span>
             </button>
 
             <!-- GEM BAZAAR SHOP -->
@@ -1151,6 +1178,10 @@ const goToWelcome = () => {
     color: var(--px-link-ink);
 }
 
+.pill-classmates {
+    color: #8B5CF6;
+}
+
 .pill-shop {
     color: #F59E0B;
 }
@@ -1160,6 +1191,10 @@ const goToWelcome = () => {
 }
 
 @media (hover: hover) {
+    .clay-dock-btn:hover .pill-classmates {
+        color: #7C3AED;
+    }
+
     .clay-dock-btn:hover .pill-shop {
         color: #D97706;
     }
@@ -1239,9 +1274,18 @@ const goToWelcome = () => {
         font-size: 0.74rem;
     }
 
+    .clay-bottom-dock {
+        padding: 0.28rem 0.35rem;
+        gap: 0.2rem;
+    }
+
     .clay-dock-btn {
-        min-width: 60px;
-        padding: 0.14rem 0.42rem;
+        min-width: 54px;
+        padding: 0.12rem 0.3rem;
+    }
+
+    .clay-dock-label {
+        font-size: 0.58rem;
     }
 }
 

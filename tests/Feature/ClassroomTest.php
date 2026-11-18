@@ -3,6 +3,8 @@
 use App\Enums\ModuleStatus;
 use App\Models\Classroom;
 use App\Models\Module;
+use App\Models\Quiz;
+use App\Models\QuizAttempt;
 use App\Models\StudentProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -352,7 +354,7 @@ test('student ranking page isolates leaderboard to classroom members', function 
     $response->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('students/Ranking')
-            ->has('classmates', 2)
+            ->where('classmatesCount', 2)
             ->where('active_classroom.id', $classroom->id)
         );
 });
@@ -361,15 +363,27 @@ test('student ranking only reveals the top five and hides the student\'s own low
     $teacher = User::factory()->teacher()->create();
     $classroom = Classroom::factory()->create(['user_id' => $teacher->id]);
 
+    $quiz = Quiz::factory()->create();
+    $earnWeeklyStars = fn (User $student, int $stars) => QuizAttempt::create([
+        'user_id' => $student->id,
+        'quiz_id' => $quiz->id,
+        'attempt_number' => 1,
+        'status' => 'completed',
+        'stars' => $stars,
+        'xp_earned' => 0,
+        'completed_at' => now(),
+    ]);
+
     foreach (range(1, 6) as $position) {
         $classmate = User::factory()->student()->create();
         $classroom->enrollStudent($classmate->id);
-        StudentProfile::updateOrCreate(['user_id' => $classmate->id], ['total_xp' => 1000 - $position * 100]);
+        $earnWeeklyStars($classmate, 10 - $position);
     }
 
     $student = User::factory()->student()->create();
     $classroom->enrollStudent($student->id);
     StudentProfile::updateOrCreate(['user_id' => $student->id], ['total_xp' => 50]);
+    $earnWeeklyStars($student, 1);
 
     $this->actingAs($student)
         ->get(route('students.ranking', ['class_id' => $classroom->id]))
@@ -381,7 +395,7 @@ test('student ranking only reveals the top five and hides the student\'s own low
             ->where('me.in_top', false)
             ->where('me.rank', null)
             ->where('me.xp', 50)
-            ->where('me.xp_to_top', 451)
+            ->where('me.stars_to_top', 5)
             ->missing('classrooms')
         );
 });
@@ -403,8 +417,7 @@ test('student cannot view the leaderboard of a classroom they do not belong to',
         ->assertInertia(fn (Assert $page) => $page
             ->component('students/Ranking')
             ->where('active_classroom.id', $myRoom->id)
-            ->has('classmates', 1)
-            ->where('classmates.0.id', $student->id)
+            ->where('classmatesCount', 1)
         );
 });
 

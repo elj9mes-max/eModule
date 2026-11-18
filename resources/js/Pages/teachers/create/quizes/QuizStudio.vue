@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import QuizImagePicker from '@/Components/QuizImagePicker.vue';
+import { csrfHeaders } from '@/Services/csrf';
 
 const props = defineProps({
     user: {
@@ -571,6 +572,133 @@ const removeEventImage = (event) => {
     event.image_path = null;
     event.image_url = null;
     captureHistorySnapshot();
+};
+
+/* Batch upload multiple pictures for Conflict Map (Drag-and-Drop Cards Alternative) */
+const isUploadingBatchImages = ref(false);
+const isDraggingOverBatchZone = ref(false);
+const batchImageInputRef = ref(null);
+
+const triggerBatchImageUpload = () => {
+    batchImageInputRef.value?.click();
+};
+
+const imageCardCount = computed(() => {
+    return studioState.events.filter((e) => Boolean(e.image_path)).length;
+});
+
+const getEventIndex = (evt) => {
+    return studioState.events.indexOf(evt);
+};
+
+const uploadBatchFiles = async (files) => {
+    if (!files || !files.length) {
+        return;
+    }
+
+    const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/'));
+    if (imageFiles.length === 0) {
+        triggerStudioToast('Please select valid image files (JPG, PNG, WEBP, or GIF).');
+        return;
+    }
+
+    const hasOnlyEmptyStarter = studioState.events.length === 1
+        && !studioState.events[0].image_path
+        && !studioState.events[0].event_text?.trim();
+
+    const availableSlots = hasOnlyEmptyStarter ? 30 : (30 - studioState.events.length);
+    if (imageFiles.length > availableSlots) {
+        triggerStudioToast(`You can only add up to ${availableSlots} more card${availableSlots === 1 ? '' : 's'} (max 30 total).`);
+        return;
+    }
+
+    const oversized = imageFiles.filter((f) => f.size > 5 * 1024 * 1024);
+    if (oversized.length > 0) {
+        triggerStudioToast('One or more pictures exceed 5 MB. Please select smaller files.');
+        return;
+    }
+
+    isUploadingBatchImages.value = true;
+    try {
+        const body = new FormData();
+        imageFiles.forEach((file) => {
+            body.append('images[]', file);
+        });
+
+        const response = await fetch(conflictMapImageUploadUrl.value, {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                ...csrfHeaders(),
+            },
+            body,
+        });
+
+        const data = await response.json().catch(() => null);
+
+        if (!response.ok || !data?.images) {
+            const errMsg = data?.errors?.['images.0']?.[0]
+                || data?.errors?.images?.[0]
+                || data?.message
+                || 'One or more pictures could not be uploaded.';
+            triggerStudioToast(errMsg);
+            return;
+        }
+
+        const uploadedList = data.images || [];
+        if (uploadedList.length > 0) {
+            const defaultZone = studioState.zones[0]?.conflict_type || 'character_vs_character';
+
+            if (hasOnlyEmptyStarter) {
+                studioState.events = [];
+            }
+
+            const startIndex = studioState.events.length;
+            uploadedList.forEach((img, i) => {
+                const idx = startIndex + i;
+                studioState.events.push({
+                    card_letter: getCardLetter(idx),
+                    event_text: '',
+                    image_path: img.path,
+                    image_url: img.url,
+                    target_conflict_type: defaultZone,
+                    hint: '',
+                    explanation: '',
+                    points: 10,
+                    sort_order: idx + 1,
+                });
+            });
+
+            reindexActiveSlideItems();
+            activeSlideIndex.value = Math.min(startIndex, studioState.events.length - 1);
+            captureHistorySnapshot();
+            triggerStudioToast(`🎉 Successfully added ${uploadedList.length} picture card${uploadedList.length === 1 ? '' : 's'}!`);
+        }
+    } catch (err) {
+        console.error('Batch image upload error:', err);
+        triggerStudioToast('Network error while uploading pictures. Please try again.');
+    } finally {
+        isUploadingBatchImages.value = false;
+    }
+};
+
+const handleBatchImageSelect = (event) => {
+    const files = event.target?.files;
+    if (files) {
+        uploadBatchFiles(files);
+    }
+    if (event.target) {
+        event.target.value = '';
+    }
+};
+
+const handleBatchImageDrop = (event) => {
+    isDraggingOverBatchZone.value = false;
+    const files = event.dataTransfer?.files;
+    if (files) {
+        uploadBatchFiles(files);
+    }
 };
 
 const reindexActiveSlideItems = () => {
@@ -1267,14 +1395,6 @@ onBeforeUnmount(() => {
                     </button>
                 </div>
 
-                <div class="studio-stats-pills">
-                    <span class="stat-pill pill-pts" title="Total Quiz Points">
-                        🎯 {{ totalPoints }} pts
-                    </span>
-                    <span class="stat-pill pill-xp" title="Student XP Bounty">
-                        ⚡ +{{ studioState.xp_reward }} XP
-                    </span>
-                </div>
 
                 <button
                     type="button"
@@ -1777,7 +1897,7 @@ onBeforeUnmount(() => {
                             </div>
 
                             <div class="item-header-right">
-                                <label class="points-inline-box">
+                                <!-- <label class="points-inline-box">
                                     <span>Points:</span>
                                     <input
                                         v-model.number="currentSlideItem.points"
@@ -1786,7 +1906,7 @@ onBeforeUnmount(() => {
                                         max="1000"
                                         class="points-number-input"
                                     />
-                                </label>
+                                </label> -->
 
                                 <button
                                     type="button"
@@ -2068,6 +2188,117 @@ onBeforeUnmount(() => {
                                                     : 'Set as Target Zone'
                                             }}
                                         </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Alternative: Upload Multiple Images for Drag-and-Drop Cards -->
+                            <div class="map-batch-images-banner">
+                                <div class="batch-banner-header">
+                                    <div class="batch-banner-title-pod">
+                                        <span class="batch-banner-icon" aria-hidden="true">🖼️</span>
+                                        <div>
+                                            <strong class="batch-banner-title">Upload Multiple Images (Drag & Drop Alternative)</strong>
+                                            <p class="batch-banner-sub">
+                                                Alternative to typing text event cards: upload multiple conflict photos or illustrations at once that students will drag and drop into the target zones!
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        class="batch-upload-trigger-btn"
+                                        :disabled="isUploadingBatchImages || studioState.events.length >= 30"
+                                        @click="triggerBatchImageUpload"
+                                    >
+                                        <span v-if="isUploadingBatchImages" class="btn-spinner" aria-hidden="true">🌀</span>
+                                        <span v-else aria-hidden="true">📁</span>
+                                        <span>{{ isUploadingBatchImages ? 'Uploading Pictures...' : '+ Upload Multiple Images' }}</span>
+                                    </button>
+                                </div>
+
+                                <!-- Hidden multi-file input -->
+                                <input
+                                    ref="batchImageInputRef"
+                                    type="file"
+                                    multiple
+                                    accept="image/png,image/jpeg,image/webp,image/gif"
+                                    style="display: none;"
+                                    @change="handleBatchImageSelect"
+                                />
+
+                                <!-- Drag-and-Drop Zone Area -->
+                                <div
+                                    class="batch-drop-zone-well"
+                                    :class="{ 'is-dragging': isDraggingOverBatchZone }"
+                                    @dragover.prevent="isDraggingOverBatchZone = true"
+                                    @dragleave="isDraggingOverBatchZone = false"
+                                    @drop.prevent="handleBatchImageDrop"
+                                    @click="triggerBatchImageUpload"
+                                >
+                                    <span class="drop-well-icon" aria-hidden="true">📥</span>
+                                    <div class="drop-well-text">
+                                        <strong>Drag and drop multiple pictures here</strong> or click to browse files
+                                        <small>(JPG, PNG, WEBP, or GIF up to 5 MB each • max 30 cards total)</small>
+                                    </div>
+                                </div>
+
+                                <!-- Quick Image Cards Gallery (if any cards have images) -->
+                                <div v-if="imageCardCount > 0" class="batch-cards-quick-gallery">
+                                    <div class="quick-gallery-head">
+                                        <span class="gallery-title">🖼️ Picture Cards in this Quiz ({{ imageCardCount }})</span>
+                                        <span class="gallery-hint">Quickly set which conflict bucket each picture belongs to:</span>
+                                    </div>
+
+                                    <div class="quick-gallery-grid">
+                                        <div
+                                            v-for="(evt, eIdx) in studioState.events.filter(e => e.image_path)"
+                                            :key="evt.image_path || eIdx"
+                                            class="quick-gallery-card"
+                                            :class="{ 'is-active-card': activeSlideIndex === getEventIndex(evt) }"
+                                        >
+                                            <div class="quick-gallery-thumb-frame" @click="activeSlideIndex = getEventIndex(evt)">
+                                                <img :src="evt.image_url" :alt="evt.card_letter || 'Picture card'" />
+                                                <span class="quick-card-badge">{{ evt.card_letter || getCardLetter(getEventIndex(evt)) }}</span>
+                                            </div>
+
+                                            <div class="quick-gallery-meta">
+                                                <label class="sr-only">Target Zone</label>
+                                                <select
+                                                    v-model="evt.target_conflict_type"
+                                                    class="quick-zone-select"
+                                                    :title="'Target zone for ' + (evt.card_letter || 'card')"
+                                                >
+                                                    <option
+                                                        v-for="cat in conflictCategories"
+                                                        :key="cat.type"
+                                                        :value="cat.type"
+                                                    >
+                                                        {{ cat.icon }} {{ cat.label }}
+                                                    </option>
+                                                </select>
+
+                                                <div class="quick-card-footer">
+                                                    <button
+                                                        type="button"
+                                                        class="quick-card-edit-btn"
+                                                        title="Edit details (caption, hint, points)"
+                                                        @click="activeSlideIndex = getEventIndex(evt)"
+                                                    >
+                                                        Edit Details
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        class="quick-card-del-btn"
+                                                        title="Remove picture card"
+                                                        :disabled="studioState.events.length <= 1"
+                                                        @click="removeSlideItem(getEventIndex(evt))"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -2475,7 +2706,7 @@ onBeforeUnmount(() => {
                                         placeholder="e.g., One important lesson I learned from this story is..."
                                     />
                                 </div>
-                                <div>
+                                <!-- <div>
                                     <label class="field-label">💡 Guiding Hint (Optional)</label>
                                     <input
                                         v-model="currentSlideItem.guiding_hint"
@@ -2483,7 +2714,7 @@ onBeforeUnmount(() => {
                                         class="studio-input"
                                         placeholder="Helpful reflection tip for students..."
                                     />
-                                </div>
+                                </div> -->
                             </div>
                         </div>
                     </section>
@@ -2501,9 +2732,23 @@ onBeforeUnmount(() => {
                             {{ activeFormatMeta.itemNoun }}s ({{ activeItemsArray.length }})
                         </h3>
                     </div>
-                    <button type="button" class="nav-add-slide-btn" @click="addSlideItem">
-                        + Add {{ activeFormatMeta.itemNoun }}
-                    </button>
+                    <div class="navigator-header-actions">
+                        <button type="button" class="nav-add-slide-btn" @click="addSlideItem">
+                            + Add {{ activeFormatMeta.itemNoun }}
+                        </button>
+                        <!-- <button
+                            v-if="activeFormatId === 'the-conflict-map'"
+                            type="button"
+                            class="nav-batch-images-btn"
+                            title="Upload multiple pictures at once to create drag-and-drop cards"
+                            :disabled="isUploadingBatchImages || studioState.events.length >= 30"
+                            @click="triggerBatchImageUpload"
+                        >
+                            <span v-if="isUploadingBatchImages" class="btn-spinner" aria-hidden="true">🌀</span>
+                            <span v-else aria-hidden="true">🖼️</span>
+                            <span>+ Images</span>
+                        </button> -->
+                    </div>
                 </div>
 
                 <div class="navigator-slides-list">
@@ -3593,6 +3838,306 @@ onBeforeUnmount(() => {
     display: flex;
     flex-direction: column;
     gap: 0.65rem;
+}
+
+/* Conflict Map Batch Images Banner & Drop Zone (Drag & Drop Images Alternative) */
+.map-batch-images-banner {
+    background: linear-gradient(180deg, #F0F9FF 0%, #E0F2FE 100%);
+    border: 2.5px dashed #0284C7;
+    border-radius: 18px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.08);
+}
+
+.batch-banner-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.batch-banner-title-pod {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    flex: 1 1 320px;
+}
+
+.batch-banner-icon {
+    font-size: 1.6rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.batch-banner-title {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 0.96rem;
+    font-weight: 800;
+    color: #0369A1;
+    line-height: 1.2;
+}
+
+.batch-banner-sub {
+    margin: 0.15rem 0 0;
+    font-size: 0.74rem;
+    color: #075985;
+    line-height: 1.35;
+}
+
+.batch-upload-trigger-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #38BDF8 0%, #0284C7 100%);
+    border: 1.5px solid #0369A1;
+    color: #FFFFFF;
+    font-family: var(--font-display);
+    font-size: 0.82rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 3px 0 #075985;
+    transition: transform 0.12s ease;
+    white-space: nowrap;
+}
+
+.batch-upload-trigger-btn:hover:not(:disabled) {
+    transform: translateY(-1.5px);
+}
+
+.batch-upload-trigger-btn:active:not(:disabled) {
+    transform: translateY(1.5px);
+    box-shadow: 0 1px 0 #075985;
+}
+
+.batch-upload-trigger-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.batch-drop-zone-well {
+    border: 2px dashed #38BDF8;
+    background: rgba(255, 255, 255, 0.75);
+    border-radius: 14px;
+    padding: 0.95rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    text-align: center;
+}
+
+.batch-drop-zone-well:hover,
+.batch-drop-zone-well.is-dragging {
+    background: #FFFFFF;
+    border-color: #0284C7;
+    box-shadow: 0 4px 14px rgba(2, 132, 199, 0.15);
+    transform: translateY(-1px);
+}
+
+.drop-well-icon {
+    font-size: 1.4rem;
+    color: #0284C7;
+}
+
+.drop-well-text {
+    font-size: 0.82rem;
+    color: #0C4A6E;
+    line-height: 1.3;
+}
+
+.drop-well-text small {
+    display: block;
+    color: #0369A1;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-top: 0.15rem;
+}
+
+/* Quick Image Cards Gallery inside Conflict Map */
+.batch-cards-quick-gallery {
+    background: #FFFFFF;
+    border: 1.5px solid #BAE6FD;
+    border-radius: 14px;
+    padding: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.quick-gallery-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.gallery-title {
+    font-family: var(--font-display);
+    font-size: 0.86rem;
+    font-weight: 800;
+    color: #0369A1;
+}
+
+.gallery-hint {
+    font-size: 0.7rem;
+    color: #64748B;
+    font-weight: 600;
+}
+
+.quick-gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.65rem;
+}
+
+.quick-gallery-card {
+    border: 2px solid #E2E8F0;
+    background: #F8FAFC;
+    border-radius: 12px;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    transition: all 0.15s ease;
+}
+
+.quick-gallery-card.is-active-card {
+    border-color: #0284C7;
+    background: #F0F9FF;
+    box-shadow: 0 3px 0 #0284C7;
+}
+
+.quick-gallery-thumb-frame {
+    position: relative;
+    width: 100%;
+    height: 95px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #FFFFFF;
+    border: 1px solid #CBD5E1;
+    cursor: pointer;
+}
+
+.quick-gallery-thumb-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.quick-card-badge {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    background: rgba(15, 23, 42, 0.75);
+    color: #FFFFFF;
+    font-family: var(--font-display);
+    font-size: 0.62rem;
+    font-weight: 800;
+    padding: 0.1rem 0.4rem;
+    border-radius: 6px;
+    backdrop-filter: blur(4px);
+}
+
+.quick-gallery-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.quick-zone-select {
+    width: 100%;
+    padding: 0.28rem 0.4rem;
+    border-radius: 6px;
+    border: 1.5px solid #CBD5E1;
+    font-size: 0.72rem;
+    font-weight: 800;
+    background: #FFFFFF;
+    color: #1E293B;
+}
+
+.quick-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+}
+
+.quick-card-edit-btn {
+    border: none;
+    background: #E2E8F0;
+    color: #334155;
+    border-radius: 6px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 0.2rem 0.5rem;
+    cursor: pointer;
+}
+
+.quick-card-edit-btn:hover {
+    background: #CBD5E1;
+}
+
+.quick-card-del-btn {
+    border: none;
+    background: #FEE2E2;
+    color: #DC2626;
+    border-radius: 6px;
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    font-size: 0.68rem;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.quick-card-del-btn:hover:not(:disabled) {
+    background: #FCA5A5;
+}
+
+.quick-card-del-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Right Navigator Header Actions */
+.navigator-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.nav-batch-images-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 8px;
+    background: #F0F9FF;
+    border: 1.5px solid #0284C7;
+    color: #0369A1;
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    white-space: nowrap;
+}
+
+.nav-batch-images-btn:hover:not(:disabled) {
+    background: #0284C7;
+    color: #FFFFFF;
 }
 
 .map-zones-strip {
