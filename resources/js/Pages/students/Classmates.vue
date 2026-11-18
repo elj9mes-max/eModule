@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import StudentLayout from '@/Components/StudentLayout.vue';
 import { useSound } from '@/Services/soundManager';
@@ -7,7 +7,6 @@ import { spawnPixarBurst, usePixarTheme, useWorldOnDocument } from '@/Composable
 
 const {
     playPop,
-    playSparkle,
     playBonus,
     playClick,
 } = useSound();
@@ -43,10 +42,7 @@ const AVATAR_EMOJIS = {
     dragon: '🐲',
 };
 
-// View mode: 'grid' | 'list'
-const viewMode = ref('grid');
-
-// Search & Filter state
+// Search & Filter state (List-only compact mode)
 const searchQuery = ref('');
 const activeRoomFilter = ref(props.active_classroom_id ? String(props.active_classroom_id) : 'all');
 const sortBy = ref('xp'); // 'xp' | 'stars' | 'level' | 'name'
@@ -60,22 +56,22 @@ let toastTimeout = null;
 const inspectModalOpen = ref(false);
 const inspectingClassmate = ref(null);
 
+const handleKeydown = (event) => {
+    if (event.key === 'Escape' && inspectModalOpen.value) {
+        closeInspectModal();
+    }
+};
+
 onMounted(() => {
-    try {
-        const savedView = window.localStorage?.getItem('emodule_classmates_view');
-        if (savedView === 'list' || savedView === 'grid') {
-            viewMode.value = savedView;
-        }
-    } catch {}
+    window.addEventListener('keydown', handleKeydown);
 });
 
-const setViewMode = (mode) => {
-    viewMode.value = mode;
-    playClick();
-    try {
-        window.localStorage?.setItem('emodule_classmates_view', mode);
-    } catch {}
-};
+onBeforeUnmount(() => {
+    window.removeEventListener('keydown', handleKeydown);
+    if (toastTimeout) {
+        clearTimeout(toastTimeout);
+    }
+});
 
 const getAvatarEmoji = (avatarKey) => {
     return AVATAR_EMOJIS[avatarKey] || '🦊';
@@ -107,7 +103,6 @@ const filteredClassmates = computed(() => {
 
     // Sort
     list.sort((a, b) => {
-        // Keep current user pinned near top if desired or natural sort
         if (sortBy.value === 'xp') {
             return (b.xp || 0) - (a.xp || 0);
         }
@@ -150,7 +145,7 @@ const clearSearch = () => {
 const cheerForClassmate = (classmate, event) => {
     playBonus();
     if (event?.currentTarget) {
-        spawnPixarBurst(event.currentTarget, 16, activeWorld.value);
+        spawnPixarBurst(event.currentTarget, 14, activeWorld.value);
     }
 
     cheeredClassmates.value.add(classmate.id);
@@ -164,7 +159,7 @@ const cheerForClassmate = (classmate, event) => {
     }
     toastTimeout = setTimeout(() => {
         cheerToast.value = '';
-    }, 2800);
+    }, 2600);
 };
 
 const openInspectModal = (classmate) => {
@@ -188,6 +183,22 @@ const goToClasses = () => {
     playClick();
     router.visit('/students/classes');
 };
+
+const rankBadgeClass = (index) => {
+    if (sortBy.value === 'name') {
+        return '';
+    }
+    if (index === 0) {
+        return 'is-rank-1';
+    }
+    if (index === 1) {
+        return 'is-rank-2';
+    }
+    if (index === 2) {
+        return 'is-rank-3';
+    }
+    return '';
+};
 </script>
 
 <template>
@@ -196,65 +207,108 @@ const goToClasses = () => {
     <StudentLayout
         :user="user"
         active-nav="classmates"
-        :full-width="true"
     >
-        <div class="clay-classmates-page">
+        <section class="clay-classmates-page" aria-labelledby="classmates-heading">
             <!-- =========================================================================
-                 1. COMPACT CONTROL DECK (Cohesive with Classrooms.vue & Shop.vue)
+                 1. COMPACT 3D PIXAR CONTROL DECK
                  ========================================================================= -->
             <header class="classmates-control-deck">
-                <!-- Top Row: Medallion + Title + Result Count + View Switcher -->
+                <span class="deck-specular-gloss" aria-hidden="true"></span>
+
+                <!-- Top Row: 3D Medallion + Title + Counter + Tactile Sort Switcher -->
                 <div class="deck-top-row">
                     <div class="deck-title-block">
-                        <span class="deck-friends-medallion" aria-hidden="true">👥</span>
+                        <span class="deck-friends-medallion" aria-hidden="true">
+                            <span class="medallion-gloss"></span>
+                            <span class="medallion-emoji">👥</span>
+                        </span>
                         <div class="deck-title-meta">
-                            <h1 class="deck-title">Classmates</h1>
-                            <span class="deck-counter">
-                                {{ filteredClassmates.length }} {{ filteredClassmates.length === 1 ? 'classmate' : 'classmates' }}
-                            </span>
+                            <div class="deck-title-inline">
+                                <h1 id="classmates-heading" class="deck-title">Classmates</h1>
+                                <span class="deck-counter-pill">
+                                    {{ filteredClassmates.length }}
+                                </span>
+                            </div>
+                            <p class="deck-subtitle">
+                                Classroom Explorers Directory
+                            </p>
                         </div>
                     </div>
 
-                    <!-- View Switcher (Grid / List) -->
-                    <div class="deck-view-switch" role="group" aria-label="Layout view">
+                    <!-- Tactile 3D Sort Segmented Bar -->
+                    <div class="deck-sort-group" role="group" aria-label="Sort classmates by">
                         <button
                             type="button"
-                            class="view-btn"
-                            :class="{ 'is-active': viewMode === 'grid' }"
-                            title="Grid View"
-                            aria-label="Grid View"
-                            @click="setViewMode('grid')"
+                            class="sort-pill-btn"
+                            :class="{ 'is-active': sortBy === 'xp' }"
+                            @click="sortBy = 'xp'; playClick()"
                         >
-                            <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true">
-                                <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.5" />
-                                <rect x="9" y="1.5" width="5.5" height="5.5" rx="1.5" />
-                                <rect x="1.5" y="9" width="5.5" height="5.5" rx="1.5" />
-                                <rect x="9" y="9" width="5.5" height="5.5" rx="1.5" />
-                            </svg>
-                            <span>Grid</span>
+                            <span aria-hidden="true">⚡</span>
+                            <span>XP</span>
                         </button>
                         <button
                             type="button"
-                            class="view-btn"
-                            :class="{ 'is-active': viewMode === 'list' }"
-                            title="List View"
-                            aria-label="List View"
-                            @click="setViewMode('list')"
+                            class="sort-pill-btn"
+                            :class="{ 'is-active': sortBy === 'stars' }"
+                            @click="sortBy = 'stars'; playClick()"
                         >
-                            <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true">
-                                <rect x="1.5" y="2" width="13" height="3" rx="1" />
-                                <rect x="1.5" y="6.5" width="13" height="3" rx="1" />
-                                <rect x="1.5" y="11" width="13" height="3" rx="1" />
-                            </svg>
-                            <span>List</span>
+                            <span aria-hidden="true">⭐</span>
+                            <span>Stars</span>
+                        </button>
+                        <button
+                            type="button"
+                            class="sort-pill-btn"
+                            :class="{ 'is-active': sortBy === 'level' }"
+                            @click="sortBy = 'level'; playClick()"
+                        >
+                            <span aria-hidden="true">👑</span>
+                            <span>Level</span>
+                        </button>
+                        <button
+                            type="button"
+                            class="sort-pill-btn"
+                            :class="{ 'is-active': sortBy === 'name' }"
+                            @click="sortBy = 'name'; playClick()"
+                        >
+                            <span>A–Z</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- Mid Row: Classroom Pills Carousel + Search Bar -->
+                <!-- Bottom Row: Compact Search Well + Classroom Filter Pills -->
                 <div class="deck-filters-row">
+                    <div class="clay-search-well" :class="{ 'has-query': searchQuery }" role="search">
+                        <label for="classmate-search-input" class="sr-only">Find classmate by name or room</label>
+                        <span class="search-mini-lens" aria-hidden="true">🔍</span>
+                        <input
+                            id="classmate-search-input"
+                            v-model="searchQuery"
+                            type="search"
+                            class="search-mini-input"
+                            placeholder="Search classmate or room…"
+                            autocomplete="off"
+                            enterkeyhint="search"
+                            @keydown.esc="clearSearch"
+                        />
+                        <span v-if="searchQuery" class="search-mini-count">{{ filteredClassmates.length }}</span>
+                        <button
+                            v-if="searchQuery"
+                            type="button"
+                            class="search-mini-clear"
+                            aria-label="Clear search"
+                            @click="clearSearch"
+                        >
+                            ✕
+                        </button>
+                    </div>
+
                     <!-- Classroom Filter Pills -->
-                    <div v-if="classrooms.length > 0" class="room-pills-scroll" role="tablist" aria-label="Classroom filters">
+                    <div
+                        v-if="classrooms.length > 0"
+                        class="room-pills-scroll"
+                        role="tablist"
+                        aria-label="Filter by classroom"
+                    >
                         <button
                             type="button"
                             class="room-pill-btn"
@@ -263,9 +317,11 @@ const goToClasses = () => {
                             :aria-selected="activeRoomFilter === 'all'"
                             @click="selectRoomFilter('all')"
                         >
-                            <span class="room-pill-icon">🏫</span>
-                            <span class="room-pill-name">All Rooms</span>
-                            <span class="room-pill-badge">{{ classroomCounts.all }}</span>
+                            <span class="room-pill-face">
+                                <span class="room-pill-icon" aria-hidden="true">🏫</span>
+                                <span class="room-pill-name">All</span>
+                                <span class="room-pill-badge">{{ classroomCounts.all }}</span>
+                            </span>
                         </button>
 
                         <button
@@ -278,51 +334,12 @@ const goToClasses = () => {
                             :aria-selected="activeRoomFilter === String(room.id)"
                             @click="selectRoomFilter(room.id)"
                         >
-                            <span class="room-pill-icon">{{ room.icon || '📚' }}</span>
-                            <span class="room-pill-name">{{ room.name }}</span>
-                            <span class="room-pill-badge">{{ classroomCounts[room.id] || 0 }}</span>
+                            <span class="room-pill-face">
+                                <span class="room-pill-icon" aria-hidden="true">{{ room.icon || '📚' }}</span>
+                                <span class="room-pill-name">{{ room.name }}</span>
+                                <span class="room-pill-badge">{{ classroomCounts[room.id] || 0 }}</span>
+                            </span>
                         </button>
-                    </div>
-
-                    <!-- Search Input & Sort Selector -->
-                    <div class="deck-search-wrap">
-                        <div class="clay-search-compact" :class="{ 'has-query': searchQuery }" role="search">
-                            <span class="search-mini-lens" aria-hidden="true">🔍</span>
-                            <input
-                                v-model="searchQuery"
-                                type="search"
-                                class="search-mini-input"
-                                placeholder="Find classmate by name…"
-                                enterkeyhint="search"
-                                @keydown.esc="clearSearch"
-                            />
-                            <span v-if="searchQuery" class="search-mini-count">{{ filteredClassmates.length }}</span>
-                            <button
-                                v-if="searchQuery"
-                                type="button"
-                                class="search-mini-clear"
-                                aria-label="Clear search"
-                                @click="clearSearch"
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        <!-- Quick Sort Dropdown -->
-                        <div class="sort-select-wrap">
-                            <label for="sort-classmates-by" class="sr-only">Sort classmates</label>
-                            <select
-                                id="sort-classmates-by"
-                                v-model="sortBy"
-                                class="sort-mini-select"
-                                @change="playClick"
-                            >
-                                <option value="xp">⚡ Most XP</option>
-                                <option value="stars">⭐ Most Stars</option>
-                                <option value="level">👑 Highest Level</option>
-                                <option value="name">🔤 Alphabetical</option>
-                            </select>
-                        </div>
                     </div>
                 </div>
             </header>
@@ -335,14 +352,13 @@ const goToClasses = () => {
             </transition>
 
             <!-- =========================================================================
-                 2. EMPTY STATES
+                 2. COMPACT EMPTY STATES
                  ========================================================================= -->
-            <!-- Empty state: Not enrolled in any classrooms -->
             <div v-if="classrooms.length === 0" class="clay-empty-card">
                 <div class="empty-icon-medallion" aria-hidden="true">🎒</div>
                 <h2 class="empty-card-title">Join a Classroom Adventure!</h2>
                 <p class="empty-card-desc">
-                    You haven't joined any classrooms yet. Enter a 6-digit class code from your teacher to explore adventures and meet your classmates!
+                    Enter a 6-digit class code from your teacher to explore modules and meet your classmates!
                 </p>
                 <button
                     type="button"
@@ -350,13 +366,12 @@ const goToClasses = () => {
                     @click="goToClasses"
                 >
                     <span class="btn-face">
-                        <span>🏫</span>
+                        <span aria-hidden="true">🏫</span>
                         <span>Go to Classrooms</span>
                     </span>
                 </button>
             </div>
 
-            <!-- Empty state: Enrolled, but no classmates match search or room filter -->
             <div v-else-if="filteredClassmates.length === 0" class="clay-empty-card">
                 <div class="empty-icon-medallion" aria-hidden="true">
                     {{ searchQuery ? '🔍' : '🌱' }}
@@ -367,8 +382,8 @@ const goToClasses = () => {
                 <p class="empty-card-desc">
                     {{
                         searchQuery
-                            ? `No classmates matched "${searchQuery}". Try searching for another name!`
-                            : 'You are the first explorer in this room! When other classmates join with the class code, they will appear here.'
+                            ? `No classmates matched "${searchQuery}". Try another name!`
+                            : 'You are the first explorer in this room! Classmates will appear here when they join.'
                     }}
                 </p>
                 <button
@@ -382,113 +397,160 @@ const goToClasses = () => {
             </div>
 
             <!-- =========================================================================
-                 3. CLASSMATES DIRECTORY (GRID & LIST VIEWS)
+                 3. COMPACT 3D PIXAR LIST DIRECTORY (LIST ONLY)
                  ========================================================================= -->
-            <div
+            <ol
                 v-else
-                class="classmates-content-stage"
-                :class="viewMode === 'grid' ? 'is-grid-layout' : 'is-list-layout'"
+                class="classmates-list-stage"
+                aria-label="Classmates directory"
             >
-                <article
-                    v-for="classmate in filteredClassmates"
+                <li
+                    v-for="(classmate, index) in filteredClassmates"
                     :key="classmate.id"
-                    class="classmate-card"
-                    :class="{ 'is-me': classmate.is_current_user }"
+                    class="classmate-list-item"
+                    :style="{ '--i': Math.min(index, 10) }"
                 >
-                    <!-- Card Header: Avatar Medallion + Level + "You" badge -->
-                    <div class="card-avatar-row">
-                        <div class="avatar-pod-wrap">
+                    <article
+                        class="classmate-row"
+                        :class="[rankBadgeClass(index), { 'is-me': classmate.is_current_user }]"
+                    >
+                        <span class="row-top-gloss" aria-hidden="true"></span>
+
+                        <!-- Rank Number Pill -->
+                        <span class="row-rank-badge" :class="rankBadgeClass(index)" aria-hidden="true">
+                            {{ index + 1 }}
+                        </span>
+
+                        <!-- 3D Glossy Avatar Orb + Level Pill -->
+                        <button
+                            type="button"
+                            class="row-avatar-btn"
+                            :aria-label="`Inspect ${classmate.name}`"
+                            @click="openInspectModal(classmate)"
+                        >
                             <span
                                 class="classmate-avatar-sphere"
                                 :style="{ background: classmate.avatarBg }"
                                 aria-hidden="true"
                             >
+                                <span class="avatar-specular"></span>
                                 <span class="avatar-emoji-glyph">{{ getAvatarEmoji(classmate.avatar) }}</span>
                             </span>
-                            <span class="classmate-lvl-pill">LVL {{ classmate.level }}</span>
-                        </div>
-
-                        <div class="card-badges-row">
-                            <span v-if="classmate.is_current_user" class="you-badge" aria-label="This is you">
-                                🌟 You
-                            </span>
-                            <span
-                                v-for="room in classmate.shared_classrooms.slice(0, 2)"
-                                :key="room.id"
-                                class="shared-room-tag"
-                                :title="room.name"
-                            >
-                                <span class="room-tag-icon">{{ room.icon || '🏷️' }}</span>
-                                <span class="room-tag-name">{{ room.name }}</span>
-                            </span>
-                            <span
-                                v-if="classmate.shared_classrooms.length > 2"
-                                class="shared-room-more"
-                                :title="`${classmate.shared_classrooms.length - 2} more classrooms`"
-                            >
-                                +{{ classmate.shared_classrooms.length - 2 }}
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- Card Body: Student Identity -->
-                    <div class="card-info-block">
-                        <h2 class="classmate-name" :title="classmate.name">
-                            {{ classmate.name }}
-                        </h2>
-                        <span class="classmate-title-kicker">{{ classmate.level_title }}</span>
-                    </div>
-
-                    <!-- Card Stats Readout -->
-                    <div class="card-stats-deck">
-                        <div class="stat-pill stat-xp" title="Total Experience">
-                            <span class="stat-icon" aria-hidden="true">⚡</span>
-                            <span class="stat-val">{{ Number(classmate.xp).toLocaleString() }}</span>
-                            <span class="stat-lbl">XP</span>
-                        </div>
-
-                        <div class="stat-pill stat-stars" title="Total Reading Stars">
-                            <span class="stat-icon" aria-hidden="true">⭐</span>
-                            <span class="stat-val">{{ Number(classmate.stars).toLocaleString() }}</span>
-                            <span class="stat-lbl">Stars</span>
-                        </div>
-
-                        <div class="stat-pill stat-quizzes" title="Quizzes Passed">
-                            <span class="stat-icon" aria-hidden="true">🏆</span>
-                            <span class="stat-val">{{ classmate.quizzes_passed }}</span>
-                            <span class="stat-lbl">Quiz</span>
-                        </div>
-                    </div>
-
-                    <!-- Card Tactile Actions -->
-                    <div class="card-actions-strip">
-                        <button
-                            type="button"
-                            class="cheer-btn"
-                            :class="{ 'has-cheered': cheeredClassmates.has(classmate.id) }"
-                            :aria-label="`Give high five to ${classmate.name}`"
-                            @click="cheerForClassmate(classmate, $event)"
-                        >
-                            <span class="cheer-btn-face">
-                                <span>{{ cheeredClassmates.has(classmate.id) ? '💖' : '🎉' }}</span>
-                                <span>{{ cheeredClassmates.has(classmate.id) ? 'Cheered!' : 'High Five' }}</span>
-                            </span>
+                            <span class="classmate-lvl-pill">LV {{ classmate.level }}</span>
                         </button>
 
-                        <button
-                            type="button"
-                            class="inspect-btn"
-                            :aria-label="`Inspect ${classmate.name}'s profile`"
-                            @click="openInspectModal(classmate)"
-                        >
-                            <span class="inspect-btn-face">
-                                <span>Inspect</span>
-                                <span aria-hidden="true">→</span>
-                            </span>
-                        </button>
-                    </div>
-                </article>
-            </div>
+                        <!-- Main Identity & Mobile-Inline Stats -->
+                        <div class="row-identity-col" @click="openInspectModal(classmate)">
+                            <div class="row-name-line">
+                                <h2 class="classmate-name" :title="classmate.name">
+                                    {{ classmate.name }}
+                                </h2>
+                                <span v-if="classmate.is_current_user" class="you-badge" aria-label="This is you">
+                                    YOU
+                                </span>
+                            </div>
+
+                            <div class="row-sub-line">
+                                <span class="classmate-title-kicker">{{ classmate.level_title }}</span>
+
+                                <div v-if="classmate.shared_classrooms?.length" class="row-rooms-inline">
+                                    <span
+                                        v-for="room in classmate.shared_classrooms.slice(0, 1)"
+                                        :key="room.id"
+                                        class="shared-room-tag"
+                                        :title="room.name"
+                                    >
+                                        <span aria-hidden="true">{{ room.icon || '📚' }}</span>
+                                        <span class="room-tag-text">{{ room.name }}</span>
+                                    </span>
+                                    <span
+                                        v-if="classmate.shared_classrooms.length > 1"
+                                        class="shared-room-more"
+                                        :title="`${classmate.shared_classrooms.length - 1} more classrooms`"
+                                    >
+                                        +{{ classmate.shared_classrooms.length - 1 }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Compact Inline Stats (always visible on mobile, hidden on desktop where dedicated column shows) -->
+                            <div class="row-mobile-stats" aria-label="Student stats">
+                                <span class="mini-stat is-xp" title="Total Experience">
+                                    <span aria-hidden="true">⚡</span>
+                                    <strong>{{ Number(classmate.xp).toLocaleString() }}</strong>
+                                </span>
+                                <span class="mini-stat is-stars" title="Reading Stars">
+                                    <span aria-hidden="true">⭐</span>
+                                    <strong>{{ Number(classmate.stars).toLocaleString() }}</strong>
+                                </span>
+                                <span class="mini-stat is-quiz" title="Quizzes Passed">
+                                    <span aria-hidden="true">🏆</span>
+                                    <strong>{{ classmate.quizzes_passed }}</strong>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Desktop Recessed Stats Well -->
+                        <div class="row-stats-deck" aria-label="Student stats">
+                            <div class="stat-pill stat-xp" title="Total Experience">
+                                <span class="stat-icon" aria-hidden="true">⚡</span>
+                                <div class="stat-copy">
+                                    <span class="stat-val">{{ Number(classmate.xp).toLocaleString() }}</span>
+                                    <span class="stat-lbl">XP</span>
+                                </div>
+                            </div>
+
+                            <div class="stat-pill stat-stars" title="Total Reading Stars">
+                                <span class="stat-icon" aria-hidden="true">⭐</span>
+                                <div class="stat-copy">
+                                    <span class="stat-val">{{ Number(classmate.stars).toLocaleString() }}</span>
+                                    <span class="stat-lbl">Stars</span>
+                                </div>
+                            </div>
+
+                            <div class="stat-pill stat-quizzes" title="Quizzes Passed">
+                                <span class="stat-icon" aria-hidden="true">🏆</span>
+                                <div class="stat-copy">
+                                    <span class="stat-val">{{ classmate.quizzes_passed }}</span>
+                                    <span class="stat-lbl">Quiz</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tactile 3D Actions -->
+                        <div class="row-actions-strip">
+                            <button
+                                type="button"
+                                class="cheer-btn"
+                                :class="{ 'has-cheered': cheeredClassmates.has(classmate.id) }"
+                                :aria-label="`Give high five to ${classmate.name}`"
+                                @click.stop="cheerForClassmate(classmate, $event)"
+                            >
+                                <span class="cheer-btn-face">
+                                    <span class="cheer-emoji" aria-hidden="true">
+                                        {{ cheeredClassmates.has(classmate.id) ? '💖' : '🎉' }}
+                                    </span>
+                                    <span class="cheer-label">
+                                        {{ cheeredClassmates.has(classmate.id) ? 'Cheered' : 'High Five' }}
+                                    </span>
+                                </span>
+                            </button>
+
+                            <button
+                                type="button"
+                                class="inspect-btn"
+                                :aria-label="`Inspect ${classmate.name}'s profile`"
+                                @click.stop="openInspectModal(classmate)"
+                            >
+                                <span class="inspect-btn-face">
+                                    <span class="inspect-label">View</span>
+                                    <span class="inspect-arrow" aria-hidden="true">›</span>
+                                </span>
+                            </button>
+                        </div>
+                    </article>
+                </li>
+            </ol>
 
             <!-- =========================================================================
                  4. PIXAR SQUASH-AND-STRETCH INSPECT MODAL
@@ -499,10 +561,12 @@ const goToClasses = () => {
                     class="modal-backdrop-scrim"
                     role="dialog"
                     aria-modal="true"
-                    :aria-label="`${inspectingClassmate.name}'s Profile Card`"
+                    aria-labelledby="inspect-modal-title"
                     @click.self="closeInspectModal"
                 >
                     <div class="pixar-inspect-modal">
+                        <span class="modal-top-gloss" aria-hidden="true"></span>
+
                         <!-- Top Close Cross -->
                         <button
                             type="button"
@@ -510,60 +574,63 @@ const goToClasses = () => {
                             aria-label="Close dialog"
                             @click="closeInspectModal"
                         >
-                            ✕
+                            <span class="close-cross-face" aria-hidden="true">✕</span>
                         </button>
 
-                        <!-- Modal Header With Big Glow Avatar -->
+                        <!-- Modal Hero Header -->
                         <div class="modal-hero-deck">
                             <div class="modal-avatar-halo" aria-hidden="true">
                                 <span
                                     class="modal-avatar-bubble"
                                     :style="{ background: inspectingClassmate.avatarBg }"
                                 >
+                                    <span class="avatar-specular"></span>
                                     <span class="modal-emoji-char">
                                         {{ getAvatarEmoji(inspectingClassmate.avatar) }}
                                     </span>
                                 </span>
-                                <span class="modal-lvl-badge">LVL {{ inspectingClassmate.level }}</span>
+                                <span class="modal-lvl-badge">LV {{ inspectingClassmate.level }}</span>
                             </div>
 
                             <div class="modal-hero-meta">
                                 <span v-if="inspectingClassmate.is_current_user" class="modal-you-pill">
                                     🌟 That's You!
                                 </span>
-                                <h3 class="modal-hero-name">{{ inspectingClassmate.name }}</h3>
+                                <h3 id="inspect-modal-title" class="modal-hero-name">
+                                    {{ inspectingClassmate.name }}
+                                </h3>
                                 <p class="modal-hero-title">{{ inspectingClassmate.level_title }}</p>
                             </div>
                         </div>
 
-                        <!-- Stats Pedestal -->
+                        <!-- Compact 4-Tile Stats Pedestal -->
                         <div class="modal-stats-matrix">
-                            <div class="matrix-tile">
-                                <span class="tile-icon">⭐</span>
+                            <div class="matrix-tile is-stars">
+                                <span class="tile-icon" aria-hidden="true">⭐</span>
                                 <span class="tile-num">{{ Number(inspectingClassmate.stars).toLocaleString() }}</span>
-                                <span class="tile-sub">Total Stars</span>
+                                <span class="tile-sub">Stars</span>
                             </div>
-                            <div class="matrix-tile">
-                                <span class="tile-icon">⚡</span>
+                            <div class="matrix-tile is-xp">
+                                <span class="tile-icon" aria-hidden="true">⚡</span>
                                 <span class="tile-num">{{ Number(inspectingClassmate.xp).toLocaleString() }}</span>
-                                <span class="tile-sub">Reading XP</span>
+                                <span class="tile-sub">XP</span>
                             </div>
-                            <div class="matrix-tile">
-                                <span class="tile-icon">🏆</span>
+                            <div class="matrix-tile is-quiz">
+                                <span class="tile-icon" aria-hidden="true">🏆</span>
                                 <span class="tile-num">{{ inspectingClassmate.quizzes_passed }}</span>
-                                <span class="tile-sub">Quizzes Passed</span>
+                                <span class="tile-sub">Quizzes</span>
                             </div>
-                            <div class="matrix-tile">
-                                <span class="tile-icon">📖</span>
+                            <div class="matrix-tile is-read">
+                                <span class="tile-icon" aria-hidden="true">📖</span>
                                 <span class="tile-num">{{ inspectingClassmate.lectures_completed }}</span>
-                                <span class="tile-sub">Chapters Read</span>
+                                <span class="tile-sub">Chapters</span>
                             </div>
                         </div>
 
                         <!-- Shared Classrooms Section -->
-                        <div class="modal-rooms-deck">
+                        <div v-if="inspectingClassmate.shared_classrooms?.length" class="modal-rooms-deck">
                             <h4 class="rooms-deck-heading">
-                                <span>🏫</span>
+                                <span aria-hidden="true">🏫</span>
                                 <span>Shared Classrooms ({{ inspectingClassmate.shared_classrooms.length }})</span>
                             </h4>
                             <div class="rooms-deck-list">
@@ -572,7 +639,7 @@ const goToClasses = () => {
                                     :key="room.id"
                                     class="modal-room-chip"
                                 >
-                                    <span class="room-chip-icon">{{ room.icon || '📚' }}</span>
+                                    <span class="room-chip-icon" aria-hidden="true">{{ room.icon || '📚' }}</span>
                                     <div class="room-chip-info">
                                         <span class="room-chip-title">{{ room.name }}</span>
                                         <span v-if="room.grade_level" class="room-chip-sub">{{ room.grade_level }}</span>
@@ -581,7 +648,7 @@ const goToClasses = () => {
                             </div>
                         </div>
 
-                        <!-- Modal Bottom Actions -->
+                        <!-- Modal Side-by-Side 3D Actions -->
                         <div class="modal-actions-tray">
                             <button
                                 type="button"
@@ -589,8 +656,8 @@ const goToClasses = () => {
                                 @click="cheerForClassmate(inspectingClassmate, $event)"
                             >
                                 <span class="btn-face">
-                                    <span>🎉</span>
-                                    <span>Give High Five!</span>
+                                    <span aria-hidden="true">🎉</span>
+                                    <span>High Five!</span>
                                 </span>
                             </button>
 
@@ -600,7 +667,7 @@ const goToClasses = () => {
                                 @click="goToProfile(inspectingClassmate.id)"
                             >
                                 <span class="btn-face">
-                                    <span>View Full Profile</span>
+                                    <span>Full Profile</span>
                                     <span aria-hidden="true">→</span>
                                 </span>
                             </button>
@@ -608,263 +675,418 @@ const goToClasses = () => {
                     </div>
                 </div>
             </transition>
-        </div>
+        </section>
     </StudentLayout>
 </template>
 
 <style scoped>
 /* ==========================================================================
-   PAGE CONTAINER & 3D CLAY SYSTEM
+   PIXAR 3D GRAPHIC UI — COMPACT LIST DIRECTORY
+   Volumetric 3-Point Lighting • Chromatic Contact Shadows • Zero Layout Shift
    ========================================================================== */
 .clay-classmates-page {
-    width: 100%;
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0.75rem 0.85rem 5.5rem;
-    box-sizing: border-box;
-}
+    --font-display: var(--px-font-display, 'Fredoka', ui-rounded, 'Nunito', system-ui, sans-serif);
+    --font-body: var(--px-font-body, 'Nunito', ui-rounded, system-ui, sans-serif);
+    --spring-bounce: var(--px-ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 
-/* ==========================================================================
-   1. CONTROL DECK (Matches Shop.vue & Classrooms.vue)
-   ========================================================================== */
-.classmates-control-deck {
-    background: var(--px-surface-card, #FFFFFF);
-    border: 2px solid var(--px-card-border, #E2E8F0);
-    border-radius: 20px;
-    padding: 0.85rem 1rem;
-    box-shadow:
-        0 4px 0 var(--px-card-ledge, #CBD5E1),
-        0 10px 24px rgba(var(--px-shadow-rgb, 15, 23, 42), 0.08),
-        inset 0 1px 2px var(--px-rim-top, rgba(255, 255, 255, 0.9));
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    margin-bottom: 1.15rem;
+    width: 100%;
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 0.25rem 0 2rem;
+    box-sizing: border-box;
+    font-family: var(--font-body);
+    color: var(--px-ink, #1E1B4B);
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ==========================================================================
+   1. COMPACT 3D PIXAR CONTROL DECK
+   ========================================================================== */
+.classmates-control-deck {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, var(--px-surface-card, #FFFDF9) 0%, var(--px-surface-soft, #F4F0FF) 100%);
+    border: 2.5px solid var(--px-card-border, #CBD5E1);
+    border-radius: 20px;
+    padding: 0.65rem 0.8rem;
+    box-shadow:
+        0 4px 0 var(--px-ledge, #CBD5E1),
+        0 10px 20px -8px rgba(var(--px-shadow-rgb, 28, 22, 62), 0.16),
+        inset 0 2px 0 var(--px-rim-top, rgba(255, 255, 255, 0.92));
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.deck-specular-gloss {
+    position: absolute;
+    top: 3px;
+    left: 16px;
+    right: 16px;
+    height: 7px;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
 }
 
 .deck-top-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.45rem;
 }
 
 .deck-title-block {
     display: flex;
     align-items: center;
-    gap: 0.65rem;
+    gap: 0.5rem;
+    min-width: 0;
 }
 
 .deck-friends-medallion {
-    width: 44px;
-    height: 44px;
-    border-radius: 14px;
-    background: linear-gradient(145deg, #DDD6FE 0%, #8B5CF6 100%);
-    border: 2px solid #7C3AED;
+    position: relative;
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    background: radial-gradient(circle at 32% 24%, #EDE9FE 0%, #8B5CF6 55%, #5B21B6 100%);
+    border: 2px solid var(--px-surface-card, #FFFFFF);
     box-shadow:
-        0 3px 0 #5B21B6,
-        inset 0 2px 2px rgba(255, 255, 255, 0.65);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.35rem;
+        0 2.5px 0 #4C1D95,
+        0 5px 10px -3px rgba(var(--px-shadow-rgb, 28, 22, 62), 0.28),
+        inset 0 1.5px 2px rgba(255, 255, 255, 0.72);
+    display: grid;
+    place-items: center;
     flex-shrink: 0;
+}
+
+.medallion-gloss {
+    position: absolute;
+    top: 3px;
+    left: 5px;
+    width: 11px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.65);
+    transform: rotate(-18deg);
+    pointer-events: none;
+}
+
+.medallion-emoji {
+    font-size: 1.08rem;
+    line-height: 1;
+    filter: drop-shadow(0 1px 1px rgba(28, 22, 62, 0.28));
 }
 
 .deck-title-meta {
     display: flex;
     flex-direction: column;
+    min-width: 0;
+}
+
+.deck-title-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.38rem;
 }
 
 .deck-title {
-    font-family: var(--font-display, 'Lilita One', sans-serif);
-    font-size: 1.45rem;
-    line-height: 1.15;
-    color: var(--px-ink, #0F172A);
+    font-family: var(--font-display);
+    font-size: clamp(1.08rem, 0.98rem + 0.5vw, 1.25rem);
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--px-ink, #1E1B4B);
     margin: 0;
+    letter-spacing: -0.01em;
 }
 
-.deck-counter {
-    font-size: 0.76rem;
-    font-weight: 700;
-    color: var(--px-ink-muted, #64748B);
-}
-
-/* View Switcher */
-.deck-view-switch {
-    display: inline-flex;
-    align-items: center;
-    background: var(--px-surface-well, #F1F5F9);
-    border: 1.5px solid var(--px-card-border, #E2E8F0);
-    border-radius: 12px;
-    padding: 0.16rem;
-    gap: 0.15rem;
-}
-
-.view-btn {
-    border: none;
-    background: transparent;
-    padding: 0.28rem 0.55rem;
-    border-radius: 9px;
-    font-family: var(--font-display, 'Lilita One', sans-serif);
-    font-size: 0.72rem;
-    color: var(--px-ink-muted, #64748B);
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    cursor: pointer;
-    transition: all 160ms ease;
-}
-
-.view-btn.is-active {
-    background: #FFFFFF;
-    color: #7C3AED;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-}
-
-/* Filters Row */
-.deck-filters-row {
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
-}
-
-/* Room Pills Horizontal Scroll */
-.room-pills-scroll {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    overflow-x: auto;
-    padding-bottom: 0.25rem;
-    scrollbar-width: thin;
-    -webkit-overflow-scrolling: touch;
-}
-
-.room-pill-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.32rem 0.65rem;
+.deck-counter-pill {
+    padding: 0.06rem 0.42rem;
     border-radius: 9999px;
-    border: 1.5px solid var(--px-card-border, #CBD5E1);
-    background: var(--px-surface-well, #F8FAFC);
-    color: var(--px-ink, #1E293B);
-    font-size: 0.76rem;
+    background: linear-gradient(180deg, #EDE9FE 0%, #DDD6FE 100%);
+    border: 1.5px solid #A78BFA;
+    box-shadow: 0 1.5px 0 #8B5CF6;
+    font-family: var(--font-display);
+    font-size: 0.66rem;
+    font-weight: 800;
+    color: #4C1D95;
+    line-height: 1.15;
+}
+
+.deck-subtitle {
+    margin: 0.04rem 0 0;
+    font-size: 0.68rem;
     font-weight: 700;
-    cursor: pointer;
+    color: var(--px-ink-muted, #64748B);
     white-space: nowrap;
-    transition: all 160ms ease;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Tactile 3D Sort Segmented Track */
+.deck-sort-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.16rem;
+    padding: 0.18rem;
+    border-radius: 9999px;
+    background: var(--px-surface-well, #E2E8F0);
+    border: 1.5px solid var(--px-card-border, #CBD5E1);
+    box-shadow: inset 0 1.5px 3px rgba(var(--px-shadow-rgb, 28, 22, 62), 0.1);
     flex-shrink: 0;
 }
 
-.room-pill-btn:hover {
-    transform: translateY(-1px);
-    border-color: #A78BFA;
-}
-
-.room-pill-btn.is-active {
-    background: linear-gradient(145deg, #8B5CF6 0%, #6D28D9 100%);
-    border-color: #5B21B6;
-    color: #FFFFFF;
-    box-shadow: 0 3px 0 #4C1D95;
-    transform: translateY(-1px);
-}
-
-.room-pill-icon {
-    font-size: 0.88rem;
-}
-
-.room-pill-badge {
-    background: rgba(0, 0, 0, 0.08);
-    padding: 0.08rem 0.38rem;
+.sort-pill-btn {
+    border: none;
+    background: transparent;
+    padding: 0.24rem 0.52rem;
     border-radius: 9999px;
+    font-family: var(--font-display);
     font-size: 0.68rem;
     font-weight: 800;
-}
-
-.room-pill-btn.is-active .room-pill-badge {
-    background: rgba(255, 255, 255, 0.25);
-    color: #FFFFFF;
-}
-
-/* Compact Search + Sort */
-.deck-search-wrap {
-    display: flex;
+    color: var(--px-ink-muted, #475569);
+    display: inline-flex;
     align-items: center;
-    gap: 0.55rem;
-    width: 100%;
+    gap: 0.2rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: transform 140ms var(--spring-bounce), background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.clay-search-compact {
+.sort-pill-btn:focus-visible {
+    outline: 2px solid var(--px-focus-stroke, #38BDF8);
+    outline-offset: 2px;
+}
+
+.sort-pill-btn.is-active {
+    background: linear-gradient(180deg, #A78BFA 0%, #7C3AED 55%, #5B21B6 100%);
+    color: #FFFFFF;
+    box-shadow:
+        0 2px 0 #3B0764,
+        inset 0 1px 1px rgba(255, 255, 255, 0.55);
+}
+
+.sort-pill-btn:active {
+    transform: scale(0.95);
+}
+
+/* Filters Row: Search + Room Pills */
+.deck-filters-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+@media (min-width: 640px) {
+    .deck-filters-row {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.55rem;
+    }
+}
+
+/* Recessed Clay Search Well (Fixed 38px height — never stretches vertically!) */
+.clay-search-well {
     position: relative;
     display: flex;
     align-items: center;
-    flex: 1;
-    min-width: 0;
-    background: var(--px-surface-well, #F1F5F9);
-    border: 1.5px solid var(--px-card-border, #CBD5E1);
-    border-radius: 12px;
-    padding: 0.34rem 0.65rem;
-    gap: 0.4rem;
+    gap: 0.38rem;
+    width: 100%;
+    height: 38px;
+    min-height: 38px;
+    max-height: 38px;
+    flex: 0 0 auto;
+    padding: 0 0.65rem;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, var(--px-surface-well, #EEF2FF) 0%, var(--px-surface-card, #FFFFFF) 100%);
+    border: 2px solid var(--px-card-border, #CBD5E1);
+    box-shadow:
+        0 2px 0 var(--px-ledge, #CBD5E1),
+        inset 0 2px 3px rgba(var(--px-shadow-rgb, 28, 22, 62), 0.08);
+    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+    box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+    .clay-search-well {
+        width: 230px;
+        flex: 0 0 230px;
+    }
+}
+
+.clay-search-well:focus-within {
+    background: var(--px-surface-card, #FFFFFF);
+    border-color: #8B5CF6;
+    box-shadow:
+        0 2px 0 #6D28D9,
+        0 0 0 3px rgba(139, 92, 246, 0.2);
 }
 
 .search-mini-lens {
-    font-size: 0.85rem;
-    opacity: 0.7;
+    font-size: 0.82rem;
+    line-height: 1;
+    opacity: 0.8;
+    flex-shrink: 0;
 }
 
 .search-mini-input {
     border: none;
     background: transparent;
     width: 100%;
-    font-size: 0.82rem;
+    height: 100%;
+    min-width: 0;
+    padding: 0;
+    font-family: var(--font-body);
+    font-size: max(16px, 0.85rem);
+    font-weight: 700;
     color: var(--px-ink, #0F172A);
     outline: none;
-    font-weight: 600;
 }
 
 .search-mini-input::placeholder {
-    color: var(--px-ink-muted, #94A3B8);
+    color: var(--px-ink-muted, #64748B);
+    font-weight: 600;
 }
 
 .search-mini-count {
-    font-size: 0.68rem;
+    font-family: var(--font-display);
+    font-size: 0.64rem;
     font-weight: 800;
-    color: #7C3AED;
+    color: #5B21B6;
     background: #EDE9FE;
-    padding: 0.1rem 0.38rem;
-    border-radius: 6px;
+    padding: 0.06rem 0.38rem;
+    border-radius: 999px;
     white-space: nowrap;
 }
 
 .search-mini-clear {
     border: none;
-    background: rgba(0, 0, 0, 0.1);
-    color: var(--px-ink, #0F172A);
+    background: #EF4444;
+    color: #FFFFFF;
     border-radius: 50%;
-    width: 18px;
-    height: 18px;
-    font-size: 0.65rem;
+    width: 20px;
+    height: 20px;
+    font-size: 0.62rem;
+    font-weight: 900;
     cursor: pointer;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    box-shadow: 0 1.5px 0 #B91C1C;
+}
+
+.search-mini-clear:focus-visible {
+    outline: 2px solid var(--px-focus-stroke, #38BDF8);
+    outline-offset: 2px;
+}
+
+/* Room Pills Horizontal Scroll */
+.room-pills-scroll {
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 0.35rem;
+    overflow-x: auto;
+    padding: 1px 2px 3px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
-.sort-select-wrap {
-    flex-shrink: 0;
+.room-pills-scroll::-webkit-scrollbar {
+    display: none;
 }
 
-.sort-mini-select {
-    border: 1.5px solid var(--px-card-border, #CBD5E1);
-    border-radius: 12px;
-    background: var(--px-surface-well, #F8FAFC);
-    color: var(--px-ink, #1E293B);
-    padding: 0.36rem 0.55rem;
-    font-size: 0.76rem;
-    font-weight: 700;
+.room-pill-btn {
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin-bottom: 2px;
+    border-radius: 9999px;
     cursor: pointer;
-    outline: none;
+    flex-shrink: 0;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.room-pill-btn:focus-visible {
+    outline: 3px solid var(--px-focus-stroke, #38BDF8);
+    outline-offset: 2px;
+}
+
+.room-pill-face {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    height: 32px;
+    padding: 0 0.6rem;
+    border-radius: 9999px;
+    border: 1.5px solid var(--px-card-border, #CBD5E1);
+    background: linear-gradient(180deg, var(--px-surface-card, #FFFFFF) 0%, var(--px-surface-soft, #F1F5F9) 100%);
+    box-shadow:
+        0 2px 0 var(--px-ledge, #CBD5E1),
+        inset 0 1px 0 var(--px-rim-top, rgba(255, 255, 255, 0.9));
+    color: var(--px-ink, #1E293B);
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+    box-sizing: border-box;
+    transition: transform 150ms var(--spring-bounce), box-shadow 150ms ease;
+}
+
+.room-pill-btn.is-active .room-pill-face {
+    background: linear-gradient(180deg, #A78BFA 0%, #7C3AED 52%, #5B21B6 100%);
+    border-color: #4C1D95;
+    color: #FFFFFF;
+    box-shadow:
+        0 2.5px 0 #3B0764,
+        inset 0 1.5px 1px rgba(255, 255, 255, 0.55);
+}
+
+.room-pill-btn:active .room-pill-face {
+    transform: translate3d(0, 2px, 0) scaleX(1.03) scaleY(0.95);
+    box-shadow: 0 0 0 transparent;
+}
+
+.room-pill-icon {
+    font-size: 0.8rem;
+    line-height: 1;
+}
+
+.room-pill-name {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.room-pill-badge {
+    background: rgba(var(--px-shadow-rgb, 28, 22, 62), 0.1);
+    padding: 0.04rem 0.36rem;
+    border-radius: 9999px;
+    font-size: 0.62rem;
+    font-weight: 800;
+}
+
+.room-pill-btn.is-active .room-pill-badge {
+    background: rgba(255, 255, 255, 0.24);
+    color: #FFFFFF;
 }
 
 /* ==========================================================================
@@ -872,254 +1094,321 @@ const goToClasses = () => {
    ========================================================================== */
 .cheer-toast-pill {
     position: fixed;
-    top: 5.25rem;
+    top: calc(4.8rem + env(safe-area-inset-top, 0px));
     left: 50%;
-    transform: translateX(-50%);
-    background: linear-gradient(145deg, #8B5CF6 0%, #6D28D9 100%);
+    transform: translate3d(-50%, 0, 0);
+    background: linear-gradient(180deg, #A78BFA 0%, #7C3AED 55%, #5B21B6 100%);
     color: #FFFFFF;
-    border: 2px solid #5B21B6;
-    padding: 0.45rem 1.15rem;
+    border: 2px solid #4C1D95;
+    padding: 0.4rem 1rem;
     border-radius: 9999px;
-    font-family: var(--font-display, 'Lilita One', sans-serif);
-    font-size: 0.85rem;
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-weight: 800;
+    white-space: nowrap;
     box-shadow:
-        0 4px 0 #4C1D95,
-        0 8px 24px rgba(109, 40, 217, 0.35);
-    z-index: 100;
+        0 4px 0 #3B0764,
+        0 10px 24px rgba(var(--px-shadow-rgb, 28, 22, 62), 0.32),
+        inset 0 1.5px 1px rgba(255, 255, 255, 0.6);
+    z-index: 120;
     pointer-events: none;
 }
 
 .toast-pop-enter-active,
 .toast-pop-leave-active {
-    transition: all 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: opacity 220ms ease, transform 240ms var(--spring-bounce);
 }
 
 .toast-pop-enter-from,
 .toast-pop-leave-to {
     opacity: 0;
-    transform: translate(-50%, -14px) scale(0.9);
+    transform: translate3d(-50%, -12px, 0) scale(0.9);
 }
 
 /* ==========================================================================
-   2. EMPTY STATES
+   2. COMPACT EMPTY STATES
    ========================================================================== */
 .clay-empty-card {
-    background: var(--px-surface-card, #FFFFFF);
-    border: 2px solid var(--px-card-border, #E2E8F0);
-    border-radius: 24px;
-    padding: 2.25rem 1.5rem;
+    background: linear-gradient(180deg, var(--px-surface-card, #FFFFFF) 0%, var(--px-surface-soft, #F8FAFC) 100%);
+    border: 2.5px solid var(--px-card-border, #E2E8F0);
+    border-radius: 22px;
+    padding: 1.6rem 1.25rem;
     text-align: center;
     box-shadow:
-        0 4px 0 var(--px-card-ledge, #CBD5E1),
-        0 12px 28px rgba(0, 0, 0, 0.06);
+        0 5px 0 var(--px-ledge, #CBD5E1),
+        0 14px 28px -10px rgba(var(--px-shadow-rgb, 28, 22, 62), 0.16),
+        inset 0 2px 0 var(--px-rim-top, rgba(255, 255, 255, 0.9));
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.75rem;
-    max-width: 460px;
-    margin: 1.5rem auto;
+    gap: 0.55rem;
+    max-width: 420px;
+    margin: 0.75rem auto;
 }
 
 .empty-icon-medallion {
-    width: 64px;
-    height: 64px;
-    border-radius: 20px;
-    background: linear-gradient(145deg, #EDE9FE 0%, #DDD6FE 100%);
-    border: 2px solid #C4B5FD;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2rem;
-    box-shadow: 0 4px 0 #A78BFA;
+    width: 54px;
+    height: 54px;
+    border-radius: 18px;
+    background: radial-gradient(circle at 32% 24%, #FFFFFF 0%, #DDD6FE 65%, #A78BFA 100%);
+    border: 2px solid #8B5CF6;
+    display: grid;
+    place-items: center;
+    font-size: 1.65rem;
+    box-shadow:
+        0 3.5px 0 #6D28D9,
+        inset 0 2px 2px rgba(255, 255, 255, 0.8);
 }
 
 .empty-card-title {
-    font-family: var(--font-display, 'Lilita One', sans-serif);
-    font-size: 1.35rem;
+    font-family: var(--font-display);
+    font-size: 1.18rem;
     color: var(--px-ink, #0F172A);
     margin: 0;
 }
 
 .empty-card-desc {
-    font-size: 0.86rem;
+    font-size: 0.82rem;
     line-height: 1.45;
+    font-weight: 600;
     color: var(--px-ink-muted, #64748B);
     margin: 0;
 }
 
 /* ==========================================================================
-   3. CLASSMATES GRID & LIST LAYOUTS
+   3. COMPACT 3D PIXAR LIST DIRECTORY (HORIZONTAL ON ALL VIEWPORTS)
    ========================================================================== */
-.classmates-content-stage.is-grid-layout {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.75rem;
-}
-
-@media (min-width: 768px) {
-    .classmates-content-stage.is-grid-layout {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 1rem;
-    }
-}
-
-@media (min-width: 1080px) {
-    .classmates-content-stage.is-grid-layout {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 1.15rem;
-    }
-}
-
-.classmates-content-stage.is-list-layout {
+.classmates-list-stage {
+    list-style: none;
+    margin: 0;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.65rem;
-}
-
-/* ==========================================================================
-   CLASSMATE CARD (Tactile 3D Claymorphism)
-   ========================================================================== */
-.classmate-card {
-    background: var(--px-surface-card, #FFFFFF);
-    border: 2px solid var(--px-card-border, #E2E8F0);
-    border-radius: 18px;
-    padding: 0.75rem;
-    box-shadow:
-        0 4px 0 var(--px-card-ledge, #CBD5E1),
-        0 8px 18px rgba(0, 0, 0, 0.05),
-        inset 0 1px 1px rgba(255, 255, 255, 0.9);
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
-    transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 180ms ease;
-    box-sizing: border-box;
-    position: relative;
-}
-
-.classmate-card:hover {
-    transform: translateY(-2px);
-    box-shadow:
-        0 6px 0 var(--px-card-ledge, #CBD5E1),
-        0 14px 24px rgba(0, 0, 0, 0.08);
-}
-
-.classmate-card.is-me {
-    border-color: #8B5CF6;
-    background: linear-gradient(180deg, #FAF5FF 0%, #FFFFFF 100%);
-    box-shadow:
-        0 4px 0 #7C3AED,
-        0 8px 20px rgba(124, 58, 237, 0.12);
-}
-
-/* Card Avatar Row */
-.card-avatar-row {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
     gap: 0.5rem;
 }
 
-.avatar-pod-wrap {
+.classmate-list-item {
+    animation: rowPopIn 360ms var(--spring-bounce) backwards;
+    animation-delay: calc(var(--i, 0) * 35ms);
+}
+
+@keyframes rowPopIn {
+    0% {
+        opacity: 0;
+        transform: translate3d(0, 10px, 0) scale(0.97);
+    }
+    100% {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1);
+    }
+}
+
+.classmate-row {
+    --row-border: var(--px-card-border, #E2E8F0);
+    --row-ledge: var(--px-ledge, #CBD5E1);
+    --row-bg-top: var(--px-surface-card, #FFFDF9);
+    --row-bg-bot: var(--px-surface-soft, #F8FAFC);
+
     position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.5rem 0.65rem;
+    border-radius: 18px;
+    background: linear-gradient(180deg, var(--row-bg-top) 0%, var(--row-bg-bot) 100%);
+    border: 2px solid var(--row-border);
+    box-shadow:
+        0 3.5px 0 var(--row-ledge),
+        0 8px 18px -8px rgba(var(--px-shadow-rgb, 28, 22, 62), 0.16),
+        inset 0 1.5px 0 var(--px-rim-top, rgba(255, 255, 255, 0.9));
+    transition: transform 180ms var(--spring-bounce), box-shadow 180ms ease;
+    box-sizing: border-box;
+}
+
+.row-top-gloss {
+    position: absolute;
+    top: 2px;
+    left: 14px;
+    right: 14px;
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .classmate-row:hover {
+        transform: translate3d(0, -2px, 0);
+        box-shadow:
+            0 5px 0 var(--row-ledge),
+            0 12px 22px -8px rgba(var(--px-shadow-rgb, 28, 22, 62), 0.24),
+            inset 0 1.5px 0 var(--px-rim-top, rgba(255, 255, 255, 0.95));
+    }
+}
+
+.classmate-row.is-me {
+    --row-border: #8B5CF6;
+    --row-ledge: #6D28D9;
+    --row-bg-top: color-mix(in srgb, #EDE9FE 40%, var(--px-surface-card, #FFFFFF));
+    --row-bg-bot: var(--px-surface-card, #FFFFFF);
+}
+
+/* Rank Badge */
+.row-rank-badge {
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+    background: var(--px-surface-well, #EEF2FF);
+    border: 1.5px solid var(--px-card-border, #CBD5E1);
+    box-shadow: inset 0 1px 2px rgba(var(--px-shadow-rgb, 28, 22, 62), 0.1);
+    display: grid;
+    place-items: center;
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: var(--px-ink-muted, #64748B);
     flex-shrink: 0;
 }
 
-.classmate-avatar-sphere {
-    width: 48px;
-    height: 48px;
+.row-rank-badge.is-rank-1 {
+    background: radial-gradient(circle at 30% 25%, #FFFBEB 0%, #FACC15 65%, #CA8A04 100%);
+    border-color: #A16207;
+    color: #422006;
+    box-shadow: 0 2px 0 #854D0E, inset 0 1px 1px rgba(255, 255, 255, 0.8);
+}
+
+.row-rank-badge.is-rank-2 {
+    background: radial-gradient(circle at 30% 25%, #FFFFFF 0%, #CBD5E1 68%, #64748B 100%);
+    border-color: #475569;
+    color: #0F172A;
+    box-shadow: 0 2px 0 #334155, inset 0 1px 1px rgba(255, 255, 255, 0.8);
+}
+
+.row-rank-badge.is-rank-3 {
+    background: radial-gradient(circle at 30% 25%, #FFEDD5 0%, #FB923C 68%, #C2410C 100%);
+    border-color: #9A3412;
+    color: #431407;
+    box-shadow: 0 2px 0 #7C2D12, inset 0 1px 1px rgba(255, 255, 255, 0.75);
+}
+
+/* 3D Glossy Avatar Pod */
+.row-avatar-btn {
+    position: relative;
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.row-avatar-btn:focus-visible {
+    outline: 3px solid var(--px-focus-stroke, #38BDF8);
+    outline-offset: 2px;
     border-radius: 50%;
-    border: 2px solid #FFFFFF;
+}
+
+.classmate-avatar-sphere {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 2.5px solid var(--px-surface-card, #FFFFFF);
     box-shadow:
-        0 3px 0 rgba(0, 0, 0, 0.14),
+        0 3px 0 rgba(var(--px-shadow-rgb, 28, 22, 62), 0.2),
+        inset 0 -3px 5px rgba(var(--px-shadow-rgb, 28, 22, 62), 0.14),
         inset 0 2px 3px rgba(255, 255, 255, 0.85);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+}
+
+.avatar-specular {
+    position: absolute;
+    top: 3px;
+    left: 6px;
+    width: 14px;
+    height: 7px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.72);
+    transform: rotate(-22deg);
+    pointer-events: none;
 }
 
 .avatar-emoji-glyph {
-    font-size: 1.6rem;
+    font-size: 1.38rem;
     line-height: 1;
+    filter: drop-shadow(0 1px 1px rgba(28, 22, 62, 0.2));
 }
 
 .classmate-lvl-pill {
     position: absolute;
     bottom: -4px;
-    right: -4px;
-    background: #0F172A;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, #312E81 0%, #0F172A 100%);
     color: #FACC15;
-    font-family: var(--font-display, 'Lilita One', sans-serif);
-    font-size: 0.58rem;
-    padding: 0.08rem 0.32rem;
-    border-radius: 9999px;
-    border: 1.5px solid #FFFFFF;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-}
-
-.card-badges-row {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.25rem;
-    min-width: 0;
-}
-
-.you-badge {
-    background: linear-gradient(145deg, #F59E0B 0%, #D97706 100%);
-    color: #FFFFFF;
-    font-family: var(--font-display, 'Lilita One', sans-serif);
-    font-size: 0.62rem;
-    padding: 0.1rem 0.42rem;
-    border-radius: 9999px;
-    box-shadow: 0 2px 0 #B45309;
-}
-
-.shared-room-tag {
-    background: var(--px-surface-well, #F1F5F9);
-    border: 1px solid var(--px-card-border, #CBD5E1);
-    color: var(--px-ink-muted, #475569);
-    font-size: 0.62rem;
-    font-weight: 700;
-    padding: 0.1rem 0.36rem;
-    border-radius: 6px;
-    max-width: 110px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
-}
-
-.room-tag-icon {
-    font-size: 0.68rem;
-}
-
-.shared-room-more {
-    font-size: 0.58rem;
+    font-family: var(--font-display);
+    font-size: 0.54rem;
     font-weight: 800;
-    color: var(--px-ink-muted, #64748B);
-    background: var(--px-surface-well, #E2E8F0);
-    padding: 0.06rem 0.28rem;
-    border-radius: 4px;
+    letter-spacing: 0.02em;
+    padding: 0.05rem 0.34rem;
+    border-radius: 9999px;
+    border: 1.5px solid var(--px-surface-card, #FFFFFF);
+    box-shadow: 0 1.5px 2px rgba(var(--px-shadow-rgb, 28, 22, 62), 0.25);
+    white-space: nowrap;
 }
 
-/* Card Info Block */
-.card-info-block {
+/* Identity Column */
+.row-identity-col {
     display: flex;
     flex-direction: column;
+    gap: 0.14rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.row-name-line {
+    display: flex;
+    align-items: center;
+    gap: 0.32rem;
     min-width: 0;
 }
 
 .classmate-name {
-    font-family: var(--font-display, 'Lilita One', sans-serif);
-    font-size: 1.02rem;
-    line-height: 1.2;
+    font-family: var(--font-display);
+    font-size: 0.94rem;
+    font-weight: 800;
+    line-height: 1.15;
     color: var(--px-ink, #0F172A);
     margin: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.you-badge {
+    flex-shrink: 0;
+    background: linear-gradient(180deg, #FBBF24 0%, #D97706 100%);
+    color: #271300;
+    font-family: var(--font-display);
+    font-size: 0.56rem;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    padding: 0.06rem 0.36rem;
+    border-radius: 9999px;
+    border: 1px solid #B45309;
+    box-shadow: 0 1.5px 0 #92400E, inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.row-sub-line {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
 }
 
 .classmate-title-kicker {
@@ -1131,51 +1420,133 @@ const goToClasses = () => {
     text-overflow: ellipsis;
 }
 
-/* Card Stats Deck */
-.card-stats-deck {
+.row-rooms-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.22rem;
+    min-width: 0;
+    flex-shrink: 0;
+}
+
+.shared-room-tag {
+    background: var(--px-surface-well, #F1F5F9);
+    border: 1px solid var(--px-card-border, #CBD5E1);
+    color: var(--px-ink-muted, #475569);
+    font-size: 0.6rem;
+    font-weight: 800;
+    padding: 0.05rem 0.34rem;
+    border-radius: 6px;
+    max-width: 96px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.18rem;
+}
+
+.room-tag-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.shared-room-more {
+    font-size: 0.56rem;
+    font-weight: 800;
+    color: var(--px-ink-muted, #64748B);
+    background: var(--px-surface-well, #E2E8F0);
+    padding: 0.05rem 0.26rem;
+    border-radius: 5px;
+}
+
+/* Mobile Inline Stats Strip (Visible < 680px) */
+.row-mobile-stats {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    background: var(--px-surface-well, #F8FAFC);
+    flex-wrap: wrap;
+    gap: 0.28rem;
+    margin-top: 0.1rem;
+}
+
+.mini-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.16rem;
+    padding: 0.06rem 0.36rem;
+    border-radius: 6px;
+    background: var(--px-surface-well, #F1F5F9);
     border: 1px solid var(--px-card-border, #E2E8F0);
-    border-radius: 10px;
-    padding: 0.32rem 0.45rem;
-    gap: 0.25rem;
+    font-size: 0.64rem;
+    color: var(--px-ink, #1E293B);
+    line-height: 1.2;
+}
+
+.mini-stat strong {
+    font-family: var(--font-display);
+    font-weight: 800;
+}
+
+/* Desktop Recessed Stats Deck (Visible >= 680px) */
+.row-stats-deck {
+    display: none;
+    align-items: center;
+    background: var(--px-surface-well, #F8FAFC);
+    border: 1.5px solid var(--px-card-border, #E2E8F0);
+    box-shadow: inset 0 1.5px 3px rgba(var(--px-shadow-rgb, 28, 22, 62), 0.08);
+    border-radius: 12px;
+    padding: 0.24rem 0.55rem;
+    gap: 0.65rem;
+    flex-shrink: 0;
 }
 
 .stat-pill {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    flex: 1;
-    min-width: 0;
+    gap: 0.28rem;
 }
 
 .stat-icon {
-    font-size: 0.72rem;
+    font-size: 0.82rem;
     line-height: 1;
 }
 
+.stat-copy {
+    display: flex;
+    flex-direction: column;
+}
+
 .stat-val {
-    font-family: var(--font-display, 'Lilita One', sans-serif);
+    font-family: var(--font-display);
     font-size: 0.78rem;
+    font-weight: 800;
     color: var(--px-ink, #0F172A);
-    line-height: 1.1;
+    line-height: 1.05;
 }
 
 .stat-lbl {
-    font-size: 0.54rem;
+    font-size: 0.52rem;
     font-weight: 800;
     color: var(--px-ink-muted, #94A3B8);
     text-transform: uppercase;
+    letter-spacing: 0.03em;
 }
 
-/* Card Tactile Actions */
-.card-actions-strip {
+@media (min-width: 680px) {
+    .row-mobile-stats {
+        display: none;
+    }
+
+    .row-stats-deck {
+        display: inline-flex;
+    }
+}
+
+/* Row Tactile Actions (Zero Layout-Shift 3D Buttons) */
+.row-actions-strip {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    margin-top: auto;
+    gap: 0.35rem;
+    flex-shrink: 0;
 }
 
 .cheer-btn,
@@ -1184,105 +1555,84 @@ const goToClasses = () => {
     background: transparent;
     cursor: pointer;
     padding: 0;
-    font-family: var(--font-display, 'Lilita One', sans-serif);
-    font-size: 0.72rem;
-    border-radius: 10px;
+    margin-bottom: 2px;
+    font-family: var(--font-display);
+    border-radius: 12px;
     outline: none;
-    flex: 1;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.cheer-btn:focus-visible,
+.inspect-btn:focus-visible {
+    outline: 3px solid var(--px-focus-stroke, #38BDF8);
+    outline-offset: 2px;
 }
 
 .cheer-btn-face {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.25rem;
-    padding: 0.36rem 0.45rem;
-    border-radius: 10px;
-    background: linear-gradient(145deg, #DDD6FE 0%, #C4B5FD 100%);
+    gap: 0.24rem;
+    min-height: 36px;
+    min-width: 36px;
+    padding: 0.28rem 0.6rem;
+    border-radius: 11px;
+    background: linear-gradient(180deg, #EDE9FE 0%, #DDD6FE 52%, #C4B5FD 100%);
     border: 1.5px solid #8B5CF6;
-    color: #4C1D95;
-    box-shadow: 0 2px 0 #7C3AED;
-    transition: transform 120ms ease, box-shadow 120ms ease;
+    color: #3B0764;
+    font-size: 0.72rem;
+    font-weight: 800;
+    box-shadow:
+        0 2.5px 0 #6D28D9,
+        inset 0 1.5px 0 rgba(255, 255, 255, 0.8);
+    transition: transform 140ms var(--spring-bounce), box-shadow 140ms ease;
     white-space: nowrap;
 }
 
 .cheer-btn:active .cheer-btn-face {
-    transform: translateY(2px);
-    box-shadow: 0 0 0 #7C3AED;
+    transform: translate3d(0, 2px, 0) scaleX(1.035) scaleY(0.95);
+    box-shadow: 0 0.5px 0 #6D28D9;
 }
 
 .cheer-btn.has-cheered .cheer-btn-face {
-    background: linear-gradient(145deg, #FCE7F3 0%, #FBCFE8 100%);
-    border-color: #EC4899;
-    color: #9D174D;
-    box-shadow: 0 2px 0 #DB2777;
+    background: linear-gradient(180deg, #FCE7F3 0%, #FBCFE8 55%, #F9A8D4 100%);
+    border-color: #DB2777;
+    color: #831843;
+    box-shadow:
+        0 2.5px 0 #9D174D,
+        inset 0 1.5px 0 rgba(255, 255, 255, 0.8);
 }
 
 .inspect-btn-face {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.2rem;
-    padding: 0.36rem 0.45rem;
-    border-radius: 10px;
-    background: var(--px-surface-well, #F1F5F9);
+    gap: 0.18rem;
+    min-height: 36px;
+    min-width: 34px;
+    padding: 0.28rem 0.55rem;
+    border-radius: 11px;
+    background: linear-gradient(180deg, var(--px-surface-card, #FFFFFF) 0%, var(--px-surface-soft, #F1F5F9) 100%);
     border: 1.5px solid var(--px-card-border, #CBD5E1);
     color: var(--px-ink, #334155);
-    box-shadow: 0 2px 0 var(--px-card-ledge, #CBD5E1);
-    transition: transform 120ms ease, box-shadow 120ms ease;
+    font-size: 0.72rem;
+    font-weight: 800;
+    box-shadow:
+        0 2.5px 0 var(--px-ledge, #CBD5E1),
+        inset 0 1.5px 0 var(--px-rim-top, rgba(255, 255, 255, 0.9));
+    transition: transform 140ms var(--spring-bounce), box-shadow 140ms ease;
     white-space: nowrap;
 }
 
 .inspect-btn:active .inspect-btn-face {
-    transform: translateY(2px);
-    box-shadow: 0 0 0 var(--px-card-ledge, #CBD5E1);
+    transform: translate3d(0, 2px, 0) scaleX(1.035) scaleY(0.95);
+    box-shadow: 0 0.5px 0 var(--px-ledge, #CBD5E1);
 }
 
-/* ==========================================================================
-   LIST VIEW OVERRIDES
-   ========================================================================== */
-.classmates-content-stage.is-list-layout .classmate-card {
-    flex-direction: row;
-    align-items: center;
-    padding: 0.65rem 0.85rem;
-    gap: 0.85rem;
-}
-
-.classmates-content-stage.is-list-layout .card-avatar-row {
-    margin-right: 0;
-}
-
-.classmates-content-stage.is-list-layout .card-info-block {
-    flex: 1;
-    min-width: 0;
-}
-
-.classmates-content-stage.is-list-layout .card-stats-deck {
-    width: auto;
-    min-width: 180px;
-    padding: 0.3rem 0.75rem;
-}
-
-.classmates-content-stage.is-list-layout .card-actions-strip {
-    margin-top: 0;
-    min-width: 170px;
-}
-
-@media (max-width: 640px) {
-    .classmates-content-stage.is-list-layout .classmate-card {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .classmates-content-stage.is-list-layout .card-stats-deck {
-        min-width: 0;
-        width: 100%;
-    }
-
-    .classmates-content-stage.is-list-layout .card-actions-strip {
-        min-width: 0;
-        width: 100%;
-    }
+.inspect-arrow {
+    font-size: 0.95rem;
+    line-height: 1;
 }
 
 /* ==========================================================================
@@ -1291,61 +1641,91 @@ const goToClasses = () => {
 .modal-backdrop-scrim {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.6);
+    background: rgba(var(--px-shadow-rgb, 15, 23, 42), 0.62);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     z-index: 1000;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 1rem;
+    padding: 0.85rem;
+    padding-bottom: calc(0.85rem + env(safe-area-inset-bottom, 0px));
     box-sizing: border-box;
 }
 
 .pixar-inspect-modal {
-    background: var(--px-surface-card, #FFFFFF);
-    border: 3px solid var(--px-card-border, #E2E8F0);
-    border-radius: 28px;
-    padding: 1.5rem;
-    width: 100%;
-    max-width: 440px;
-    box-shadow:
-        0 8px 0 var(--px-card-ledge, #CBD5E1),
-        0 24px 48px rgba(0, 0, 0, 0.25),
-        inset 0 2px 2px rgba(255, 255, 255, 0.95);
     position: relative;
+    overflow-x: hidden;
+    overflow-y: auto;
+    max-height: calc(100dvh - 2rem);
+    background: linear-gradient(180deg, var(--px-surface-card, #FFFDF9) 0%, var(--px-surface-soft, #F4F0FF) 100%);
+    border: 3px solid var(--px-card-border, #E2E8F0);
+    border-radius: 26px;
+    padding: 1.15rem;
+    width: 100%;
+    max-width: 400px;
+    box-shadow:
+        0 8px 0 var(--px-ledge, #CBD5E1),
+        0 24px 48px rgba(var(--px-shadow-rgb, 15, 23, 42), 0.34),
+        inset 0 2px 2px var(--px-rim-top, rgba(255, 255, 255, 0.95));
     display: flex;
     flex-direction: column;
-    gap: 1.15rem;
+    gap: 0.9rem;
     box-sizing: border-box;
+}
+
+.modal-top-gloss {
+    position: absolute;
+    top: 4px;
+    left: 22px;
+    right: 22px;
+    height: 10px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
 }
 
 .modal-close-cross {
     position: absolute;
-    top: 0.85rem;
-    right: 0.85rem;
+    top: 0.75rem;
+    right: 0.75rem;
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    z-index: 2;
+}
+
+.modal-close-cross:focus-visible {
+    outline: 3px solid var(--px-focus-stroke, #38BDF8);
+    outline-offset: 2px;
+    border-radius: 50%;
+}
+
+.close-cross-face {
     width: 32px;
     height: 32px;
     border-radius: 50%;
     border: 1.5px solid var(--px-card-border, #CBD5E1);
     background: var(--px-surface-well, #F1F5F9);
+    box-shadow: 0 2px 0 var(--px-ledge, #CBD5E1);
     color: var(--px-ink, #334155);
-    font-size: 0.85rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 120ms ease;
+    font-size: 0.8rem;
+    font-weight: 800;
+    display: grid;
+    place-items: center;
+    transition: transform 120ms var(--spring-bounce);
 }
 
-.modal-close-cross:hover {
-    transform: scale(1.08);
+.modal-close-cross:active .close-cross-face {
+    transform: translate3d(0, 2px, 0) scale(0.94);
 }
 
 .modal-hero-deck {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.85rem;
+    padding-right: 2rem;
 }
 
 .modal-avatar-halo {
@@ -1354,20 +1734,22 @@ const goToClasses = () => {
 }
 
 .modal-avatar-bubble {
-    width: 68px;
-    height: 68px;
+    position: relative;
+    width: 60px;
+    height: 60px;
     border-radius: 50%;
-    border: 3px solid #FFFFFF;
+    border: 3px solid var(--px-surface-card, #FFFFFF);
     box-shadow:
-        0 4px 0 rgba(0, 0, 0, 0.16),
-        0 8px 18px rgba(124, 58, 237, 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+        0 4px 0 rgba(var(--px-shadow-rgb, 28, 22, 62), 0.18),
+        0 8px 18px rgba(124, 58, 237, 0.22),
+        inset 0 2px 4px rgba(255, 255, 255, 0.85);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
 }
 
 .modal-emoji-char {
-    font-size: 2.3rem;
+    font-size: 2rem;
     line-height: 1;
 }
 
@@ -1375,13 +1757,14 @@ const goToClasses = () => {
     position: absolute;
     bottom: -4px;
     right: -4px;
-    background: #0F172A;
+    background: linear-gradient(180deg, #312E81 0%, #0F172A 100%);
     color: #FACC15;
-    font-family: var(--font-display, 'Lilita One', sans-serif);
-    font-size: 0.68rem;
-    padding: 0.12rem 0.45rem;
+    font-family: var(--font-display);
+    font-size: 0.62rem;
+    font-weight: 800;
+    padding: 0.1rem 0.4rem;
     border-radius: 9999px;
-    border: 2px solid #FFFFFF;
+    border: 2px solid var(--px-surface-card, #FFFFFF);
 }
 
 .modal-hero-meta {
@@ -1393,42 +1776,52 @@ const goToClasses = () => {
 .modal-you-pill {
     display: inline-block;
     align-self: flex-start;
-    background: #F59E0B;
-    color: #FFFFFF;
-    font-family: var(--font-display, 'Lilita One', sans-serif);
-    font-size: 0.64rem;
-    padding: 0.1rem 0.45rem;
+    background: linear-gradient(180deg, #FBBF24 0%, #D97706 100%);
+    color: #271300;
+    font-family: var(--font-display);
+    font-size: 0.6rem;
+    font-weight: 900;
+    padding: 0.08rem 0.42rem;
     border-radius: 9999px;
-    margin-bottom: 0.2rem;
+    margin-bottom: 0.15rem;
 }
 
 .modal-hero-name {
-    font-family: var(--font-display, 'Lilita One', sans-serif);
-    font-size: 1.35rem;
+    font-family: var(--font-display);
+    font-size: 1.2rem;
     color: var(--px-ink, #0F172A);
     margin: 0;
-    line-height: 1.2;
+    line-height: 1.15;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .modal-hero-title {
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     font-weight: 700;
     color: var(--px-ink-muted, #64748B);
-    margin: 0;
+    margin: 0.1rem 0 0;
 }
 
-/* Modal Stats Matrix */
+/* Modal Compact Stats Matrix */
 .modal-stats-matrix {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.55rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.4rem;
+}
+
+@media (min-width: 420px) {
+    .modal-stats-matrix {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
 }
 
 .matrix-tile {
     background: var(--px-surface-well, #F8FAFC);
     border: 1.5px solid var(--px-card-border, #E2E8F0);
+    box-shadow: inset 0 2px 3px rgba(var(--px-shadow-rgb, 28, 22, 62), 0.07);
     border-radius: 14px;
-    padding: 0.65rem;
+    padding: 0.45rem 0.25rem;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1436,18 +1829,20 @@ const goToClasses = () => {
 }
 
 .tile-icon {
-    font-size: 1.15rem;
+    font-size: 0.95rem;
+    line-height: 1.1;
 }
 
 .tile-num {
-    font-family: var(--font-display, 'Lilita One', sans-serif);
-    font-size: 1.15rem;
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    font-weight: 800;
     color: var(--px-ink, #0F172A);
     line-height: 1.15;
 }
 
 .tile-sub {
-    font-size: 0.64rem;
+    font-size: 0.56rem;
     font-weight: 800;
     color: var(--px-ink-muted, #94A3B8);
     text-transform: uppercase;
@@ -1457,39 +1852,40 @@ const goToClasses = () => {
 .modal-rooms-deck {
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
+    gap: 0.35rem;
 }
 
 .rooms-deck-heading {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
-    font-family: var(--font-display, 'Lilita One', sans-serif);
-    font-size: 0.88rem;
+    gap: 0.3rem;
+    font-family: var(--font-display);
+    font-size: 0.78rem;
     color: var(--px-ink, #0F172A);
     margin: 0;
 }
 
 .rooms-deck-list {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 0.35rem;
-    max-height: 110px;
+    max-height: 96px;
     overflow-y: auto;
 }
 
 .modal-room-chip {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.35rem;
     background: var(--px-surface-well, #F1F5F9);
     border: 1px solid var(--px-card-border, #CBD5E1);
     border-radius: 10px;
-    padding: 0.35rem 0.55rem;
+    padding: 0.25rem 0.5rem;
+    min-width: 0;
 }
 
 .room-chip-icon {
-    font-size: 1rem;
+    font-size: 0.88rem;
 }
 
 .room-chip-info {
@@ -1499,7 +1895,7 @@ const goToClasses = () => {
 }
 
 .room-chip-title {
-    font-size: 0.76rem;
+    font-size: 0.7rem;
     font-weight: 800;
     color: var(--px-ink, #0F172A);
     white-space: nowrap;
@@ -1508,14 +1904,14 @@ const goToClasses = () => {
 }
 
 .room-chip-sub {
-    font-size: 0.64rem;
+    font-size: 0.58rem;
     color: var(--px-ink-muted, #64748B);
 }
 
-/* Modal Actions Tray */
+/* Modal Side-by-Side Actions Tray */
 .modal-actions-tray {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
 }
 
@@ -1525,54 +1921,71 @@ const goToClasses = () => {
     background: transparent;
     cursor: pointer;
     padding: 0;
-    font-family: var(--font-display, 'Lilita One', sans-serif);
-    font-size: 0.92rem;
+    margin-bottom: 3px;
+    font-family: var(--font-display);
+    font-size: 0.82rem;
+    font-weight: 800;
     border-radius: 14px;
     outline: none;
     width: 100%;
+    touch-action: manipulation;
+}
+
+.clay-primary-btn:focus-visible,
+.clay-secondary-btn:focus-visible {
+    outline: 3px solid var(--px-focus-stroke, #38BDF8);
+    outline-offset: 2px;
 }
 
 .clay-primary-btn .btn-face {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.45rem;
-    padding: 0.65rem 1rem;
+    gap: 0.35rem;
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
     border-radius: 14px;
-    background: linear-gradient(145deg, #8B5CF6 0%, #6D28D9 100%);
-    border: 2px solid #5B21B6;
+    background: linear-gradient(180deg, #A78BFA 0%, #7C3AED 52%, #5B21B6 100%);
+    border: 2px solid #4C1D95;
     color: #FFFFFF;
-    box-shadow: 0 4px 0 #4C1D95;
-    transition: transform 120ms ease, box-shadow 120ms ease;
+    box-shadow:
+        0 3.5px 0 #3B0764,
+        inset 0 1.5px 1px rgba(255, 255, 255, 0.55);
+    transition: transform 140ms var(--spring-bounce), box-shadow 140ms ease;
+    white-space: nowrap;
 }
 
 .clay-primary-btn:active .btn-face {
-    transform: translateY(3px);
-    box-shadow: 0 1px 0 #4C1D95;
+    transform: translate3d(0, 3px, 0) scaleX(1.035) scaleY(0.95);
+    box-shadow: 0 0.5px 0 #3B0764;
 }
 
 .clay-secondary-btn .btn-face {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.45rem;
-    padding: 0.55rem 1rem;
+    gap: 0.35rem;
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
     border-radius: 14px;
-    background: var(--px-surface-well, #F1F5F9);
+    background: linear-gradient(180deg, var(--px-surface-card, #FFFFFF) 0%, var(--px-surface-soft, #F1F5F9) 100%);
     border: 2px solid var(--px-card-border, #CBD5E1);
     color: var(--px-ink, #334155);
-    box-shadow: 0 3px 0 var(--px-card-ledge, #CBD5E1);
-    transition: transform 120ms ease, box-shadow 120ms ease;
+    box-shadow:
+        0 3.5px 0 var(--px-ledge, #CBD5E1),
+        inset 0 1.5px 0 var(--px-rim-top, rgba(255, 255, 255, 0.9));
+    transition: transform 140ms var(--spring-bounce), box-shadow 140ms ease;
+    white-space: nowrap;
 }
 
 .clay-secondary-btn:active .btn-face {
-    transform: translateY(2px);
-    box-shadow: 0 1px 0 var(--px-card-ledge, #CBD5E1);
+    transform: translate3d(0, 3px, 0) scaleX(1.035) scaleY(0.95);
+    box-shadow: 0 0.5px 0 var(--px-ledge, #CBD5E1);
 }
 
 /* Modal Bounce Transition */
 .modal-bounce-enter-active {
-    transition: opacity 220ms ease, transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: opacity 220ms ease, transform 260ms var(--spring-bounce);
 }
 
 .modal-bounce-leave-active {
@@ -1581,67 +1994,125 @@ const goToClasses = () => {
 
 .modal-bounce-enter-from {
     opacity: 0;
-    transform: scale(0.85);
+    transform: scale(0.86) translate3d(0, 12px, 0);
 }
 
 .modal-bounce-leave-to {
     opacity: 0;
-    transform: scale(0.92);
+    transform: scale(0.93);
 }
 
 /* ==========================================================================
-   MOBILE RESPONSIVE ADJUSTMENTS
+   5. COMPACT MOBILE RESPONSIVENESS (320px - 480px)
    ========================================================================== */
 @media (max-width: 480px) {
     .clay-classmates-page {
-        padding: 0.5rem 0.55rem 5.5rem;
+        gap: 0.55rem;
+        padding: 0.1rem 0 1.5rem;
     }
 
     .classmates-control-deck {
-        padding: 0.65rem 0.75rem;
-        border-radius: 16px;
-    }
-
-    .deck-title {
-        font-size: 1.25rem;
+        padding: 0.55rem 0.65rem;
+        border-radius: 18px;
+        gap: 0.45rem;
     }
 
     .deck-friends-medallion {
-        width: 38px;
-        height: 38px;
-        font-size: 1.15rem;
+        width: 34px;
+        height: 34px;
+        border-radius: 11px;
     }
 
-    .classmates-content-stage.is-grid-layout {
-        gap: 0.55rem;
+    .medallion-emoji {
+        font-size: 1rem;
     }
 
-    .classmate-card {
-        padding: 0.6rem;
-        border-radius: 14px;
+    .deck-subtitle {
+        display: none;
+    }
+
+    .classmates-list-stage {
+        gap: 0.42rem;
+    }
+
+    .classmate-row {
+        padding: 0.42rem 0.5rem;
+        gap: 0.42rem;
+        border-radius: 15px;
+    }
+
+    .row-rank-badge {
+        width: 20px;
+        height: 20px;
+        font-size: 0.64rem;
+        border-radius: 6px;
     }
 
     .classmate-avatar-sphere {
-        width: 40px;
-        height: 40px;
+        width: 38px;
+        height: 38px;
     }
 
     .avatar-emoji-glyph {
-        font-size: 1.35rem;
+        font-size: 1.2rem;
+    }
+
+    .classmate-lvl-pill {
+        font-size: 0.5rem;
+        padding: 0.03rem 0.28rem;
     }
 
     .classmate-name {
-        font-size: 0.92rem;
+        font-size: 0.86rem;
     }
 
-    .card-actions-strip {
-        flex-direction: column;
-        gap: 0.3rem;
+    .row-rooms-inline {
+        display: none;
     }
 
-    .cheer-btn,
-    .inspect-btn {
-        width: 100%;
+    .cheer-btn-face {
+        padding: 0.24rem 0.48rem;
+        min-height: 34px;
+        font-size: 0.68rem;
+    }
+
+    .inspect-btn-face {
+        padding: 0.24rem 0.42rem;
+        min-height: 34px;
+    }
+
+    .inspect-label {
+        display: none;
+    }
+}
+
+@media (max-width: 359px) {
+    .cheer-label {
+        display: none;
+    }
+
+    .cheer-btn-face {
+        padding: 0.24rem 0.4rem;
+    }
+}
+
+/* ==========================================================================
+   6. REDUCED MOTION FALLBACK (WCAG 2.3.3 / PIXAR A11Y-001)
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+    .classmate-list-item,
+    .classmate-row,
+    .room-pill-face,
+    .cheer-btn-face,
+    .inspect-btn-face,
+    .clay-primary-btn .btn-face,
+    .clay-secondary-btn .btn-face,
+    .modal-bounce-enter-active,
+    .modal-bounce-leave-active,
+    .toast-pop-enter-active,
+    .toast-pop-leave-active {
+        animation: none !important;
+        transition: none !important;
     }
 }
 </style>
