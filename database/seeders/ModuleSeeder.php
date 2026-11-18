@@ -33,7 +33,7 @@ class ModuleSeeder extends Seeder
         $modulesData = [
             [
                 'title' => 'Whispering Forest',
-                'grade_level' => 'Grade 3 • Reading Legends',
+                'grade_level' => 'Reading Legend',
                 'description' => 'Explore phonics and enchanted woodland fables through interactive storytelling.',
                 'theme' => ModuleTheme::Forest,
                 'icon' => '🌲',

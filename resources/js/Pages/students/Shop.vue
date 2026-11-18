@@ -1,7 +1,9 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
-import { Head } from '@inertiajs/vue3';
+import { computed, onMounted, ref } from 'vue';
+import { Head, router } from '@inertiajs/vue3';
 import StudentLayout from '@/Components/StudentLayout.vue';
+import HudHeaderSkin from '@/Components/HudHeaderSkin.vue';
+import TrailThemeBackdrop from '@/Components/TrailThemeBackdrop.vue';
 import { useSound } from '@/Services/soundManager';
 import { spawnPixarBurst, usePixarTheme, useWorldOnDocument } from '@/Composables/usePixarTheme';
 
@@ -13,24 +15,17 @@ const {
     playIncorrect,
 } = useSound();
 
-const { activeWorld, switchWorld } = usePixarTheme();
+const { activeWorld } = usePixarTheme();
 useWorldOnDocument(activeWorld);
 
 const props = defineProps({
     user: {
         type: Object,
-        default: () => ({
-            id: null,
-            name: 'Student Explorer',
-            email: 'student@example.com',
-            role: 'student',
-            gamification: {
-                total_gems: 150,
-                total_stars: 24,
-                total_xp: 1200,
-                level: 4,
-            },
-        }),
+        required: true,
+    },
+    shop: {
+        type: Object,
+        default: () => ({ items: [], inventory: {}, equipped: {} }),
     },
 });
 
@@ -47,79 +42,22 @@ const inspectModalOpen = ref(false);
 const inspectingItem = ref(null);
 const modalDialogRef = ref(null);
 const purchaseSuccessToast = ref('');
+const pendingItemKey = ref(null);
 let toastTimer = null;
 
-// Local inventory & balance persistence
-const initialGems = computed(() => Number(props.user?.gamification?.total_gems ?? 100));
-const userGems = ref(initialGems.value);
-
-// Inventory tracking in localStorage
-const ownedItemIds = ref([
-    'avatar_fox',
-    'avatar_astro',
-    'avatar_knight',
-    'avatar_owl',
-    'bg_forest',
-    'console_toybox',
-]);
-
-const activeAvatarId = ref('fox');
-const activeBackgroundId = ref('forest');
-const activeConsoleId = ref('toybox');
-const consumableInventory = ref({
-    chance_5050: 0,
-    chance_shield: 0,
-    chance_hourglass: 0,
-    chance_compass: 0,
-});
+// Server-authoritative balance, inventory and loadout (never stored in the browser)
+const userGems = computed(() => Number(props.user?.gamification?.gem_balance ?? 0));
+const studentLevel = computed(() => Number(props.user?.gamification?.level ?? 1));
+const inventory = computed(() => props.shop?.inventory ?? {});
+const equipped = computed(() => props.shop?.equipped ?? {});
 
 onMounted(() => {
-    if (typeof window !== 'undefined') {
-        const savedView = window.localStorage.getItem('emodule_student_shop_view');
+    try {
+        const savedView = window.localStorage?.getItem('emodule_student_shop_view');
         if (savedView === 'list' || savedView === 'grid') {
             viewMode.value = savedView;
         }
-
-        const storedGems = window.localStorage.getItem('emodule_student_gems');
-        if (storedGems !== null) {
-            userGems.value = Math.max(0, parseInt(storedGems, 10));
-        } else {
-            userGems.value = initialGems.value;
-        }
-
-        const storedOwned = window.localStorage.getItem('emodule_owned_items');
-        if (storedOwned) {
-            try {
-                ownedItemIds.value = JSON.parse(storedOwned);
-            } catch (e) {
-                // Keep default
-            }
-        }
-
-        const storedConsumables = window.localStorage.getItem('emodule_consumables');
-        if (storedConsumables) {
-            try {
-                consumableInventory.value = { ...consumableInventory.value, ...JSON.parse(storedConsumables) };
-            } catch (e) {
-                // Keep default
-            }
-        }
-
-        const storedAvatar = window.localStorage.getItem('emodule_companion');
-        if (storedAvatar) {
-            activeAvatarId.value = storedAvatar;
-        }
-
-        const storedBg = window.localStorage.getItem('emodule_custom_map_bg');
-        if (storedBg) {
-            activeBackgroundId.value = storedBg;
-        }
-
-        const storedConsole = window.localStorage.getItem('emodule_console_skin');
-        if (storedConsole) {
-            activeConsoleId.value = storedConsole;
-        }
-    }
+    } catch {}
 });
 
 const setViewMode = (mode) => {
@@ -129,231 +67,42 @@ const setViewMode = (mode) => {
     } catch {}
 };
 
-watch(userGems, (val) => {
-    if (typeof window !== 'undefined') {
-        window.localStorage.setItem('emodule_student_gems', String(val));
-    }
-});
-
-// Categories
+// Categories (ids match App\Enums\ShopItemCategory)
 const categories = [
     { id: 'all', label: 'All', icon: '🌟' },
-    { id: 'avatars', label: 'Avatars', icon: '🦊' },
-    { id: 'backgrounds', label: 'Realms', icon: '🗺️' },
-    { id: 'consoles', label: 'Skins', icon: '🎨' },
-    { id: 'chances', label: 'Chances', icon: '⚡' },
+    { id: 'avatar', label: 'Avatars', icon: '🦊' },
+    { id: 'background', label: 'Trails', icon: '🗺️' },
+    { id: 'console', label: 'Headers', icon: '🖼️' },
+    { id: 'booster', label: 'Chances', icon: '⚡' },
 ];
 
-// Shop Catalog Items
-const shopItems = [
-    // CATEGORY: AVATARS
-    {
-        id: 'avatar_dragon',
-        key: 'dragon',
-        category: 'avatars',
-        title: 'Sunfire Dragon',
-        rarity: 'Legendary',
-        price: 120,
-        badge: 'NEW',
-        summary: 'Playful baby dragon with gold horns that breathes embers of joy when you answer right.',
-        perk: 'Unlocks custom fire-breathing companion animation in your header.',
-        palette: { bg1: '#FEF3C7', bg2: '#F59E0B', border: '#D97706', glow: 'rgba(245, 158, 11, 0.45)', soft: '#FFFBEB', ledge: '#B45309' },
-    },
-    {
-        id: 'avatar_cyber_bunny',
-        key: 'cyber_bunny',
-        category: 'avatars',
-        title: 'Neon Hopper',
-        rarity: 'Epic',
-        price: 100,
-        badge: 'POPULAR',
-        summary: 'Cybernetic rabbit with glowing cyan ears and high-speed reading antennas.',
-        perk: 'Features pulsating neon cyber-circuits and electric chatter.',
-        palette: { bg1: '#E0F2FE', bg2: '#0284C7', border: '#0369A1', glow: 'rgba(2, 132, 199, 0.45)', soft: '#F0F9FF', ledge: '#075985' },
-    },
-    {
-        id: 'avatar_phoenix',
-        key: 'phoenix',
-        category: 'avatars',
-        title: 'Solar Phoenix',
-        rarity: 'Legendary',
-        price: 150,
-        badge: 'MYTHIC',
-        summary: 'Sacred sun bird that leaves shimmering golden trails whenever you gain Reading XP.',
-        perk: 'Radiates solar particle halos in your companion avatar frame.',
-        palette: { bg1: '#FFF1F2', bg2: '#E11D48', border: '#BE123C', glow: 'rgba(225, 29, 72, 0.45)', soft: '#FFF1F2', ledge: '#9F1239' },
-    },
-    {
-        id: 'avatar_yeti',
-        key: 'yeti',
-        category: 'avatars',
-        title: 'Frosty Yeti',
-        rarity: 'Rare',
-        price: 80,
-        badge: '',
-        summary: 'Gentle snow guardian with icy sapphire horns and warm fluffy fur.',
-        perk: 'Adds swirling snowflakes around your player profile tag.',
-        palette: { bg1: '#F0FDFA', bg2: '#0D9488', border: '#0F766E', glow: 'rgba(13, 148, 136, 0.45)', soft: '#F0FDFA', ledge: '#115E59' },
-    },
+const categoryIcons = Object.fromEntries(categories.map((cat) => [cat.id, cat.icon]));
 
-    // CATEGORY: MAP BACKGROUND REALMS
-    {
-        id: 'bg_lagoon',
-        key: 'lagoon',
-        category: 'backgrounds',
-        title: 'Crystal Lagoon',
-        rarity: 'Epic',
-        price: 100,
-        badge: 'ANIMATED',
-        summary: 'Subsurface bioluminescent lagoon with turquoise coral reefs and gentle water ripples.',
-        perk: 'Applies shimmering tropical coral waters to your Adventure Quest Map.',
-        palette: { bg1: '#ECFDF5', bg2: '#10B981', border: '#047857', glow: 'rgba(16, 185, 129, 0.45)', soft: '#ECFDF5', ledge: '#065F46' },
-    },
-    {
-        id: 'bg_celestial',
-        key: 'celestial',
-        category: 'backgrounds',
-        title: 'Cosmic Nebula',
-        rarity: 'Legendary',
-        price: 140,
-        badge: 'POPULAR',
-        summary: 'Deep starlight violet skies with drifting comets, spiral galaxies, and stardust constellations.',
-        perk: 'Transforms your quest path into glowing interstellar star-bridges.',
-        palette: { bg1: '#F5F3FF', bg2: '#7C3AED', border: '#5B21B6', glow: 'rgba(124, 58, 237, 0.45)', soft: '#F5F3FF', ledge: '#4C1D95' },
-    },
-    {
-        id: 'bg_candy',
-        key: 'candy',
-        category: 'backgrounds',
-        title: 'Candy Highlands',
-        rarity: 'Rare',
-        price: 90,
-        badge: '',
-        summary: 'Pastel gumdrop mountains, cotton-candy clouds, and sugar-crystal reading trails.',
-        perk: 'Replaces quest milestone nodes with colorful candy swirl badges.',
-        palette: { bg1: '#FDF2F8', bg2: '#DB2777', border: '#BE185D', glow: 'rgba(219, 39, 119, 0.45)', soft: '#FDF2F8', ledge: '#9D174D' },
-    },
-    {
-        id: 'bg_volcano',
-        key: 'volcano',
-        category: 'backgrounds',
-        title: 'Obsidian Forge',
-        rarity: 'Epic',
-        price: 130,
-        badge: 'HOT',
-        summary: 'Dramatic obsidian cliffs with glowing amber lava flows and crackling ember particles.',
-        perk: 'Provides high-contrast volcanic terrain with glowing path markers.',
-        palette: { bg1: '#FFF7ED', bg2: '#EA580C', border: '#C2410C', glow: 'rgba(234, 88, 12, 0.45)', soft: '#FFF7ED', ledge: '#9A3412' },
-    },
+const categoryPalettes = {
+    avatar: { border: '#D97706', soft: '#FFFBEB', ledge: '#92400E' },
+    background: { border: '#0D9488', soft: '#F0FDFA', ledge: '#115E59' },
+    console: { border: '#7C3AED', soft: '#F5F3FF', ledge: '#5B21B6' },
+    booster: { border: '#2563EB', soft: '#EFF6FF', ledge: '#1E40AF' },
+};
 
-    // CATEGORY: CLAY-HUD-CONSOLE SKINS
-    {
-        id: 'console_memory_orb',
-        key: 'memory_orb',
-        category: 'consoles',
-        title: 'Memory Orb Glow',
-        rarity: 'Epic',
-        price: 110,
-        badge: 'GLOW',
-        summary: 'Inside Out inspired prismatic neon console with glass-blown rim light and crystalline luster.',
-        perk: 'Gives the student header console an iridescent glass sheen.',
-        palette: { bg1: '#F0F9FF', bg2: '#0284C7', border: '#0369A1', glow: 'rgba(2, 132, 199, 0.45)', soft: '#F0F9FF', ledge: '#075985' },
-    },
-    {
-        id: 'console_luca_coast',
-        key: 'luca_coast',
-        category: 'consoles',
-        title: 'Terracotta Riviera',
-        rarity: 'Rare',
-        price: 85,
-        badge: '',
-        summary: 'Mediterranean coastal clay baked in warm sunshine with aqua sea-glass highlights.',
-        perk: 'Changes top HUD into sun-baked terracotta clay with sparkling blue gemstones.',
-        palette: { bg1: '#FFFBEB', bg2: '#D97706', border: '#B45309', glow: 'rgba(217, 119, 6, 0.45)', soft: '#FFFBEB', ledge: '#92400E' },
-    },
-    {
-        id: 'console_royal_velvet',
-        key: 'royal_velvet',
-        category: 'consoles',
-        title: 'Royal Amethyst',
-        rarity: 'Legendary',
-        price: 160,
-        badge: 'LUXURY',
-        summary: 'Regal violet clay with 24k gold leaf borders and plush ambient bevel depth.',
-        perk: 'Upgrades the XP progress bar and badges with gilded gold trims.',
-        palette: { bg1: '#FAF5FF', bg2: '#6B21A8', border: '#581C87', glow: 'rgba(107, 33, 168, 0.45)', soft: '#FAF5FF', ledge: '#4C1D95' },
-    },
-    {
-        id: 'console_emerald_moss',
-        key: 'emerald_moss',
-        category: 'consoles',
-        title: 'Ancient Jade Relic',
-        rarity: 'Rare',
-        price: 75,
-        badge: '',
-        summary: 'Carved jade console with polished gold corners and natural forest moss accents.',
-        perk: 'Subtly pulses with soothing emerald aura during story reading.',
-        palette: { bg1: '#ECFDF5', bg2: '#059669', border: '#047857', glow: 'rgba(5, 150, 105, 0.45)', soft: '#ECFDF5', ledge: '#065F46' },
-    },
-
-    // CATEGORY: QUIZ CHANCES & POWER-UPS
-    {
-        id: 'chance_5050',
-        key: 'chance_5050',
-        category: 'chances',
-        title: '50/50 Dual Lens',
-        rarity: 'Booster',
-        price: 25,
-        badge: 'x1 USE',
-        isConsumable: true,
-        summary: 'Eliminates 2 incorrect answer choices on Multiple Choice questions!',
-        perk: 'Activate directly in quizzes to narrow choices down to 2 options.',
-        palette: { bg1: '#EFF6FF', bg2: '#2563EB', border: '#1D4ED8', glow: 'rgba(37, 99, 235, 0.45)', soft: '#EFF6FF', ledge: '#1E40AF' },
-    },
-    {
-        id: 'chance_shield',
-        key: 'chance_shield',
-        category: 'chances',
-        title: 'Streak Shield',
-        rarity: 'Booster',
-        price: 40,
-        badge: 'x1 USE',
-        isConsumable: true,
-        summary: 'Protects your streak and allows 1 free retry if you pick a wrong answer.',
-        perk: 'Absorbs first mistake without losing stars or deducting points.',
-        palette: { bg1: '#FEFCE8', bg2: '#CA8A04', border: '#A16207', glow: 'rgba(202, 138, 4, 0.45)', soft: '#FEFCE8', ledge: '#854D0E' },
-    },
-    {
-        id: 'chance_hourglass',
-        key: 'chance_hourglass',
-        category: 'chances',
-        title: 'Chrono Hourglass',
-        rarity: 'Booster',
-        price: 20,
-        badge: 'x1 USE',
-        isConsumable: true,
-        summary: 'Freezes the quiz countdown timer for 30 peaceful bonus seconds.',
-        perk: 'Gives extra reading time to review tricky question scenarios.',
-        palette: { bg1: '#F0FDF4', bg2: '#16A34A', border: '#15803D', glow: 'rgba(22, 163, 74, 0.45)', soft: '#F0FDF4', ledge: '#166534' },
-    },
-    {
-        id: 'chance_compass',
-        key: 'chance_compass',
-        category: 'chances',
-        title: 'Wisdom Compass',
-        rarity: 'Booster',
-        price: 30,
-        badge: 'x1 USE',
-        isConsumable: true,
-        summary: 'Highlights the sentence in the reading passage containing the answer clue.',
-        perk: 'Casts a glowing gold highlight across the clue paragraph.',
-        palette: { bg1: '#FDF4FF', bg2: '#A855F7', border: '#7E22CE', glow: 'rgba(168, 85, 247, 0.45)', soft: '#FDF4FF', ledge: '#6B21A8' },
-    },
-];
+// Shop catalog comes from the server (shop_items table)
+const shopItems = computed(() => (props.shop?.items ?? []).map((item) => ({
+    ...item,
+    id: item.key,
+    title: item.name,
+    summary: item.description ?? '',
+    perk: item.perk ?? item.description ?? '',
+    isConsumable: item.category === 'booster',
+    headerSkin: item.metadata?.header_skin ?? null,
+    trailTheme: item.metadata?.trail_theme ?? null,
+    badge: item.category === 'booster' ? `MAX ${item.max_quantity}` : null,
+    icon: item.metadata?.icon ?? categoryIcons[item.category] ?? '🎁',
+    palette: { ...categoryPalettes[item.category], ...(item.metadata?.palette ?? {}) },
+})));
 
 // Filtered shop items
 const filteredItems = computed(() => {
-    return shopItems.filter((item) => {
+    return shopItems.value.filter((item) => {
         if (activeCategory.value !== 'all' && item.category !== activeCategory.value) {
             return false;
         }
@@ -378,30 +127,16 @@ const filteredItems = computed(() => {
     });
 });
 
-// Check ownership / equipped state
-const isItemOwned = (item) => {
-    if (item.isConsumable) {
-        return (consumableInventory.value[item.id] || 0) > 0;
-    }
-    return ownedItemIds.value.includes(item.id);
-};
+const getConsumableCount = (itemId) => Number(inventory.value[itemId] ?? 0);
 
-const isItemEquipped = (item) => {
-    if (item.category === 'avatars') {
-        return activeAvatarId.value === item.key;
-    }
-    if (item.category === 'backgrounds') {
-        return activeBackgroundId.value === item.key;
-    }
-    if (item.category === 'consoles') {
-        return activeConsoleId.value === item.key;
-    }
-    return false;
-};
+// Check ownership / equipped / lock state
+const isItemOwned = (item) => getConsumableCount(item.id) > 0;
 
-const getConsumableCount = (itemId) => {
-    return consumableInventory.value[itemId] || 0;
-};
+const isItemEquipped = (item) => !item.isConsumable && equipped.value[item.category] === item.id;
+
+const isLevelLocked = (item) => studentLevel.value < item.min_level;
+
+const isAtHoldLimit = (item) => getConsumableCount(item.id) >= item.max_quantity;
 
 // Inspect item
 const openInspect = (item) => {
@@ -415,10 +150,28 @@ const closeInspect = () => {
     inspectModalOpen.value = false;
 };
 
-// Purchase / Equip actions
+const firstError = (errors, fallback) => errors?.shop ?? Object.values(errors ?? {})[0] ?? fallback;
+
+// Purchase / Equip actions (validated and charged on the server)
 const handleBuyOrEquip = (item, event) => {
     if (!item.isConsumable && isItemOwned(item)) {
         equipItem(item);
+        return;
+    }
+
+    if (pendingItemKey.value) {
+        return;
+    }
+
+    if (isLevelLocked(item)) {
+        playIncorrect();
+        triggerToast(`Reach level ${item.min_level} to unlock ${item.title}!`);
+        return;
+    }
+
+    if (item.isConsumable && isAtHoldLimit(item)) {
+        playIncorrect();
+        triggerToast(`Your bag holds at most ${item.max_quantity} ${item.title}.`);
         return;
     }
 
@@ -428,60 +181,108 @@ const handleBuyOrEquip = (item, event) => {
         return;
     }
 
-    userGems.value -= item.price;
-    playSuccess();
-
-    if (item.isConsumable) {
-        consumableInventory.value[item.id] = (consumableInventory.value[item.id] || 0) + 1;
-        if (typeof window !== 'undefined') {
-            window.localStorage.setItem('emodule_consumables', JSON.stringify(consumableInventory.value));
-        }
-        triggerToast(`Purchased ${item.title}! (${consumableInventory.value[item.id]}x in bag)`);
-    } else {
-        if (!ownedItemIds.value.includes(item.id)) {
-            ownedItemIds.value.push(item.id);
-            if (typeof window !== 'undefined') {
-                window.localStorage.setItem('emodule_owned_items', JSON.stringify(ownedItemIds.value));
-            }
-        }
-        equipItem(item, false);
-        triggerToast(`🎉 Unlocked ${item.title}!`);
-    }
-
     const targetEl = event?.currentTarget || modalDialogRef.value;
-    if (targetEl) {
-        spawnPixarBurst(targetEl, 24, document.documentElement.dataset.pixarTheme || 'toybox');
+    pendingItemKey.value = item.id;
+
+    router.post(`/students/shop/items/${item.id}/purchase`, {}, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['user', 'shop'],
+        optimistic: (pageProps) => ({
+            user: {
+                ...pageProps.user,
+                gamification: {
+                    ...pageProps.user.gamification,
+                    gem_balance: pageProps.user.gamification.gem_balance - item.price,
+                    gems_spent: pageProps.user.gamification.gems_spent + item.price,
+                },
+            },
+            shop: {
+                ...pageProps.shop,
+                inventory: {
+                    ...pageProps.shop.inventory,
+                    [item.id]: (pageProps.shop.inventory[item.id] ?? 0) + 1,
+                },
+            },
+        }),
+        onSuccess: () => {
+            playSuccess();
+            if (targetEl) {
+                spawnPixarBurst(targetEl, 24, document.documentElement.dataset.pixarTheme || 'toybox');
+            }
+
+            if (item.isConsumable) {
+                triggerToast(`Purchased ${item.title}! (${getConsumableCount(item.id)}x in bag)`);
+                return;
+            }
+
+            triggerToast(`🎉 Unlocked ${item.title}!`);
+            inspectModalOpen.value = false;
+            equipItem(item, false);
+        },
+        onError: (errors) => {
+            playIncorrect();
+            triggerToast(firstError(errors, `Couldn't buy ${item.title}. Try again!`));
+        },
+        onFinish: () => {
+            pendingItemKey.value = null;
+        },
+    });
+};
+
+// Big-ticket items (100+ gems) open the confirm dialog instead of buying in one tap
+const CONFIRM_PRICE_THRESHOLD = 100;
+
+const buyFromCard = (item, event) => {
+    if (item.price >= CONFIRM_PRICE_THRESHOLD) {
+        openInspect(item);
+        return;
     }
 
-    if (inspectModalOpen.value && !item.isConsumable) {
-        inspectModalOpen.value = false;
+    handleBuyOrEquip(item, event);
+};
+
+// Cosmetics the layout reads from auth.user, so equipping restyles the page instantly.
+const equippedAuthPatch = (item) => {
+    if (item.headerSkin) {
+        return { header_skin: item.headerSkin };
     }
+    if (item.trailTheme) {
+        return { trail_theme: item.trailTheme };
+    }
+    return null;
 };
 
 const equipItem = (item, notify = true) => {
-    playSparkle();
-
-    if (item.category === 'avatars') {
-        activeAvatarId.value = item.key;
-        if (typeof window !== 'undefined') {
-            window.localStorage.setItem('emodule_companion', item.key);
-            window.dispatchEvent(new CustomEvent('emodule:companion-changed', { detail: { id: item.key } }));
-        }
-        if (notify) triggerToast(`Equipped ${item.title}!`);
-    } else if (item.category === 'backgrounds') {
-        activeBackgroundId.value = item.key;
-        if (typeof window !== 'undefined') {
-            window.localStorage.setItem('emodule_custom_map_bg', item.key);
-        }
-        if (notify) triggerToast(`Set map theme to ${item.title}!`);
-    } else if (item.category === 'consoles') {
-        activeConsoleId.value = item.key;
-        if (typeof window !== 'undefined') {
-            window.localStorage.setItem('emodule_console_skin', item.key);
-        }
-        switchWorld(item.key);
-        if (notify) triggerToast(`Switched HUD skin to ${item.title}!`);
+    if (item.isConsumable || isItemEquipped(item)) {
+        return;
     }
+
+    router.patch(`/students/shop/items/${item.id}/equip`, {}, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['shop', 'auth'],
+        optimistic: (pageProps) => ({
+            shop: {
+                ...pageProps.shop,
+                equipped: { ...pageProps.shop.equipped, [item.category]: item.id },
+            },
+            // Swap the live HUD header instantly when equipping a header background.
+            ...(equippedAuthPatch(item) && pageProps.auth?.user
+                ? { auth: { ...pageProps.auth, user: { ...pageProps.auth.user, ...equippedAuthPatch(item) } } }
+                : {}),
+        }),
+        onSuccess: () => {
+            playSparkle();
+            if (notify) {
+                triggerToast(`Equipped ${item.title}!`);
+            }
+        },
+        onError: (errors) => {
+            playIncorrect();
+            triggerToast(firstError(errors, `Couldn't equip ${item.title}.`));
+        },
+    });
 };
 
 const triggerToast = (msg) => {
@@ -516,18 +317,6 @@ const triggerToast = (msg) => {
                                 {{ filteredItems.length }} {{ filteredItems.length === 1 ? 'item' : 'items' }}
                             </span>
                         </div>
-                    </div>
-
-                    <!-- Right Controls: Gem Vault Balance + View Mode Switcher -->
-                    <div class="deck-right-pod">
-                        <!-- Tactile Gem Vault Pill -->
-                        <div class="shop-gem-vault" title="Your Gem Balance">
-                            <span class="vault-gem-icon" aria-hidden="true">💎</span>
-                            <span class="vault-value">{{ userGems.toLocaleString() }}</span>
-                            <span class="vault-lbl">GEMS</span>
-                        </div>
-
-                        <!-- Grid/List View Switch -->
                         <div class="deck-view-switch" role="group" aria-label="Layout view">
                             <button
                                 type="button"
@@ -562,26 +351,11 @@ const triggerToast = (msg) => {
                             </button>
                         </div>
                     </div>
+
                 </div>
 
                 <!-- Mid Row: Smooth Category Filter Pills (Glides on mobile) -->
                 <div class="deck-filters-row">
-                    <nav class="shop-category-tabs" aria-label="Shop categories">
-                        <button
-                            v-for="cat in categories"
-                            :key="cat.id"
-                            type="button"
-                            class="shop-cat-btn"
-                            :class="{ 'is-active': activeCategory === cat.id }"
-                            @click="playPop(1.1); activeCategory = cat.id"
-                        >
-                            <span class="cat-icon" aria-hidden="true">{{ cat.icon }}</span>
-                            <span class="cat-label">{{ cat.label }}</span>
-                            <span v-if="cat.id !== 'all'" class="cat-counter" aria-hidden="true">
-                                {{ shopItems.filter(i => i.category === cat.id).length }}
-                            </span>
-                        </button>
-                    </nav>
 
                     <!-- Compact Search & Affordable Toggle -->
                     <div class="deck-search-wrap">
@@ -591,7 +365,7 @@ const triggerToast = (msg) => {
                                 v-model="searchQuery"
                                 type="search"
                                 class="search-mini-input"
-                                placeholder="Find avatar, realm, chance…"
+                                placeholder="Find header, avatar, chance…"
                                 enterkeyhint="search"
                                 @keydown.esc="searchQuery = ''"
                             />
@@ -659,75 +433,30 @@ const triggerToast = (msg) => {
                         }"
                     >
                         <!-- Compact Diorama Scene Header (Matches Classrooms.vue card style) -->
-                        <div class="card-scene" @click="openInspect(item)">
+                        <div class="card-scene" :class="{ 'has-skin-preview': item.headerSkin || item.trailTheme }" @click="openInspect(item)">
+                            <!-- Live Header Background / Trail Theme Preview -->
+                            <HudHeaderSkin v-if="item.headerSkin" :skin="item.headerSkin" :scrim="false" />
+                            <TrailThemeBackdrop v-else-if="item.trailTheme" :theme="item.trailTheme" sample />
+
                             <!-- Ambient Rolling Clay Hills -->
-                            <svg class="scene-hills" viewBox="0 0 200 45" preserveAspectRatio="none" aria-hidden="true">
+                            <svg v-else class="scene-hills" viewBox="0 0 200 45" preserveAspectRatio="none" aria-hidden="true">
                                 <path class="hill-back" d="M0,26 C40,10 80,30 130,16 C165,6 185,20 200,14 L200,45 L0,45 Z" />
                                 <path class="hill-front" d="M0,35 C45,20 90,40 140,24 C175,16 190,28 200,24 L200,45 L0,45 Z" />
                             </svg>
 
                             <!-- Top Badges -->
                             <span class="scene-kicker">{{ item.rarity }}</span>
-                            <span v-if="item.badge" class="scene-badge">{{ item.badge }}</span>
-                            <span v-else-if="item.isConsumable && getConsumableCount(item.id) > 0" class="scene-stock">
-                                {{ getConsumableCount(item.id) }}x in bag
+                            <span v-if="item.isConsumable && getConsumableCount(item.id) > 0" class="scene-stock">
+                                {{ getConsumableCount(item.id) }}/{{ item.max_quantity }} in bag
                             </span>
+                            <span v-else-if="item.badge" class="scene-badge">{{ item.badge }}</span>
                             <span v-else-if="isItemEquipped(item)" class="scene-active-pill">
                                 Active ✓
                             </span>
 
                             <!-- 3D Item Medallion / Art -->
-                            <div class="card-medallion" aria-hidden="true">
-                                <!-- Avatar SVG -->
-                                <template v-if="item.category === 'avatars'">
-                                    <svg v-if="item.key === 'dragon'" viewBox="0 0 80 80" class="mini-art-svg">
-                                        <circle cx="40" cy="42" r="28" fill="#F59E0B" stroke="#D97706" stroke-width="3" />
-                                        <path d="M22 22 L30 34 L18 36 Z" fill="#EF4444" stroke="#B91C1C" stroke-width="2.5" />
-                                        <path d="M58 22 L50 34 L62 36 Z" fill="#EF4444" stroke="#B91C1C" stroke-width="2.5" />
-                                        <ellipse cx="32" cy="40" rx="4.5" ry="5.5" fill="#1F2937" />
-                                        <ellipse cx="48" cy="40" rx="4.5" ry="5.5" fill="#1F2937" />
-                                        <circle cx="34" cy="38" r="1.8" fill="#FFFFFF" />
-                                        <circle cx="50" cy="38" r="1.8" fill="#FFFFFF" />
-                                        <ellipse cx="40" cy="50" rx="10" ry="6.5" fill="#FDE68A" />
-                                    </svg>
-                                    <svg v-else-if="item.key === 'cyber_bunny'" viewBox="0 0 80 80" class="mini-art-svg">
-                                        <path d="M26 8 C26 4 32 4 33 16 L31 34 C31 34 26 24 26 8 Z" fill="#38BDF8" stroke="#0284C7" stroke-width="3" />
-                                        <path d="M54 8 C54 4 48 4 47 16 L49 34 C49 34 54 24 54 8 Z" fill="#38BDF8" stroke="#0284C7" stroke-width="3" />
-                                        <circle cx="40" cy="46" r="24" fill="#F8FAFC" stroke="#0284C7" stroke-width="3.5" />
-                                        <rect x="22" y="38" width="36" height="13" rx="6.5" fill="#0F172A" />
-                                        <circle cx="30" cy="44.5" r="3.5" fill="#38BDF8" />
-                                        <circle cx="50" cy="44.5" r="3.5" fill="#38BDF8" />
-                                    </svg>
-                                    <svg v-else-if="item.key === 'phoenix'" viewBox="0 0 80 80" class="mini-art-svg">
-                                        <ellipse cx="40" cy="44" rx="26" ry="24" fill="#F43F5E" stroke="#BE123C" stroke-width="3.5" />
-                                        <polygon points="40,8 46,26 34,26" fill="#FBBF24" stroke="#D97706" stroke-width="2" />
-                                        <circle cx="30" cy="42" r="4.5" fill="#1C1917" />
-                                        <circle cx="50" cy="42" r="4.5" fill="#1C1917" />
-                                        <polygon points="40,46 33,54 47,54" fill="#F59E0B" stroke="#B45309" stroke-width="2" />
-                                    </svg>
-                                    <svg v-else viewBox="0 0 80 80" class="mini-art-svg">
-                                        <circle cx="40" cy="44" r="26" fill="#E2E8F0" stroke="#0D9488" stroke-width="3.5" />
-                                        <path d="M16 32 C12 24 16 16 26 24" fill="none" stroke="#06B6D4" stroke-width="5" stroke-linecap="round" />
-                                        <path d="M64 32 C68 24 64 16 54 24" fill="none" stroke="#06B6D4" stroke-width="5" stroke-linecap="round" />
-                                        <circle cx="32" cy="42" r="4" fill="#134E4A" />
-                                        <circle cx="48" cy="42" r="4" fill="#134E4A" />
-                                    </svg>
-                                </template>
-
-                                <!-- Map Realm Icon -->
-                                <template v-else-if="item.category === 'backgrounds'">
-                                    <span class="medallion-emoji">{{ item.key === 'lagoon' ? '🏝️' : item.key === 'celestial' ? '🌌' : item.key === 'candy' ? '🍭' : '🌋' }}</span>
-                                </template>
-
-                                <!-- Console HUD Icon -->
-                                <template v-else-if="item.category === 'consoles'">
-                                    <span class="medallion-emoji">{{ item.key === 'memory_orb' ? '🔮' : item.key === 'luca_coast' ? '🏛️' : item.key === 'royal_velvet' ? '👑' : '🌿' }}</span>
-                                </template>
-
-                                <!-- Quiz Chance Icon -->
-                                <template v-else>
-                                    <span class="medallion-emoji">{{ item.key === 'chance_5050' ? '👓' : item.key === 'chance_shield' ? '🛡️' : item.key === 'chance_hourglass' ? '⏳' : '🧭' }}</span>
-                                </template>
+                            <div v-if="!item.headerSkin && !item.trailTheme" class="card-medallion" aria-hidden="true">
+                                <span class="medallion-emoji">{{ item.icon }}</span>
                             </div>
                         </div>
 
@@ -763,12 +492,32 @@ const triggerToast = (msg) => {
                                     </button>
 
                                     <button
+                                        v-else-if="isLevelLocked(item)"
+                                        type="button"
+                                        class="shop-action-btn is-locked-btn"
+                                        :title="`Unlocks at level ${item.min_level}`"
+                                        @click="openInspect(item)"
+                                    >
+                                        <span class="action-btn-face">🔒 Lv {{ item.min_level }}</span>
+                                    </button>
+
+                                    <button
+                                        v-else-if="item.isConsumable && isAtHoldLimit(item)"
+                                        type="button"
+                                        class="shop-action-btn is-active-btn"
+                                        disabled
+                                    >
+                                        <span class="action-btn-face">Bag Full</span>
+                                    </button>
+
+                                    <button
                                         v-else-if="item.price <= userGems"
                                         type="button"
                                         class="shop-action-btn is-buy-btn"
-                                        @click="handleBuyOrEquip(item, $event)"
+                                        :disabled="pendingItemKey !== null"
+                                        @click="buyFromCard(item, $event)"
                                     >
-                                        <span class="action-btn-face">Buy</span>
+                                        <span class="action-btn-face">{{ pendingItemKey === item.id ? '…' : 'Buy' }}</span>
                                     </button>
 
                                     <button
@@ -809,9 +558,7 @@ const triggerToast = (msg) => {
                     >
                         <!-- Left Medallion -->
                         <div class="list-medallion" aria-hidden="true">
-                            <span class="list-icon">
-                                {{ item.category === 'avatars' ? '🦊' : item.category === 'backgrounds' ? '🗺️' : item.category === 'consoles' ? '🎨' : '⚡' }}
-                            </span>
+                            <span class="list-icon">{{ item.icon }}</span>
                         </div>
 
                         <!-- Mid Info -->
@@ -821,7 +568,7 @@ const triggerToast = (msg) => {
                                 <span class="list-kicker">{{ item.rarity }}</span>
                                 <span v-if="isItemEquipped(item)" class="list-active-tag">Active</span>
                                 <span v-else-if="item.isConsumable && getConsumableCount(item.id) > 0" class="list-stock-tag">
-                                    {{ getConsumableCount(item.id) }}x in bag
+                                    {{ getConsumableCount(item.id) }}/{{ item.max_quantity }} in bag
                                 </span>
                             </div>
                             <span class="list-meta">{{ item.perk }}</span>
@@ -850,12 +597,31 @@ const triggerToast = (msg) => {
                             </button>
 
                             <button
+                                v-else-if="isLevelLocked(item)"
+                                type="button"
+                                class="list-action-btn is-locked-btn"
+                                @click="openInspect(item)"
+                            >
+                                <span class="action-btn-face">🔒 Level {{ item.min_level }}</span>
+                            </button>
+
+                            <button
+                                v-else-if="item.isConsumable && isAtHoldLimit(item)"
+                                type="button"
+                                class="list-action-btn is-active-btn"
+                                disabled
+                            >
+                                <span class="action-btn-face">Bag Full</span>
+                            </button>
+
+                            <button
                                 v-else-if="item.price <= userGems"
                                 type="button"
                                 class="list-action-btn is-buy-btn"
-                                @click="handleBuyOrEquip(item, $event)"
+                                :disabled="pendingItemKey !== null"
+                                @click="buyFromCard(item, $event)"
                             >
-                                <span class="action-btn-face">Buy</span>
+                                <span class="action-btn-face">{{ pendingItemKey === item.id ? '…' : 'Buy' }}</span>
                             </button>
 
                             <button
@@ -869,6 +635,15 @@ const triggerToast = (msg) => {
                         </div>
                     </div>
                 </template>
+            </div>
+
+            <!-- Empty Catalog State (no products stocked yet) -->
+            <div v-else-if="shopItems.length === 0" class="shop-empty-state" role="status">
+                <span class="empty-emoji" aria-hidden="true">🏗️</span>
+                <h3 class="empty-title">The Bazaar is restocking</h3>
+                <p class="empty-desc">
+                    New goodies are on the way. Keep earning gems in quizzes. You have 💎 {{ userGems.toLocaleString() }} ready to spend!
+                </p>
             </div>
 
             <!-- Empty Search State -->
@@ -915,9 +690,7 @@ const triggerToast = (msg) => {
                             <!-- Crest Header -->
                             <div class="modal-crest-row">
                                 <div class="modal-crest-badge" aria-hidden="true">
-                                    <span class="crest-emoji">
-                                        {{ inspectingItem.category === 'avatars' ? '🦊' : inspectingItem.category === 'backgrounds' ? '🗺️' : inspectingItem.category === 'consoles' ? '🎨' : '⚡' }}
-                                    </span>
+                                    <span class="crest-emoji">{{ inspectingItem.icon }}</span>
                                 </div>
                                 <div class="modal-crest-meta">
                                     <span class="modal-kicker-pill">{{ inspectingItem.rarity }} {{ inspectingItem.category.toUpperCase() }}</span>
@@ -931,8 +704,27 @@ const triggerToast = (msg) => {
                                 {{ inspectingItem.summary }}
                             </p>
 
+                            <!-- Trail Theme Preview (sample stretch of the expedition map) -->
+                            <div v-if="inspectingItem.trailTheme" class="modal-skin-preview modal-trail-preview">
+                                <TrailThemeBackdrop :theme="inspectingItem.trailTheme" sample />
+                                <span class="trail-preview-label">Trail preview</span>
+                            </div>
+
+                            <!-- Header Background Preview (mini HUD with the student's name) -->
+                            <div v-if="inspectingItem.headerSkin" class="modal-skin-preview">
+                                <HudHeaderSkin :skin="inspectingItem.headerSkin" />
+                                <div class="skin-preview-content">
+                                    <span class="skin-preview-avatar" aria-hidden="true">🙂</span>
+                                    <div class="skin-preview-meta">
+                                        <span class="skin-preview-kicker">Header preview</span>
+                                        <strong class="skin-preview-name">{{ user?.name || 'Student' }}</strong>
+                                    </div>
+                                    <span class="skin-preview-gems">💎 {{ userGems.toLocaleString() }}</span>
+                                </div>
+                            </div>
+
                             <!-- Perk Showcase -->
-                            <div class="modal-perk-box">
+                            <div v-if="inspectingItem.perk" class="modal-perk-box">
                                 <span class="perk-label">👑 IN-GAME PERK</span>
                                 <p class="perk-body">{{ inspectingItem.perk }}</p>
                             </div>
@@ -988,9 +780,28 @@ const triggerToast = (msg) => {
                                 </button>
 
                                 <button
+                                    v-else-if="isLevelLocked(inspectingItem)"
+                                    type="button"
+                                    class="modal-primary-btn is-need-more"
+                                    disabled
+                                >
+                                    🔒 Unlocks at Level {{ inspectingItem.min_level }}
+                                </button>
+
+                                <button
+                                    v-else-if="inspectingItem.isConsumable && isAtHoldLimit(inspectingItem)"
+                                    type="button"
+                                    class="modal-primary-btn is-equipped-state"
+                                    disabled
+                                >
+                                    Bag Full ({{ inspectingItem.max_quantity }}/{{ inspectingItem.max_quantity }})
+                                </button>
+
+                                <button
                                     v-else-if="userGems >= inspectingItem.price"
                                     type="button"
                                     class="modal-primary-btn is-confirm-buy"
+                                    :disabled="pendingItemKey !== null"
                                     @click="handleBuyOrEquip(inspectingItem, $event)"
                                 >
                                     Confirm Buy (💎 {{ inspectingItem.price }})
@@ -1047,6 +858,7 @@ const triggerToast = (msg) => {
     justify-content: space-between;
     gap: 0.65rem;
     flex-wrap: wrap;
+    width: 100%;
 }
 
 .deck-title-block {
@@ -1332,10 +1144,10 @@ const triggerToast = (msg) => {
 }
 
 .affordable-pill-btn.is-active {
-    background: #ECFDF5;
-    border-color: #10B981;
-    color: #065F46;
-    box-shadow: 0 2px 0 #047857;
+    background: var(--px-tint-success-bg, #ECFDF5);
+    border-color: var(--px-tint-success-line, #10B981);
+    color: var(--px-tint-success-ink, #065F46);
+    box-shadow: 0 2px 0 var(--px-tint-success-line, #047857);
 }
 
 .affordable-pill-btn.is-active .afford-dot {
@@ -1349,12 +1161,12 @@ const triggerToast = (msg) => {
     gap: 0.4rem;
     padding: 0.45rem 0.85rem;
     border-radius: 14px;
-    background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
-    border: 1.5px solid #F59E0B;
+    background: var(--px-tint-warn-bg, #FEF3C7);
+    border: 1.5px solid var(--px-tint-warn-line, #F59E0B);
     box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);
     font-size: 0.78rem;
     font-weight: 800;
-    color: #92400E;
+    color: var(--px-tint-warn-ink, #92400E);
     animation: toast-slide 0.3s var(--spring-bounce);
 }
 
@@ -1373,7 +1185,9 @@ const triggerToast = (msg) => {
     display: flex;
     flex-direction: column;
     border-radius: 20px;
-    background: linear-gradient(180deg, var(--px-surface-card, #FFFFFF) 0%, var(--item-soft, #F8FAFC) 100%);
+    background: linear-gradient(180deg,
+        var(--px-surface-card, #FFFFFF) 0%,
+        color-mix(in srgb, var(--item-accent, #6366F1) 10%, var(--px-surface-card-bottom, #F8FAFC)) 100%);
     border: 2.5px solid var(--px-card-border, #E2E8F0);
     box-shadow:
         0 5px 0 var(--item-ledge, #CBD5E1),
@@ -1408,6 +1222,102 @@ const triggerToast = (msg) => {
 }
 
 /* Compact Diorama Scene (matches Classrooms.vue) */
+/* Header background art fills the card scene as a live preview */
+.card-scene.has-skin-preview > .scene-kicker,
+.card-scene.has-skin-preview > .scene-badge,
+.card-scene.has-skin-preview > .scene-active-pill {
+    z-index: 1;
+}
+
+.modal-trail-preview {
+    height: 128px;
+}
+
+.trail-preview-label {
+    position: absolute;
+    left: 0.6rem;
+    top: 0.5rem;
+    z-index: 1;
+    padding: 0.15rem 0.55rem;
+    border-radius: 9999px;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--px-ink);
+    background: color-mix(in srgb, var(--px-surface-card) 85%, transparent);
+    border: 1.5px solid var(--px-card-border);
+}
+
+.modal-skin-preview {
+    position: relative;
+    overflow: hidden;
+    height: 64px;
+    margin: 0 0 0.75rem;
+    border-radius: 16px;
+    border: 2px solid var(--px-card-border);
+    background: linear-gradient(180deg, var(--px-surface-card) 0%, var(--px-surface-card-bottom) 100%);
+    box-shadow: 0 3px 0 var(--px-hud-ledge), inset 0 2px 3px var(--px-rim-top);
+}
+
+.skin-preview-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    height: 100%;
+    padding: 0 0.75rem;
+}
+
+.skin-preview-avatar {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    font-size: 1.15rem;
+    background: var(--px-surface-elevated);
+    border: 2px solid var(--px-card-border);
+    box-shadow: 0 2px 0 var(--px-hud-ledge);
+}
+
+.skin-preview-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.skin-preview-kicker {
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--px-ink-muted);
+}
+
+.skin-preview-name {
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    color: var(--px-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.skin-preview-gems {
+    flex-shrink: 0;
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: var(--px-ink);
+    background: var(--px-surface-elevated);
+    border: 1.5px solid var(--px-card-border);
+}
+
 .card-scene {
     position: relative;
     display: flex;
@@ -1421,8 +1331,8 @@ const triggerToast = (msg) => {
     background:
         radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.75) 0%, transparent 45%),
         linear-gradient(172deg,
-            color-mix(in srgb, var(--item-accent, #6366F1) 22%, #FFFFFF) 0%,
-            color-mix(in srgb, var(--item-accent, #6366F1) 50%, #FFFFFF) 100%);
+            color-mix(in srgb, var(--item-accent, #6366F1) 22%, var(--px-surface-elevated, #FFFFFF)) 0%,
+            color-mix(in srgb, var(--item-accent, #6366F1) 50%, var(--px-surface-elevated, #FFFFFF)) 100%);
     box-shadow: inset 0 2px 4px rgba(var(--px-shadow-rgb), 0.12);
 }
 
@@ -1437,12 +1347,12 @@ const triggerToast = (msg) => {
 }
 
 .hill-back {
-    fill: color-mix(in srgb, var(--item-accent, #6366F1) 35%, #FFFFFF);
+    fill: color-mix(in srgb, var(--item-accent, #6366F1) 35%, var(--px-surface-elevated, #FFFFFF));
     opacity: 0.7;
 }
 
 .hill-front {
-    fill: color-mix(in srgb, var(--item-accent, #6366F1) 50%, #FFFFFF);
+    fill: color-mix(in srgb, var(--item-accent, #6366F1) 50%, var(--px-surface-elevated, #FFFFFF));
     opacity: 0.9;
 }
 
@@ -1456,7 +1366,7 @@ const triggerToast = (msg) => {
     letter-spacing: 0.05em;
     text-transform: uppercase;
     color: var(--px-ink, #1E1B4B);
-    background: rgba(255, 255, 255, 0.88);
+    background: color-mix(in srgb, var(--px-surface-card, #FFFFFF) 88%, transparent);
     backdrop-filter: blur(4px);
     padding: 0.1rem 0.4rem;
     border-radius: 9999px;
@@ -1576,7 +1486,7 @@ const triggerToast = (msg) => {
     font-family: var(--font-display);
     font-size: 0.78rem;
     font-weight: 800;
-    color: #92400E;
+    color: var(--px-tint-warn-ink, #92400E);
 }
 
 .card-btn-pod {
@@ -1624,17 +1534,17 @@ const triggerToast = (msg) => {
 }
 
 .is-active-btn .action-btn-face {
-    background: #ECFDF5;
-    border: 1.5px solid #10B981;
-    color: #065F46;
-    box-shadow: 0 1px 0 #059669;
+    background: var(--px-tint-success-bg, #ECFDF5);
+    border: 1.5px solid var(--px-tint-success-line, #10B981);
+    color: var(--px-tint-success-ink, #065F46);
+    box-shadow: 0 1px 0 var(--px-tint-success-line, #059669);
 }
 
 .is-locked-btn .action-btn-face {
-    background: #F1F5F9;
-    border: 1.5px solid #CBD5E1;
-    color: #64748B;
-    box-shadow: 0 2px 0 #94A3B8;
+    background: var(--px-surface-well, #F1F5F9);
+    border: 1.5px solid var(--px-line, #CBD5E1);
+    color: var(--px-ink-muted, #64748B);
+    box-shadow: 0 2px 0 var(--px-ledge, #94A3B8);
 }
 
 .shop-action-btn:active .action-btn-face,
@@ -1658,7 +1568,9 @@ const triggerToast = (msg) => {
     gap: 0.65rem;
     padding: 0.45rem 0.75rem;
     border-radius: 16px;
-    background: linear-gradient(180deg, var(--px-surface-card, #FFFFFF) 0%, var(--item-soft, #F8FAFC) 100%);
+    background: linear-gradient(180deg,
+        var(--px-surface-card, #FFFFFF) 0%,
+        color-mix(in srgb, var(--item-accent, #6366F1) 10%, var(--px-surface-card-bottom, #F8FAFC)) 100%);
     border: 2px solid var(--px-card-border, #E2E8F0);
     box-shadow:
         0 3px 0 var(--item-ledge, #CBD5E1),
@@ -1675,7 +1587,7 @@ const triggerToast = (msg) => {
     width: 36px;
     height: 36px;
     border-radius: 12px;
-    background: color-mix(in srgb, var(--item-accent, #6366F1) 20%, #FFFFFF);
+    background: color-mix(in srgb, var(--item-accent, #6366F1) 20%, var(--px-surface-elevated, #FFFFFF));
     border: 1.5px solid var(--item-accent, #6366F1);
     display: grid;
     place-items: center;
@@ -1718,8 +1630,8 @@ const triggerToast = (msg) => {
 .list-active-tag {
     font-size: 0.58rem;
     font-weight: 800;
-    color: #065F46;
-    background: #ECFDF5;
+    color: var(--px-tint-success-ink, #065F46);
+    background: var(--px-tint-success-bg, #ECFDF5);
     padding: 0.05rem 0.35rem;
     border-radius: 4px;
 }
@@ -1727,8 +1639,8 @@ const triggerToast = (msg) => {
 .list-stock-tag {
     font-size: 0.58rem;
     font-weight: 800;
-    color: #0369A1;
-    background: #E0F2FE;
+    color: var(--px-tint-info-ink, #0369A1);
+    background: var(--px-tint-info-bg, #E0F2FE);
     padding: 0.05rem 0.35rem;
     border-radius: 4px;
 }
@@ -1752,11 +1664,11 @@ const triggerToast = (msg) => {
     font-family: var(--font-display);
     font-size: 0.78rem;
     font-weight: 800;
-    color: #92400E;
-    background: #FEF9C3;
+    color: var(--px-tint-warn-ink, #92400E);
+    background: var(--px-tint-warn-bg, #FEF9C3);
     padding: 0.18rem 0.45rem;
     border-radius: 8px;
-    border: 1px solid #F59E0B;
+    border: 1px solid var(--px-tint-warn-line, #F59E0B);
 }
 
 /* Empty State */
@@ -1824,11 +1736,12 @@ const triggerToast = (msg) => {
     width: 100%;
     max-width: 380px;
     border-radius: 24px;
-    background: linear-gradient(180deg, #FFFFFF 0%, #FAF8FF 100%);
-    border: 3px solid #FFFFFF;
+    background: linear-gradient(180deg, var(--px-surface-card, #FFFFFF) 0%, var(--px-surface-card-bottom, #FAF8FF) 100%);
+    border: 3px solid var(--px-card-border, #FFFFFF);
     box-shadow:
-        0 8px 0 #D2CAEE,
-        0 24px 48px -12px rgba(15, 23, 42, 0.45);
+        0 8px 0 var(--px-ledge, #D2CAEE),
+        0 24px 48px -12px rgba(var(--px-shadow-rgb, 15, 23, 42), 0.45);
+    color: var(--px-ink, #1E1B4B);
     padding: 1.25rem;
     display: flex;
     flex-direction: column;
@@ -1842,15 +1755,15 @@ const triggerToast = (msg) => {
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: #F1F5F9;
-    border: 1.5px solid #CBD5E1;
+    background: var(--px-surface-well, #F1F5F9);
+    border: 1.5px solid var(--px-line, #CBD5E1);
     font-size: 0.75rem;
     font-weight: 900;
-    color: #64748B;
+    color: var(--px-ink-muted, #64748B);
     cursor: pointer;
     display: grid;
     place-items: center;
-    box-shadow: 0 2px 0 #94A3B8;
+    box-shadow: 0 2px 0 var(--px-ledge, #94A3B8);
 }
 
 .modal-crest-row {
@@ -1882,7 +1795,7 @@ const triggerToast = (msg) => {
     font-family: var(--font-display);
     font-size: 0.58rem;
     font-weight: 800;
-    color: #6366F1;
+    color: var(--px-tint-magic-ink, #6366F1);
     letter-spacing: 0.05em;
 }
 
@@ -1891,7 +1804,7 @@ const triggerToast = (msg) => {
     font-family: var(--font-display);
     font-size: 1.1rem;
     font-weight: 800;
-    color: #1E1B4B;
+    color: var(--px-ink, #1E1B4B);
     line-height: 1.1;
 }
 
@@ -1899,13 +1812,13 @@ const triggerToast = (msg) => {
     margin: 0;
     font-size: 0.76rem;
     font-weight: 600;
-    color: #475569;
+    color: var(--px-ink-muted, #475569);
     line-height: 1.35;
 }
 
 .modal-perk-box {
-    background: #F8FAFC;
-    border: 1.5px solid #E2E8F0;
+    background: var(--px-surface-well, #F8FAFC);
+    border: 1.5px solid var(--px-line, #E2E8F0);
     border-radius: 14px;
     padding: 0.55rem 0.75rem;
     display: flex;
@@ -1917,20 +1830,20 @@ const triggerToast = (msg) => {
     font-family: var(--font-display);
     font-size: 0.62rem;
     font-weight: 800;
-    color: #D97706;
+    color: var(--px-tint-warn-ink, #D97706);
 }
 
 .perk-body {
     margin: 0;
     font-size: 0.72rem;
     font-weight: 700;
-    color: #1E293B;
+    color: var(--px-ink, #1E293B);
     line-height: 1.3;
 }
 
 .modal-ledger-box {
-    background: #FFFBEB;
-    border: 1.5px solid #FDE68A;
+    background: var(--px-tint-warn-bg, #FFFBEB);
+    border: 1.5px solid var(--px-tint-warn-line, #FDE68A);
     border-radius: 14px;
     padding: 0.55rem 0.75rem;
     display: flex;
@@ -1942,12 +1855,12 @@ const triggerToast = (msg) => {
     display: flex;
     justify-content: space-between;
     font-size: 0.72rem;
-    color: #92400E;
+    color: var(--px-tint-warn-ink, #92400E);
 }
 
 .ledger-divider {
     height: 1px;
-    background: #FCD34D;
+    background: var(--px-tint-warn-line, #FCD34D);
     margin: 0.15rem 0;
 }
 
@@ -1956,11 +1869,11 @@ const triggerToast = (msg) => {
 }
 
 .text-cost {
-    color: #B45309;
+    color: var(--px-tint-warn-ink, #B45309);
 }
 
 .text-danger {
-    color: #DC2626 !important;
+    color: var(--px-tint-danger-ink, #DC2626) !important;
 }
 
 .modal-actions-bar {
@@ -1973,14 +1886,14 @@ const triggerToast = (msg) => {
     flex: 1;
     padding: 0.5rem;
     border-radius: 12px;
-    background: #F1F5F9;
-    border: 1.5px solid #CBD5E1;
+    background: var(--px-surface-well, #F1F5F9);
+    border: 1.5px solid var(--px-line, #CBD5E1);
     font-family: var(--font-display);
     font-size: 0.78rem;
     font-weight: 800;
-    color: #64748B;
+    color: var(--px-ink-muted, #64748B);
     cursor: pointer;
-    box-shadow: 0 2px 0 #94A3B8;
+    box-shadow: 0 2px 0 var(--px-ledge, #94A3B8);
 }
 
 .modal-primary-btn {
@@ -2010,16 +1923,16 @@ const triggerToast = (msg) => {
 }
 
 .is-equipped-state {
-    background: #ECFDF5;
-    border: 1.5px solid #10B981;
-    color: #065F46;
+    background: var(--px-tint-success-bg, #ECFDF5);
+    border: 1.5px solid var(--px-tint-success-line, #10B981);
+    color: var(--px-tint-success-ink, #065F46);
 }
 
 .is-need-more {
-    background: #F1F5F9;
-    border: 1.5px solid #CBD5E1;
-    color: #64748B;
-    box-shadow: 0 3px 0 #94A3B8;
+    background: var(--px-surface-well, #F1F5F9);
+    border: 1.5px solid var(--px-line, #CBD5E1);
+    color: var(--px-ink-muted, #64748B);
+    box-shadow: 0 3px 0 var(--px-ledge, #94A3B8);
 }
 
 /* ==========================================================================

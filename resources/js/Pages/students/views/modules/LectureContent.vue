@@ -2165,6 +2165,33 @@ onBeforeUnmount(() => {
     word-break: break-word;
 }
 
+/* Teacher bullet/numbered lists (Tailwind's preflight strips list markers) */
+.student-paper-content-body :deep(ul),
+.student-paper-content-body :deep(ol) {
+    margin: 0 0 0.85rem;
+    padding-left: 1.6rem;
+}
+
+.student-paper-content-body :deep(ul) {
+    list-style: disc outside;
+}
+
+.student-paper-content-body :deep(ol) {
+    list-style: decimal outside;
+}
+
+.student-paper-content-body :deep(ul ul) {
+    list-style-type: circle;
+}
+
+.student-paper-content-body :deep(li) {
+    margin: 0 0 0.3rem;
+}
+
+.student-paper-content-body :deep(li::marker) {
+    color: var(--px-accent, #D42874);
+}
+
 .student-paper-content-body :deep(img),
 .student-paper-content-body :deep(video),
 .student-paper-content-body :deep(audio),

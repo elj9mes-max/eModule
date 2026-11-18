@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
+import QuizImagePicker from '@/Components/QuizImagePicker.vue';
 
 const props = defineProps({
     user: {
@@ -235,6 +236,8 @@ const createDefaultMapZones = () => [
 const createDefaultMapEvent = (index = 0) => ({
     card_letter: getCardLetter(index),
     event_text: '',
+    image_path: null,
+    image_url: null,
     target_conflict_type: 'character_vs_character',
     hint: '',
     explanation: '',
@@ -472,7 +475,8 @@ const getSlideSummaryLabel = (item, idx) => {
         case 'color-the-conflict':
             return item.excerpt?.trim() || `Conflict Excerpt Card ${idx + 1}`;
         case 'the-conflict-map':
-            return item.event_text?.trim() || `${item.card_letter || getCardLetter(idx)} Event`;
+            return item.event_text?.trim()
+                || (item.image_path ? `🖼️ ${item.card_letter || getCardLetter(idx)} Picture Card` : `${item.card_letter || getCardLetter(idx)} Event`);
         case 'matching-type':
             return item.description?.trim() || `Column A Item #${idx + 1}`;
         case 'evaluation':
@@ -551,6 +555,21 @@ const moveSlideItem = (index, direction) => {
     arr.splice(target, 0, moved);
     reindexActiveSlideItems();
     activeSlideIndex.value = target;
+    captureHistorySnapshot();
+};
+
+/* Conflict Map event card pictures (uploaded immediately, saved as a path with the quiz) */
+const conflictMapImageUploadUrl = computed(() => `/teachers/modules/${props.module.slug}/quizzes/the-conflict-map/images`);
+
+const attachEventImage = (event, { path, url }) => {
+    event.image_path = path;
+    event.image_url = url;
+    captureHistorySnapshot();
+};
+
+const removeEventImage = (event) => {
+    event.image_path = null;
+    event.image_url = null;
     captureHistorySnapshot();
 };
 
@@ -1044,7 +1063,8 @@ const buildSubmissionPayload = () => {
             })),
             events: studioState.events.map((e, idx) => ({
                 card_letter: e.card_letter || getCardLetter(idx),
-                event_text: e.event_text,
+                event_text: e.event_text?.trim() || null,
+                image_path: e.image_path || null,
                 target_conflict_type: e.target_conflict_type,
                 hint: e.hint || null,
                 explanation: e.explanation || null,
@@ -1368,7 +1388,7 @@ onBeforeUnmount(() => {
                         <span class="rail-lbl">Scoring</span>
                     </button>
 
-                    <button
+                    <!-- <button
                         type="button"
                         class="rail-tab-btn"
                         :class="{ 'is-active': activeLeftTab === 'saved' && isLeftDrawerOpen }"
@@ -1380,7 +1400,7 @@ onBeforeUnmount(() => {
                     >
                         <span class="rail-icon">📚</span>
                         <span class="rail-lbl">Quizzes ({{ existingQuizzes.length }})</span>
-                    </button>
+                    </button> -->
                 </nav>
 
                 <!-- Expandable Tool Shelf -->
@@ -2064,14 +2084,33 @@ onBeforeUnmount(() => {
                                     />
                                 </div>
                                 <div class="field-col-grow">
-                                    <label class="field-label">Story Event Description *</label>
+                                    <label class="field-label">
+                                        Story Event Description {{ currentSlideItem.image_path ? '(optional caption)' : '*' }}
+                                    </label>
                                     <textarea
                                         v-model="currentSlideItem.event_text"
                                         rows="3"
                                         class="studio-textarea large-prompt-input"
-                                        placeholder="Describe the story event that students will drag/place into the target zone..."
+                                        :placeholder="currentSlideItem.image_path
+                                            ? 'Optional caption shown under the picture...'
+                                            : 'Describe the story event that students will drag/place into the target zone...'"
                                     ></textarea>
                                 </div>
+                            </div>
+
+                            <!-- Optional picture students drag into the target zone -->
+                            <div class="event-image-field">
+                                <label class="field-label">
+                                    🖼️ Card Picture (Optional)
+                                    <span class="field-label-note">Students drag the picture card into its target zone. Add text, a picture, or both.</span>
+                                </label>
+                                <QuizImagePicker
+                                    :key="`event-image-${activeSlideIndex}`"
+                                    :image-url="currentSlideItem.image_url"
+                                    :upload-url="conflictMapImageUploadUrl"
+                                    @uploaded="(image) => attachEventImage(currentSlideItem, image)"
+                                    @removed="removeEventImage(currentSlideItem)"
+                                />
                             </div>
 
                             <div class="engine-row-two-col">
@@ -2641,7 +2680,13 @@ onBeforeUnmount(() => {
                                     class="sim-question-card"
                                 >
                                     <span class="sim-item-badge">{{ evt.card_letter }} ({{ evt.points }} pts)</span>
-                                    <h4>{{ evt.event_text || 'Event description...' }}</h4>
+                                    <img
+                                        v-if="evt.image_url"
+                                        :src="evt.image_url"
+                                        alt=""
+                                        class="sim-event-image"
+                                    />
+                                    <h4 v-if="evt.event_text || !evt.image_url">{{ evt.event_text || 'Event description...' }}</h4>
                                     <div class="sim-options-list">
                                         <button
                                             v-for="(z, zIdx) in studioState.zones"
@@ -4086,6 +4131,31 @@ onBeforeUnmount(() => {
     display: flex;
     flex-direction: column;
     gap: 0.85rem;
+}
+
+.event-image-field {
+    display: flex;
+    flex-direction: column;
+}
+
+.field-label-note {
+    display: block;
+    margin-top: 0.15rem;
+    font-family: var(--font-body);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #64748B;
+}
+
+.sim-event-image {
+    display: block;
+    width: 100%;
+    max-height: 180px;
+    object-fit: contain;
+    margin: 0.35rem 0 0.5rem;
+    border-radius: 12px;
+    background: #FFFFFF;
+    border: 2px solid #E2E8F0;
 }
 
 .sim-question-card {

@@ -1,11 +1,20 @@
 <script setup>
-import { Head, router, useRemember } from '@inertiajs/vue3';
+import { Head, router, usePage, useRemember } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import StudentLayout from '../../Components/StudentLayout.vue';
 import { prefetchRoute, useIdlePrefetch } from '@/Composables/usePrefetch';
 import { spawnPixarBurst } from '@/Composables/usePixarTheme';
 import { shouldReduceEffects } from '@/Composables/usePerformanceMode';
 import { consumeReturnToMapFocus } from '@/Composables/useMapReturnFocus';
+import { resolveTrailTheme } from '@/Composables/useTrailThemes';
+import TrailThemeBackdrop from '@/Components/TrailThemeBackdrop.vue';
+
+// Purchased trail theme (Gem Bazaar "Trails"), shared on every request as auth.user.trail_theme.
+const page = usePage();
+const trailThemeId = computed(() => page.props.auth?.user?.trail_theme ?? null);
+const activeTrailTheme = computed(() => resolveTrailTheme(trailThemeId.value));
+const defaultTrackColors = { rim: 'rgba(255, 255, 255, 0.85)', base: '#CBD5E1', dash: '#F8FAFC', shadow: '#0369A1' };
+const trackColors = computed(() => activeTrailTheme.value?.track ?? defaultTrackColors);
 
 const props = defineProps({
     user: {
@@ -884,13 +893,16 @@ const confettiPieces = Array.from({ length: 38 }, (_, i) => {
             <!-- =========================================================================
                  3. TIER 3: GRAPHIC-RICH MOBILE-FIRST 3D S-CURVE EXPEDITION MAP
                  ========================================================================= -->
-            <div class="clay-map-viewport">
+            <div class="clay-map-viewport" :class="{ 'has-trail-theme': activeTrailTheme }">
+                <!-- Purchased Trail Theme Scenery (replaces the default sky & clouds) -->
+                <TrailThemeBackdrop v-if="activeTrailTheme" :theme="trailThemeId" />
+
                 <!-- =====================================================================
                      ACTIVE EXPEDITION MAP (WHEN REALM HAS STORIES OR QUIZZES)
                      ===================================================================== -->
                 <template v-if="milestones.length > 0">
                     <!-- Ambient Floating Clouds & Sparkles inside the Map Canvas -->
-                <div class="map-sky-decor" aria-hidden="true">
+                <div v-if="!activeTrailTheme" class="map-sky-decor" aria-hidden="true">
                     <div class="map-cloud map-cloud-1"></div>
                     <div class="map-cloud map-cloud-2"></div>
                     <div class="map-cloud map-cloud-3"></div>
@@ -952,7 +964,7 @@ const confettiPieces = Array.from({ length: 38 }, (_, i) => {
                     >
                         <defs>
                             <filter id="clayTrailShadow" x="-15%" y="-5%" width="130%" height="115%">
-                                <feDropShadow dx="0" dy="6" stdDeviation="4" flood-color="#0369A1" flood-opacity="0.22" />
+                                <feDropShadow dx="0" dy="6" stdDeviation="4" :flood-color="trackColors.shadow" flood-opacity="0.22" />
                             </filter>
                             <filter id="glowEnergyFilter" x="-25%" y="-25%" width="150%" height="150%">
                                 <feGaussianBlur stdDeviation="5" result="blur" />
@@ -964,7 +976,7 @@ const confettiPieces = Array.from({ length: 38 }, (_, i) => {
                         <path
                             :d="pathTotalD"
                             fill="none"
-                            stroke="rgba(255, 255, 255, 0.85)"
+                            :stroke="trackColors.rim"
                             stroke-width="34"
                             stroke-linecap="round"
                             filter="url(#clayTrailShadow)"
@@ -974,7 +986,7 @@ const confettiPieces = Array.from({ length: 38 }, (_, i) => {
                         <path
                             :d="pathTotalD"
                             fill="none"
-                            stroke="#CBD5E1"
+                            :stroke="trackColors.base"
                             stroke-width="24"
                             stroke-linecap="round"
                         />
@@ -983,7 +995,7 @@ const confettiPieces = Array.from({ length: 38 }, (_, i) => {
                         <path
                             :d="pathTotalD"
                             fill="none"
-                            stroke="#F8FAFC"
+                            :stroke="trackColors.dash"
                             stroke-width="8"
                             stroke-linecap="round"
                             stroke-dasharray="2 22"
@@ -2336,6 +2348,16 @@ const confettiPieces = Array.from({ length: 38 }, (_, i) => {
 }
 
 /* Ambient Clouds inside Map */
+/* A purchased trail theme paints its own sky via TrailThemeBackdrop */
+.clay-map-viewport.has-trail-theme {
+    background: var(--px-surface-card);
+    isolation: isolate;
+}
+
+.clay-map-viewport.has-trail-theme > .trail-backdrop {
+    z-index: -1;
+}
+
 .map-sky-decor {
     position: absolute;
     inset: 0;

@@ -296,6 +296,7 @@ class QuizAnswerContextBuilder
         return [
             'card_letter' => $event->card_letter,
             'event_text' => $event->event_text,
+            'image_url' => $event->imageUrl(),
             'target_conflict_type' => $event->target_conflict_type->value,
             'target_conflict_label' => $event->target_conflict_type->label(),
             'hint' => $event->hint,

@@ -81,7 +81,7 @@ const actionNotice = ref(null);
 
 const createForm = useForm({
     name: '',
-    grade_level: 'Grade 3 • Reading Legends',
+    grade_level: '',
     theme: 'forest',
     icon: '🏫',
     description: '',
@@ -771,13 +771,13 @@ const viewClassModules = (classroom) => {
 
                                 <div class="form-row-2">
                                     <div class="form-group">
-                                        <label class="form-label" for="gradeLevel">Grade Level</label>
+                                        <label class="form-label" for="gradeLevel">Description</label>
                                         <input
                                             id="gradeLevel"
                                             v-model="createForm.grade_level"
                                             type="text"
                                             class="clay-recessed-input"
-                                            placeholder="e.g. Grade 3 • Reading Legends"
+                                            placeholder="Description"
                                         />
                                     </div>
 
@@ -826,26 +826,6 @@ const viewClassModules = (classroom) => {
                                             <span class="theme-opt-icon">{{ th.icon }}</span>
                                             <span class="theme-opt-label">{{ th.label }}</span>
                                         </button>
-                                    </div>
-                                </div>
-
-                                <!-- Initial Module Assignment -->
-                                <div v-if="available_modules.length > 0" class="form-group">
-                                    <label class="form-label">Assign Starting Reading Worlds (Optional)</label>
-                                    <div class="modules-assign-check-list">
-                                        <label
-                                            v-for="mod in available_modules"
-                                            :key="mod.id"
-                                            class="module-check-item"
-                                        >
-                                            <input
-                                                v-model="createForm.module_ids"
-                                                type="checkbox"
-                                                :value="mod.id"
-                                            />
-                                            <span class="check-mod-icon">{{ mod.icon || '📘' }}</span>
-                                            <span class="check-mod-title">{{ mod.title }}</span>
-                                        </label>
                                     </div>
                                 </div>
 

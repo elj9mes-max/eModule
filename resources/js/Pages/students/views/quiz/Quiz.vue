@@ -1809,7 +1809,14 @@ onBeforeUnmount(() => {
                                         class="placed-event-chip"
                                     >
                                         <span class="placed-letter">{{ placed.card_letter }}</span>
-                                        <span class="placed-excerpt">{{ placed.event_text }}</span>
+                                        <img
+                                            v-if="placed.image_url"
+                                            :src="placed.image_url"
+                                            alt=""
+                                            class="placed-thumb"
+                                            draggable="false"
+                                        />
+                                        <span class="placed-excerpt">{{ placed.event_text || (placed.image_url ? 'Picture card' : '') }}</span>
                                         <button
                                             type="button"
                                             class="placed-remove-btn"
@@ -1876,7 +1883,17 @@ onBeforeUnmount(() => {
                                     <span class="event-pts-lbl">{{ ev.points || 10 }} pts</span>
                                 </div>
 
-                                <p class="event-card-body">{{ ev.event_text }}</p>
+                                <!-- Picture card: the whole card is the drag handle, so the image itself can't be grabbed -->
+                                <div v-if="ev.image_url" class="event-card-picture">
+                                    <img
+                                        :src="ev.image_url"
+                                        :alt="ev.event_text || `Event ${ev.card_letter} picture`"
+                                        draggable="false"
+                                        loading="lazy"
+                                        decoding="async"
+                                    />
+                                </div>
+                                <p v-if="ev.event_text" class="event-card-body">{{ ev.event_text }}</p>
 
                                 <!-- Card Assignment Status Bar (Replaces event-quick-zone-row) -->
                                 <div class="event-card-status-bar">
@@ -3378,6 +3395,16 @@ onBeforeUnmount(() => {
     flex-shrink: 0;
 }
 
+.placed-thumb {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1.5px solid var(--px-line);
+    pointer-events: none;
+}
+
 .placed-excerpt {
     flex: 1;
     white-space: nowrap;
@@ -3439,6 +3466,26 @@ onBeforeUnmount(() => {
     transition: all 0.15s ease;
     user-select: none;
     touch-action: none;
+}
+
+/* Picture event cards (teacher-uploaded image to drag into a zone) */
+.event-card-picture {
+    margin: 0.45rem 0 0.35rem;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid var(--px-line);
+    background: var(--px-surface-card);
+    aspect-ratio: 4 / 3;
+}
+
+.event-card-picture img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    -webkit-user-drag: none;
+    -webkit-touch-callout: none;
 }
 
 .clay-map-event-card:hover {

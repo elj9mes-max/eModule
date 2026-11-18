@@ -45,6 +45,12 @@ class HandleInertiaRequests extends Middleware
                     'email' => $request->user()->email,
                     'role' => $request->user()->role?->value ?? $request->user()->role,
                     'ui_theme' => $request->user()->ui_theme?->value ?? PixarWorldTheme::Toybox->value,
+                    'header_skin' => $request->user()->isStudent()
+                        ? $request->user()->studentProfile?->equippedHeaderSkin()
+                        : null,
+                    'trail_theme' => $request->user()->isStudent()
+                        ? $request->user()->studentProfile?->equippedTrailTheme()
+                        : null,
                 ] : null,
             ],
         ];

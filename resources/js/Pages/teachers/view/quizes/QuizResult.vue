@@ -702,7 +702,14 @@ const submitGrade = () => {
                                 <span class="q-number-pill">{{ evt.card_letter || `EVENT ${mIdx + 1}` }}</span>
                                 <span class="q-points-pill">{{ evt.points }} Points</span>
                             </div>
-                            <h3 class="q-text">{{ evt.event_text }}</h3>
+                            <img
+                                v-if="evt.image_url"
+                                :src="evt.image_url"
+                                :alt="evt.event_text || 'Event card picture'"
+                                class="event-card-image"
+                                loading="lazy"
+                            />
+                            <h3 v-if="evt.event_text || !evt.image_url" class="q-text">{{ evt.event_text }}</h3>
                             <div class="blueprint-key-row">
                                 <span class="rubric-opt-box is-correct-opt">
                                     <span class="opt-body">✓ Target Zone: {{ evt.target_conflict_label || evt.target_conflict_type }}</span>
@@ -963,6 +970,17 @@ const submitGrade = () => {
 </template>
 
 <style scoped>
+.event-card-image {
+    display: block;
+    max-width: 100%;
+    max-height: 200px;
+    margin: 0.35rem 0 0.5rem;
+    object-fit: contain;
+    border-radius: 12px;
+    border: 2px solid var(--px-line, #E2E8F0);
+    background: var(--px-surface-card, #FFFFFF);
+}
+
 .quiz-results-page {
     min-height: 100vh;
     background: radial-gradient(120% 80% at 50% 0%, #E0F2FE 0%, #EDF4FF 45%, #F5F8FF 100%);

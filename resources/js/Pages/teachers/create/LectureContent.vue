@@ -1718,21 +1718,21 @@ onBeforeUnmount(() => {
 
             <!-- Heading Style Buttons -->
             <div class="ribbon-group">
-                <button
+                <!-- <button
                     type="button"
                     class="ribbon-tool-btn"
                     title="Normal Paragraph"
                     @click="applyBlockHeading('P')"
                 >
                     Body
-                </button>
+                </button> -->
                 <button
                     type="button"
                     class="ribbon-tool-btn font-bold"
                     title="Large Chapter Heading"
                     @click="applyBlockHeading('H2')"
                 >
-                    H1
+                    Title
                 </button>
                 <button
                     type="button"
@@ -1740,7 +1740,7 @@ onBeforeUnmount(() => {
                     title="Section Subheading"
                     @click="applyBlockHeading('H3')"
                 >
-                    H2
+                    Paragraph
                 </button>
             </div>
 
@@ -1869,7 +1869,7 @@ onBeforeUnmount(() => {
                         <span>Layouts</span>
                     </button>
 
-                    <button
+                    <!-- <button
                         type="button"
                         class="rail-tab-btn"
                         :class="{ 'is-active': isLeftDrawerOpen && activeToolboxTab === 'vocab' }"
@@ -1883,7 +1883,7 @@ onBeforeUnmount(() => {
                             <line x1="14.5" y1="14.5" x2="19" y2="19" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
                         </svg>
                         <span>Meanings</span>
-                    </button>
+                    </button> -->
 
                     <button
                         type="button"
@@ -1915,7 +1915,7 @@ onBeforeUnmount(() => {
                         <span>Uploads</span>
                     </button>
 
-                    <button
+                    <!-- <button
                         type="button"
                         class="rail-tab-btn"
                         :class="{ 'is-active': isLeftDrawerOpen && activeToolboxTab === 'stickers' }"
@@ -1931,7 +1931,7 @@ onBeforeUnmount(() => {
                             <path d="M8 13.5c.8 1.3 2 2 3 2s2.2-.7 3-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
                         </svg>
                         <span>Story Art</span>
-                    </button>
+                    </button> -->
 
                     <button
                         type="button"
@@ -4198,6 +4198,33 @@ onBeforeUnmount(() => {
 
 .wysiwyg-story-surface :deep(p) {
     margin: 0 0 0.85rem;
+}
+
+/* Restore list markers removed by Tailwind's preflight reset (Bullet List button) */
+.wysiwyg-story-surface :deep(ul),
+.wysiwyg-story-surface :deep(ol) {
+    margin: 0 0 0.85rem;
+    padding-left: 1.6rem;
+}
+
+.wysiwyg-story-surface :deep(ul) {
+    list-style: disc outside;
+}
+
+.wysiwyg-story-surface :deep(ol) {
+    list-style: decimal outside;
+}
+
+.wysiwyg-story-surface :deep(ul ul) {
+    list-style-type: circle;
+}
+
+.wysiwyg-story-surface :deep(li) {
+    margin: 0 0 0.3rem;
+}
+
+.wysiwyg-story-surface :deep(li::marker) {
+    color: var(--px-accent, #D42874);
 }
 
 .wysiwyg-story-surface :deep(.vocab-gloss-token) {

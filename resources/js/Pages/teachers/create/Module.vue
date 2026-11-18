@@ -373,7 +373,7 @@ const goToDashboard = () => {
                                     <p v-if="form.errors.xp_bonus" class="field-error">{{ form.errors.xp_bonus }}</p>
                                 </div>
 
-                                <div class="field-group">
+                                <!-- <div class="field-group">
                                     <label for="module-boss" class="field-label">BOSS CHALLENGE</label>
                                     <input
                                         id="module-boss"
@@ -382,7 +382,7 @@ const goToDashboard = () => {
                                         class="neu-input"
                                         placeholder="Grammar Goblin"
                                     />
-                                </div>
+                                </div> -->
                             </div>
 
                             <!-- Target Classroom Badge (If assigned to a room) -->

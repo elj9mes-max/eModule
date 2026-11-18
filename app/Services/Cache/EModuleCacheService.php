@@ -1241,7 +1241,9 @@ class EModuleCacheService
                     ])->values()->all(),
                     'events' => $quiz->mapEvents->map(static fn (ConflictMapEvent $e): array => [
                         'card_letter' => $e->card_letter,
-                        'event_text' => $e->event_text,
+                        'event_text' => $e->event_text ?? '',
+                        'image_path' => $e->image_path,
+                        'image_url' => $e->imageUrl(),
                         'target_conflict_type' => $e->target_conflict_type->value,
                         'hint' => $e->hint ?? '',
                         'explanation' => $e->explanation ?? '',
@@ -1558,6 +1560,7 @@ class EModuleCacheService
                 'id' => $event->id,
                 'card_letter' => $event->card_letter,
                 'event_text' => $event->event_text,
+                'image_url' => $event->imageUrl(),
                 'hint' => $event->hint,
                 'points' => $event->points,
                 'sort_order' => $event->sort_order,

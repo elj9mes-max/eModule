@@ -70,6 +70,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/teachers/modules/{module:slug}/quizzes/the-conflict-map/create', [TeacherConflictMapQuizController::class, 'create'])->name('teachers.quizzes.the-conflict-map.create');
     Route::post('/teachers/modules/{module:slug}/quizzes/the-conflict-map', [TeacherConflictMapQuizController::class, 'store'])->name('teachers.quizzes.the-conflict-map.store');
+    Route::post('/teachers/modules/{module:slug}/quizzes/the-conflict-map/images', [TeacherConflictMapQuizController::class, 'uploadEventImage'])->name('teachers.quizzes.the-conflict-map.images.store');
 
     Route::get('/teachers/modules/{module:slug}/quizzes/matching-type/create', [TeacherMatchingTypeQuizController::class, 'create'])->name('teachers.quizzes.matching-type.create');
     Route::post('/teachers/modules/{module:slug}/quizzes/matching-type', [TeacherMatchingTypeQuizController::class, 'store'])->name('teachers.quizzes.matching-type.store');
@@ -101,6 +102,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/students/Ranking', fn () => redirect()->route('students.ranking'));
     Route::get('/students/shop', [StudentDashboardController::class, 'shop'])->name('students.shop');
     Route::get('/students/Shop', fn () => redirect()->route('students.shop'));
+    Route::post('/students/shop/items/{shopItem}/purchase', [StudentDashboardController::class, 'purchaseShopItem'])->name('students.shop.purchase');
+    Route::patch('/students/shop/items/{shopItem}/equip', [StudentDashboardController::class, 'equipShopItem'])->name('students.shop.equip');
     Route::get('/students/settings', [StudentDashboardController::class, 'settings'])->name('students.settings');
     Route::get('/students/Settings', fn () => redirect()->route('students.settings'));
     Route::patch('/students/settings/theme', [StudentDashboardController::class, 'updateTheme'])->name('students.settings.theme');

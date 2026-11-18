@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Enums\QuizType;
 use App\Http\Requests\StoreConflictMapQuizRequest;
+use App\Http\Requests\UploadConflictMapImageRequest;
 use App\Models\Module;
 use App\Models\Quiz;
 use App\Services\Cache\EModuleCacheService;
+use App\Services\ConflictMapImageService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +19,21 @@ use Inertia\Response;
 
 class TeacherConflictMapQuizController extends Controller
 {
+    public function __construct(private readonly ConflictMapImageService $images) {}
+
+    /**
+     * Upload a picture for a Conflict Map event card; the studio keeps the returned path until the quiz is saved.
+     */
+    public function uploadEventImage(UploadConflictMapImageRequest $request, Module $module): JsonResponse
+    {
+        $path = $this->images->store($request->file('image'), $module);
+
+        return response()->json([
+            'path' => $path,
+            'url' => $this->images->url($path),
+        ], 201);
+    }
+
     /**
      * Display the form to create a new Conflict Map quiz.
      */
@@ -65,6 +83,7 @@ class TeacherConflictMapQuizController extends Controller
         $existingQuiz = $quizId ? $module->quizzes()->find($quizId) : null;
 
         $isPublished = (bool) ($validated['is_published'] ?? true);
+        $previousImagePaths = $existingQuiz?->mapEvents()->pluck('image_path')->all() ?? [];
 
         DB::transaction(function () use ($module, $validated, $existingQuiz, $isPublished): void {
             if ($existingQuiz) {
@@ -146,7 +165,9 @@ class TeacherConflictMapQuizController extends Controller
                 $quiz->mapEvents()->create([
                     'zone_id' => $zoneId,
                     'card_letter' => ! empty($eventData['card_letter']) ? trim($eventData['card_letter']) : 'Card '.chr(65 + $index),
-                    'event_text' => $eventData['event_text'],
+                    'event_text' => ! empty($eventData['event_text']) ? trim($eventData['event_text']) : null,
+                    'image_path' => $eventData['image_path'] ?? null,
+                    'image_disk' => ! empty($eventData['image_path']) ? ConflictMapImageService::DISK : null,
                     'target_conflict_type' => $targetType,
                     'hint' => ! empty($eventData['hint']) ? trim($eventData['hint']) : null,
                     'explanation' => ! empty($eventData['explanation']) ? trim($eventData['explanation']) : null,
@@ -156,7 +177,8 @@ class TeacherConflictMapQuizController extends Controller
             }
         });
 
-        app(EModuleCacheService::class)->invalidateModule($module->id, bumpCatalog: true);
+        // Remove pictures that were replaced or removed while editing (kept if a copied quiz still uses them).
+        $this->images->deleteUnreferenced($previousImagePaths);
 
         app(EModuleCacheService::class)->invalidateModule($module->id, bumpCatalog: true);
 

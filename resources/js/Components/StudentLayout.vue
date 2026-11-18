@@ -1,11 +1,12 @@
 <script setup>
-import { router } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useSound } from '@/Services/soundManager';
 import { prefetchRoute } from '@/Composables/usePrefetch';
 import { usePixarTheme, useWorldOnDocument } from '@/Composables/usePixarTheme';
+import HudHeaderSkin from '@/Components/HudHeaderSkin.vue';
 
-const { playPop, playBoing, playSparkle, playClick, playBonus } = useSound();
+const { playPop, playSparkle, playClick, playBonus } = useSound();
 const { activeWorld } = usePixarTheme();
 useWorldOnDocument(activeWorld);
 
@@ -137,25 +138,15 @@ onBeforeUnmount(() => {
     }
 });
 
-const cycleAvatar = () => {
-    selectedAvatarIndex.value = (selectedAvatarIndex.value + 1) % avatarProfiles.length;
-    const nextId = avatarProfiles[selectedAvatarIndex.value].id;
-    if (typeof window !== 'undefined') {
-        window.localStorage?.setItem('emodule_companion', nextId);
-        window.dispatchEvent(new CustomEvent('emodule:companion-changed', { detail: { id: nextId } }));
-    }
-    isAvatarBouncing.value = true;
-    playBoing();
-    window.setTimeout(() => {
-        isAvatarBouncing.value = false;
-    }, 320);
-};
+// Purchased header background (shop item metadata.header_skin), shared on every request.
+const page = usePage();
+const headerSkin = computed(() => page.props.auth?.user?.header_skin ?? null);
 
 const effectiveLevel = computed(() => props.user?.gamification?.level ?? props.level ?? 1);
 const effectiveXp = computed(() => props.user?.gamification?.xp_in_level ?? props.xp ?? 0);
 const effectiveMaxXp = computed(() => props.user?.gamification?.xp_for_next_level ?? props.maxXp ?? 200);
 const effectiveStars = computed(() => props.user?.gamification?.total_stars ?? props.stars ?? 0);
-const effectiveGems = computed(() => props.user?.gamification?.total_gems ?? props.gems ?? props.points ?? 0);
+const effectiveGems = computed(() => props.user?.gamification?.gem_balance ?? props.user?.gamification?.total_gems ?? props.gems ?? props.points ?? 0);
 const effectivePoints = computed(() => props.user?.gamification?.total_xp ?? props.points ?? 0);
 const effectiveTitle = computed(() => props.user?.gamification?.level_title ?? `Level ${effectiveLevel.value} Explorer`);
 
@@ -259,7 +250,10 @@ const goToWelcome = () => {
 
         <!-- STICKY 3D CLAYMORPHISM GAME HUD -->
         <header class="clay-hud-header">
-            <div class="clay-hud-console">
+            <div class="clay-hud-console" :class="{ 'has-header-skin': headerSkin }">
+                <!-- Purchased Header Background (Gem Bazaar) -->
+                <HudHeaderSkin v-if="headerSkin" :skin="headerSkin" />
+
                 <!-- Specular Top Clay Gloss -->
                 <span class="clay-console-gloss" aria-hidden="true"></span>
 
@@ -267,13 +261,11 @@ const goToWelcome = () => {
                 <div class="hud-primary-row">
                     <!-- Left: Interactive 3D Clay Avatar Pod -->
                     <div class="hud-player-block">
-                        <button
-                            type="button"
+                        <div
                             class="clay-avatar-pod"
                             :class="{ 'is-popping': isAvatarBouncing }"
-                            :title="`Switch Companion (${currentAvatar.label})`"
-                            :aria-label="`Player avatar: ${currentAvatar.label}. Tap to switch companion.`"
-                            @click="cycleAvatar"
+                            role="img"
+                            :aria-label="`Player avatar: ${currentAvatar.label}, level ${effectiveLevel}`"
                         >
                             <!-- SVG Circular XP Ring -->
                             <svg class="avatar-xp-ring-svg" viewBox="0 0 64 64" aria-hidden="true">
@@ -365,7 +357,7 @@ const goToWelcome = () => {
 
                             <!-- 3D Puffy Clay Level Pill -->
                             <span class="clay-lvl-pill">LVL {{ effectiveLevel }}</span>
-                        </button>
+                        </div>
 
                         <!-- Player Identity & Companion Badge -->
                         <div class="player-meta">
@@ -731,6 +723,17 @@ const goToWelcome = () => {
     pointer-events: none;
 }
 
+/* Keep HUD content above a purchased header background */
+.clay-hud-console > .hud-primary-row,
+.clay-hud-console > .hud-xp-bar-container {
+    position: relative;
+    z-index: 1;
+}
+
+.clay-hud-console > .clay-console-gloss {
+    z-index: 2;
+}
+
 .hud-primary-row {
     display: flex;
     align-items: center;
@@ -759,22 +762,11 @@ const goToWelcome = () => {
         0 3px 0 var(--px-hud-ledge),
         0 6px 12px rgba(var(--px-shadow-rgb), 0.18),
         inset 0 2px 4px var(--px-rim-top);
-    cursor: pointer;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: transform 200ms var(--spring-bounce), box-shadow 200ms ease;
-    outline: none;
-}
-
-.clay-avatar-pod:focus-visible {
-    box-shadow: 0 0 0 3px var(--px-focus-stroke), 0 4px 0 var(--px-tint-info-line);
-}
-
-.clay-avatar-pod:active {
-    transform: translateY(2px) scale(0.95);
-    box-shadow: 0 1px 0 var(--px-tint-info-line);
 }
 
 .clay-avatar-pod.is-popping {

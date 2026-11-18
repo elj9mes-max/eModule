@@ -524,7 +524,14 @@ const reflectionLengthStatus = computed(() => {
                         <span v-if="answer.context?.card_letter" class="mode-tag">{{ answer.context.card_letter }}</span>
                     </span>
                 </div>
-                <p class="prompt-main-text">
+                <img
+                    v-if="answer.context?.image_url"
+                    :src="answer.context.image_url"
+                    :alt="answer.context?.event_text || 'Event card picture'"
+                    class="event-card-image"
+                    loading="lazy"
+                />
+                <p v-if="answer.context?.event_text || !answer.context?.image_url" class="prompt-main-text">
                     {{ answer.context?.event_text || 'Event text unavailable.' }}
                 </p>
             </div>
@@ -778,6 +785,17 @@ const reflectionLengthStatus = computed(() => {
 </template>
 
 <style scoped>
+.event-card-image {
+    display: block;
+    max-width: 100%;
+    max-height: 220px;
+    margin: 0.4rem 0;
+    object-fit: contain;
+    border-radius: 12px;
+    border: 2px solid var(--px-line, #E2E8F0);
+    background: var(--px-surface-card, #FFFFFF);
+}
+
 .inspector-root {
     display: flex;
     flex-direction: column;

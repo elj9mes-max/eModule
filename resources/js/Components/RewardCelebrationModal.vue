@@ -446,12 +446,12 @@ watch(
                     </div>
 
                     <!-- Metrics (score, points…) -->
-                    <div v-if="metrics.length" class="reward-metrics">
+                    <!-- <div v-if="metrics.length" class="reward-metrics">
                         <div v-for="metric in metrics" :key="metric.label" class="reward-metric">
                             <span class="metric-label">{{ metric.label }}</span>
                             <strong class="metric-value">{{ metric.value }}</strong>
                         </div>
-                    </div>
+                    </div> -->
 
                     <!-- Level progress -->
                     <div v-if="level !== null && ['earned', 'repeat'].includes(state)" class="reward-level">

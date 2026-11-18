@@ -7,6 +7,7 @@ use App\Http\Requests\StoreModuleRequest;
 use App\Models\Module;
 use App\Models\Quiz;
 use App\Services\Cache\EModuleCacheService;
+use App\Services\ConflictMapImageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -220,7 +221,9 @@ class TeacherModuleController extends Controller
             return redirect()->route('teachers.dashboard');
         }
 
+        $imagePaths = $quiz->mapEvents()->pluck('image_path')->all();
         $quiz->delete();
+        app(ConflictMapImageService::class)->deleteUnreferenced($imagePaths);
 
         return redirect()->route('teachers.quizzes.studio', $module->slug)
             ->with('status', 'Quiz deleted from module.');

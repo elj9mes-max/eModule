@@ -7,6 +7,7 @@ use App\Models\Module;
 use App\Models\ModuleBonusClaim;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
+use App\Models\ShopPurchase;
 use App\Models\StudentLectureCompletion;
 use App\Models\StudentProfile;
 use App\Models\User;
@@ -387,6 +388,7 @@ class LevelProgressionService
             $profile->total_xp = $totalXp;
             $profile->total_stars = $quizStars;
             $profile->total_gems = $quizGems;
+            $profile->gems_spent = (int) ShopPurchase::query()->where('user_id', $userId)->sum('price_paid');
             $profile->level = $level;
             $profile->quizzes_passed_count = $quizzesPassed;
             $profile->lectures_completed_count = $lecturesCount;

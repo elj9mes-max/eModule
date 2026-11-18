@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Enums\ModuleStatus;
 use App\Enums\PixarWorldTheme;
+use App\Http\Requests\EquipShopItemRequest;
 use App\Http\Requests\JoinModuleRequest;
+use App\Http\Requests\PurchaseShopItemRequest;
 use App\Http\Requests\UpdateStudentThemeRequest;
 use App\Models\Classroom;
 use App\Models\ClassroomModule;
@@ -13,9 +15,11 @@ use App\Models\Module;
 use App\Models\ModuleBonusClaim;
 use App\Models\ModuleEnrollment;
 use App\Models\Quiz;
+use App\Models\ShopItem;
 use App\Models\User;
 use App\Services\Cache\EModuleCacheService;
 use App\Services\Gamification\LevelProgressionService;
+use App\Services\Gamification\ShopService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,6 +37,7 @@ class StudentDashboardController extends Controller
     public function __construct(
         private readonly EModuleCacheService $cache,
         private readonly LevelProgressionService $progressionService,
+        private readonly ShopService $shopService,
     ) {}
 
     /**
@@ -58,6 +63,8 @@ class StudentDashboardController extends Controller
                 'total_xp' => (int) $profile->total_xp,
                 'total_stars' => (int) $profile->total_stars,
                 'total_gems' => (int) ($profile->total_gems ?? 0),
+                'gems_spent' => (int) $profile->gems_spent,
+                'gem_balance' => $profile->gemBalance(),
                 'level' => (int) $levelDetails['level'],
                 'level_title' => (string) $levelDetails['title'],
                 'level_badge' => (string) $levelDetails['badge'],
@@ -383,7 +390,39 @@ class StudentDashboardController extends Controller
 
         return Inertia::render('students/Shop', [
             'user' => $this->formatUserPayload($user),
+            'shop' => $this->shopService->storefrontFor($user),
         ]);
+    }
+
+    /**
+     * Spend gems on one unit of a shop item.
+     */
+    public function purchaseShopItem(PurchaseShopItemRequest $request, ShopItem $shopItem): JsonResponse|RedirectResponse
+    {
+        $result = $this->shopService->purchase($request->user(), $shopItem);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'purchase' => $result,
+            ]);
+        }
+
+        return back();
+    }
+
+    /**
+     * Equip an owned cosmetic shop item.
+     */
+    public function equipShopItem(EquipShopItemRequest $request, ShopItem $shopItem): JsonResponse|RedirectResponse
+    {
+        $this->shopService->equip($request->user(), $shopItem);
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true]);
+        }
+
+        return back();
     }
 
     /**
